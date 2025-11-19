@@ -1,0 +1,6 @@
+[workspace]
+members=[
+    "nexus-player-backend",
+    "nexus-player-frontend/src-tauri",
+]
+
