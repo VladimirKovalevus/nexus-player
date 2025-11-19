@@ -1,10 +1,10 @@
 use super::playback::PlaybackEngine;
 use super::types::{AudioCommand, AudioEvent, AudioState, PlaybackState, Track};
 use crate::error::AudioError;
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, SyncSender};
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 use tracing::{info, warn};
 
@@ -12,7 +12,7 @@ const COMMAND_BUFFER_SIZE: usize = 32;
 const EVENT_BUFFER_SIZE: usize = 128;
 
 pub struct AudioEngine {
-    command_tx: Sender<AudioCommand>,
+    command_tx: SyncSender<AudioCommand>,
     event_rx: Receiver<AudioEvent>,
     state: Arc<RwLock<AudioState>>,
     audio_thread: Option<std::thread::JoinHandle<()>>,
@@ -80,7 +80,7 @@ impl AudioEngine {
 
     fn spawn_audio_thread(
         command_rx: Receiver<AudioCommand>,
-        event_tx: Sender<AudioEvent>,
+        event_tx: SyncSender<AudioEvent>,
         state: Arc<RwLock<AudioState>>,
     ) -> Result<std::thread::JoinHandle<()>, AudioError> {
         let builder = std::thread::Builder::new()
@@ -102,7 +102,7 @@ impl AudioEngine {
 
     fn audio_thread_loop(
         command_rx: Receiver<AudioCommand>,
-        event_tx: Sender<AudioEvent>,
+        event_tx: SyncSender<AudioEvent>,
         state: Arc<RwLock<AudioState>>,
     ) {
         // Создаем playback engine
@@ -144,25 +144,7 @@ impl AudioEngine {
             // Обработка команд
             match command_rx.recv_timeout(Duration::from_millis(10)) {
                 Ok(AudioCommand::Play(track)) => {
-                    if let Some(ref url) = track.stream_url {
-                        info!("Начинаем воспроизведение streaming трека: {}", url);
-                    } else {
-                        info!("Начинаем воспроизведение: {:?}", track.path);
-                    }
-
-                    // Используем stream_url если есть, иначе используем path
-                    let result = if let Some(url) = &track.stream_url {
-                        if track.is_chunked_url {
-                            // Chunked URL с bidirectional seek
-                            playback.play_chunked_url(url)
-                        } else {
-                            // Обычный URL (forward-only seek)
-                            #[allow(deprecated)]
-                            playback.play_url(url)
-                        }
-                    } else {
-                        playback.play(&track.path)
-                    };
+                    playback.play(&track.source);
 
                     match result {
                         Ok(_) => {
@@ -209,9 +191,6 @@ impl AudioEngine {
                     playback.resume();
                     state.write().playback_state = PlaybackState::Playing;
 
-                    // Сбрасываем таймер обновления позиции
-                    last_position_update = std::time::Instant::now();
-
                     let _ = event_tx.send(AudioEvent::PlaybackResumed);
                 }
 
@@ -234,10 +213,7 @@ impl AudioEngine {
 
                     match playback.seek(position) {
                         Ok(_) => {
-                            state.write().position = position;
-
-                            // Сбрасываем таймер обновления позиции после перемотки
-                            last_position_update = std::time::Instant::now();
+                            state.write().unwrap().position = position;
 
                             let _ = event_tx.send(AudioEvent::PositionUpdated { position });
                         }
@@ -250,7 +226,7 @@ impl AudioEngine {
                 Ok(AudioCommand::SetVolume(volume)) => {
                     info!("Установка громкости: {}", volume);
                     // TODO: Реализовать управление громкостью в PlaybackEngine
-                    state.write().volume = volume;
+                    state.write().unwrap().volume = volume;
                     let _ = event_tx.send(AudioEvent::VolumeChanged { volume });
                 }
 
@@ -259,11 +235,11 @@ impl AudioEngine {
                     break;
                 }
 
-                Err(crossbeam::channel::RecvTimeoutError::Timeout) => {
+                Err(mpsc::RecvTimeoutError::Timeout) => {
                     // Нет команд - продолжаем работу
                 }
 
-                Err(crossbeam::channel::RecvTimeoutError::Disconnected) => {
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
                     warn!("Канал команд отключен");
                     break;
                 }

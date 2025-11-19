@@ -1,3 +1,4 @@
+use super::decoder::AudioDecoder;
 use crate::audio::types::{SampleRate, TrackSource};
 use crate::error::AudioError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -61,47 +62,47 @@ impl PlaybackEngine {
     }
 
     pub fn pause(&mut self) {
-        *self.is_playing.lock() = false;
+        *self.is_playing.lock().unwrap() = false;
         if let Some(ref stream) = self.stream {
             let _ = stream.pause();
         }
     }
 
     pub fn resume(&mut self) {
-        *self.is_playing.lock() = true;
+        *self.is_playing.lock().unwrap() = true;
         if let Some(ref stream) = self.stream {
             let _ = stream.play();
         }
     }
 
     pub fn stop(&mut self) {
-        *self.is_playing.lock() = false;
+        *self.is_playing.lock().unwrap() = false;
         self.stream = None;
-        *self.decoder.lock() = None;
-        *self.current_position.lock() = Duration::ZERO;
-        *self.samples_played.lock() = 0;
+        *self.decoder.lock().unwrap() = None;
+        *self.current_position.lock().unwrap() = Duration::ZERO;
+        *self.samples_played.lock().unwrap() = 0;
         self.sample_buffer.lock();
-        *self.buffer_position.lock() = 0;
+        *self.buffer_position.lock().unwrap() = 0;
     }
 
     pub fn seek(&mut self, position: Duration) -> Result<(), AudioError> {
-        let mut decoder_guard = self.decoder.lock();
+        let mut decoder_guard = self.decoder.lock().unwrap();
         if let Some(ref mut dec) = *decoder_guard {
             dec.seek(position.as_secs_f64())?;
-            *self.current_position.lock() = position;
+            *self.current_position.lock().unwrap() = position;
 
-            let sr = *self.sample_rate.lock();
+            let sr = *self.sample_rate.lock().unwrap();
             let new_samples = (position.as_secs_f64() * sr as f64) as u64;
-            *self.samples_played.lock() = new_samples;
+            *self.samples_played.lock().unwrap() = new_samples;
 
-            self.sample_buffer.lock().unwrap()?.clear();
-            *self.buffer_position.lock() = 0;
+            self.sample_buffer.lock().unwrap().clear();
+            *self.buffer_position.lock().unwrap() = 0;
         }
         Ok(())
     }
 
     pub fn position(&self) -> Duration {
-        *self.current_position.lock()
+        *self.current_position.lock().unwrap()
     }
 
     pub fn duration(&self) -> Option<Duration> {
@@ -109,6 +110,6 @@ impl PlaybackEngine {
     }
 
     pub fn is_playing(&self) -> bool {
-        *self.is_playing.lock()
+        *self.is_playing.lock().unwrap()
     }
 }

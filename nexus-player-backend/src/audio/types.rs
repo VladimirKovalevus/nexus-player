@@ -98,14 +98,29 @@ impl Default for PlaybackState {
         Self::Stopped
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioFormat {
+    pub sample_rate: SampleRate,
+
+    pub channels: u16,
+}
+impl AudioFormat {
+    pub fn new(sample_rate: SampleRate, channels: u16) -> Self {
+        Self {
+            sample_rate,
+            channels,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
     pub id: usize,
 
     pub format: Option<AudioFormat>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<TrackSource>,
+    pub source: TrackSource,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
