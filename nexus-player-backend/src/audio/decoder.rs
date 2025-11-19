@@ -1,0 +1,136 @@
+use crate::error::AudioError;
+use std::path::Path;
+use symphonia::core::audio::AudioBufferRef;
+use symphonia::core::codecs::{Decoder, DecoderOptions};
+use symphonia::core::errors::Error;
+use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
+use symphonia::core::io::{MediaSourceStream, ReadOnlySource};
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::probe::Hint;
+use symphonia::core::units::Time;
+use tracing::{debug, info, warn};
+
+pub struct AudioDecoder {
+    format_reader: Box<dyn FormatReader>,
+
+    decoder: Box<dyn Decoder>,
+
+    track_id: u32,
+
+    sample_rate: u32,
+
+    channels: usize,
+
+    total_frames: Option<u64>,
+}
+
+impl AudioDecoder {
+    pub fn new(path: &Path) -> Result<Self, AudioError> {
+        info!("Создание декодера для файла: {:?}", path);
+
+        if !path.exists() {
+            return Err(AudioError::DecodingError(format!(
+                "Файл не найден: {:?}",
+                path
+            )));
+        }
+
+        let file = std::fs::File::open(path)
+            .map_err(|e| AudioError::DecodingError(format!("Не удалось открыть файл: {}", e)))?;
+
+        let mss = MediaSourceStream::new(Box::new(file), Default::default());
+
+        let mut hint = Hint::new();
+        if let Some(ext) = path.extension() {
+            if let Some(ext_str) = ext.to_str() {
+                hint.with_extension(ext_str);
+            }
+        }
+
+        let format_opts = FormatOptions::default();
+        let metadata_opts = MetadataOptions::default();
+
+        let probed = symphonia::default::get_probe()
+            .format(&hint, mss, &format_opts, &metadata_opts)
+            .map_err(|e| {
+                AudioError::DecodingError(format!("Не удалось определить формат: {}", e))
+            })?;
+
+        let format_reader = probed.format;
+
+        let track = format_reader
+            .tracks()
+            .iter()
+            .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
+            .ok_or_else(|| AudioError::DecodingError("Не найден аудио трек".to_string()))?;
+
+        let track_id = track.id;
+
+        let codec_params = &track.codec_params;
+        let sample_rate = codec_params.sample_rate.unwrap_or(44100);
+        let channels = codec_params.channels.map(|ch| ch.count()).unwrap_or(2);
+        let total_frames = codec_params.n_frames;
+
+        info!(
+            "Трек найден: sample_rate={}, channels={}, frames={:?}",
+            sample_rate, channels, total_frames
+        );
+
+        let decoder = symphonia::default::get_codecs()
+            .make(codec_params, &DecoderOptions::default())
+            .map_err(|e| AudioError::DecodingError(format!("Не удалось создать декодер: {}", e)))?;
+
+        Ok(Self {
+            format_reader,
+            decoder,
+            track_id,
+            sample_rate,
+            channels,
+            total_frames,
+        })
+    }
+
+    pub fn seek(&mut self, time_secs: f64) -> Result<u64, AudioError> {
+        debug!("Перемотка на {:.2} сек", time_secs);
+
+        let ts = Time::from(time_secs);
+
+        let seeked_to = self
+            .format_reader
+            .seek(
+                SeekMode::Accurate,
+                SeekTo::Time {
+                    time: ts,
+                    track_id: Some(self.track_id),
+                },
+            )
+            .map_err(|e| AudioError::DecodingError(format!("Ошибка перемотки: {}", e)))?;
+
+        info!("Перемотка выполнена на позицию: {:?}", seeked_to.actual_ts);
+
+        Ok(seeked_to.actual_ts)
+    }
+
+    pub fn duration(&self) -> Option<f64> {
+        self.total_frames
+            .map(|frames| frames as f64 / self.sample_rate as f64)
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    pub fn channels(&self) -> usize {
+        self.channels
+    }
+
+    fn convert_to_f32(buffer: AudioBufferRef) -> Result<Vec<f32>, AudioError> {
+        use symphonia::core::audio::SampleBuffer;
+
+        let mut sample_buf = SampleBuffer::<f32>::new(buffer.capacity() as u64, *buffer.spec());
+
+        sample_buf.copy_interleaved_ref(buffer);
+
+        Ok(sample_buf.samples().to_vec())
+    }
+}
