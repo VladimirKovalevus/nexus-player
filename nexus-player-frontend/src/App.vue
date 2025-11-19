@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
 const greetMsg = ref('');
@@ -9,6 +9,10 @@ async function greet() {
   // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
   greetMsg.value = await invoke('greet', { name: name.value });
 }
+const init = () => {};
+onMounted(() => {
+  init();
+});
 </script>
 
 <template>
@@ -28,9 +32,12 @@ async function greet() {
     </div>
     <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
 
-    <form class="row" @submit.prevent="greet">
+    <form class="row">
       <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-      <button type="submit">Greet</button>
+      <button type="submit" @click="back">BACK</button>
+      <button type="submit" @click="start">START</button>
+      <button type="submit" @click="next">NEXT</button>
+      <button type="submit" @click="select">SELECT</button>
     </form>
     <p>{{ greetMsg }}</p>
   </main>
