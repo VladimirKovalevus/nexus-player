@@ -123,6 +123,48 @@ impl AudioDecoder {
     pub fn channels(&self) -> usize {
         self.channels
     }
+    pub fn decode_next_block(&mut self) -> Result<Option<Vec<f32>>, AudioError> {
+        let packet = loop {
+            match self.format_reader.next_packet() {
+                Ok(packet) => {
+                    if packet.track_id() == self.track_id {
+                        break packet;
+                    }
+                }
+                Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    return Ok(None);
+                }
+                Err(Error::ResetRequired) => {
+                    warn!("Decoder требует сброса");
+                    return Err(AudioError::DecodingError(
+                        "Decoder reset required".to_string(),
+                    ));
+                }
+                Err(e) => {
+                    return Err(AudioError::DecodingError(format!(
+                        "Ошибка чтения пакета: {}",
+                        e
+                    )));
+                }
+            }
+        };
+
+        match self.decoder.decode(&packet) {
+            Ok(decoded) => {
+                let samples = Self::convert_to_f32(decoded)?;
+                Ok(Some(samples))
+            }
+            Err(Error::DecodeError(e)) => {
+                warn!("Ошибка декодирования: {}", e);
+
+                Ok(Some(vec![]))
+            }
+            Err(e) => Err(AudioError::DecodingError(format!(
+                "Ошибка декодирования: {}",
+                e
+            ))),
+        }
+    }
 
     fn convert_to_f32(buffer: AudioBufferRef) -> Result<Vec<f32>, AudioError> {
         use symphonia::core::audio::SampleBuffer;

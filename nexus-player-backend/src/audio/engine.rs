@@ -67,7 +67,7 @@ impl AudioEngine {
     }
 
     pub fn state(&self) -> AudioState {
-        self.state.read().clone()
+        self.state.read().unwrap().clone()
     }
 
     pub fn poll_event(&self) -> Option<AudioEvent> {
@@ -113,28 +113,28 @@ impl AudioEngine {
                 return;
             }
         };
+        let mut last_position_update = std::time::Instant::now();
 
         loop {
-            // Обновление позиции
             if playback.is_playing() {
                 let now = std::time::Instant::now();
                 if now.duration_since(last_position_update) >= Duration::from_millis(100) {
                     last_position_update = now;
 
                     let position = playback.position();
-                    state.write().position = position;
+                    state.write().unwrap().position = position;
                     let _ = event_tx.send(AudioEvent::PositionUpdated { position });
 
-                    // Проверяем завершение трека
                     if let Some(duration) = playback.duration() {
                         if position >= duration {
                             info!("Трек завершен");
-                            let track_id = state.read().current_track.as_ref().map(|t| t.id);
+                            let track_id =
+                                state.read().unwrap().current_track.as_ref().map(|t| t.id);
                             if let Some(id) = track_id {
                                 let _ = event_tx.send(AudioEvent::TrackFinished { track_id: id });
                             }
 
-                            state.write().playback_state = PlaybackState::Stopped;
+                            state.write().unwrap().playback_state = PlaybackState::Stopped;
                             playback.stop();
                         }
                     }
@@ -144,7 +144,7 @@ impl AudioEngine {
             // Обработка команд
             match command_rx.recv_timeout(Duration::from_millis(10)) {
                 Ok(AudioCommand::Play(track)) => {
-                    playback.play(&track.source);
+                    let result = playback.play(&track.source);
 
                     match result {
                         Ok(_) => {
@@ -153,20 +153,20 @@ impl AudioEngine {
 
                             // Обновляем состояние
                             {
-                                let mut s = state.write();
+                                let mut s = state.write().unwrap();
                                 s.playback_state = PlaybackState::Playing;
                                 s.current_track = Some(track.clone());
                                 s.position = Duration::ZERO;
                                 s.duration = duration;
                             }
 
-                            // Сбрасываем таймер обновления позиции для нового трека
-                            last_position_update = std::time::Instant::now();
-
                             // Отправляем события
                             if duration > Duration::ZERO {
                                 let _ = event_tx.send(AudioEvent::DurationChanged { duration });
                             }
+                            last_position_update = std::time::Instant::now();
+
+                            // Проверяем завершение трека
                             let _ = event_tx.send(AudioEvent::PlaybackStarted { track });
                             info!("Воспроизведение началось, длительность: {:?}", duration);
                         }
@@ -182,14 +182,14 @@ impl AudioEngine {
                 Ok(AudioCommand::Pause) => {
                     info!("Пауза");
                     playback.pause();
-                    state.write().playback_state = PlaybackState::Paused;
+                    state.write().unwrap().playback_state = PlaybackState::Paused;
                     let _ = event_tx.send(AudioEvent::PlaybackPaused);
                 }
 
                 Ok(AudioCommand::Resume) => {
                     info!("Возобновление");
                     playback.resume();
-                    state.write().playback_state = PlaybackState::Playing;
+                    state.write().unwrap().playback_state = PlaybackState::Playing;
 
                     let _ = event_tx.send(AudioEvent::PlaybackResumed);
                 }
@@ -199,7 +199,7 @@ impl AudioEngine {
                     playback.stop();
 
                     {
-                        let mut s = state.write();
+                        let mut s = state.write().unwrap();
                         s.playback_state = PlaybackState::Stopped;
                         s.current_track = None;
                         s.position = Duration::ZERO;
