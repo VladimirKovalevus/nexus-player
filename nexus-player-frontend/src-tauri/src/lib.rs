@@ -1,6 +1,5 @@
 use std::{
     path::PathBuf,
-    str::FromStr,
     sync::{Arc, Mutex},
 };
 
@@ -16,23 +15,24 @@ fn greet(name: &str) -> String {
 }
 #[tauri::command]
 fn play(path: &str, state: State<'_, AppState>) -> String {
-    state.update_playlist(|p| {
+    // let state_guard = state.lock().unwrap();
+    let state_guard = state;
+    state_guard.update_playlist(|p| {
         p.add_track(Track {
             id: 0,
             format: None,
             source: TrackSource::local(PathBuf::from(path)),
         });
     });
-    state.play_next();
-    format!("Hello, {}! You've been greeted from Rust!", path)
+    state_guard.play_next();
+    format!("Playing: {}", path)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = AppState::new().expect("Не удалось инициализировать AppState");
-    let arc = Arc::new(Mutex::new(app));
     tauri::Builder::default()
-        .manage(arc)
+        .manage(app)
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![greet, play])
         .run(tauri::generate_context!())
