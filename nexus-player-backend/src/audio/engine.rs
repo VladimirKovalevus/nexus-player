@@ -1,8 +1,9 @@
 use super::playback::PlaybackEngine;
 use super::types::{AudioCommand, AudioEvent, AudioState, PlaybackState, Track};
 use crate::error::AudioError;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, SyncSender};
+// TODO(human): замените std::sync::mpsc на crossbeam::channel
+use crossbeam::channel;
+use crossbeam::channel::{Receiver, Sender};
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
@@ -12,7 +13,7 @@ const COMMAND_BUFFER_SIZE: usize = 32;
 const EVENT_BUFFER_SIZE: usize = 128;
 
 pub struct AudioEngine {
-    command_tx: SyncSender<AudioCommand>,
+    command_tx: Sender<AudioCommand>,
     event_rx: Receiver<AudioEvent>,
     state: Arc<RwLock<AudioState>>,
     audio_thread: Option<std::thread::JoinHandle<()>>,
@@ -22,8 +23,9 @@ impl AudioEngine {
     pub fn new() -> Result<Self, AudioError> {
         info!("Инициализация аудио движка");
 
-        let (command_tx, command_rx) = mpsc::sync_channel(COMMAND_BUFFER_SIZE);
-        let (event_tx, event_rx) = mpsc::sync_channel(EVENT_BUFFER_SIZE);
+        // TODO(human): замените mpsc::sync_channel на channel::bounded (для обоих каналов)
+        let (command_tx, command_rx) = crossbeam::channel::bounded(COMMAND_BUFFER_SIZE);
+        let (event_tx, event_rx) = crossbeam::channel::bounded(EVENT_BUFFER_SIZE);
 
         let state = Arc::new(RwLock::new(AudioState::default()));
 
@@ -80,7 +82,7 @@ impl AudioEngine {
 
     fn spawn_audio_thread(
         command_rx: Receiver<AudioCommand>,
-        event_tx: SyncSender<AudioEvent>,
+        event_tx: Sender<AudioEvent>,
         state: Arc<RwLock<AudioState>>,
     ) -> Result<std::thread::JoinHandle<()>, AudioError> {
         let builder = std::thread::Builder::new()
@@ -102,10 +104,9 @@ impl AudioEngine {
 
     fn audio_thread_loop(
         command_rx: Receiver<AudioCommand>,
-        event_tx: SyncSender<AudioEvent>,
+        event_tx: Sender<AudioEvent>,
         state: Arc<RwLock<AudioState>>,
     ) {
-        // Создаем playback engine
         let mut playback = match PlaybackEngine::new() {
             Ok(p) => p,
             Err(e) => {
@@ -235,11 +236,11 @@ impl AudioEngine {
                     break;
                 }
 
-                Err(mpsc::RecvTimeoutError::Timeout) => {
+                Err(channel::RecvTimeoutError::Timeout) => {
                     // Нет команд - продолжаем работу
                 }
 
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                Err(channel::RecvTimeoutError::Disconnected) => {
                     warn!("Канал команд отключен");
                     break;
                 }

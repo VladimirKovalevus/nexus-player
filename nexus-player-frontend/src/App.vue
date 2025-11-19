@@ -7,12 +7,23 @@ const name = ref('');
 
 async function greet() {
   // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+  console.log('test');
   greetMsg.value = await invoke('greet', { name: name.value });
+
+  console.log('KAIFy');
 }
-const init = () => {};
-onMounted(() => {
-  init();
-});
+const back = () => {};
+const next = () => {};
+
+const start = async () => {
+  console.log('test');
+  const path =
+    '/home/ktoia/Downloads/Telegram Desktop/White Shore - Enjoy the Motion.mp3';
+
+  greetMsg.value = await invoke('play', { path: path });
+  console.log('KAIFy');
+};
+const select = () => {};
 </script>
 
 <template>
@@ -32,13 +43,11 @@ onMounted(() => {
     </div>
     <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
 
-    <form class="row">
-      <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-      <button type="submit" @click="back">BACK</button>
-      <button type="submit" @click="start">START</button>
-      <button type="submit" @click="next">NEXT</button>
-      <button type="submit" @click="select">SELECT</button>
-    </form>
+    <input id="greet-input" v-model="name" placeholder="Enter a name..." />
+    <button type="submit" @click="back">BACK</button>
+    <button type="submit" @click="start">START</button>
+    <button type="submit" @click="next">NEXT</button>
+    <button type="submit" @click="greet">SELECT</button>
     <p>{{ greetMsg }}</p>
   </main>
 </template>
