@@ -5,3 +5,9 @@
 
 pub(super) mod models;
 pub(super) mod convert;
+pub(super) mod track_repo;
+pub(super) mod playlist_repo;
+
+// Re-export repository implementations for convenience
+pub use track_repo::SqliteTrackRepository;
+pub use playlist_repo::SqlitePlaylistRepository;
