@@ -1,7 +1,6 @@
 use super::playback::PlaybackEngine;
 use super::types::{AudioCommand, AudioEvent, AudioState, PlaybackState, Track};
 use crate::error::AudioError;
-// TODO(human): замените std::sync::mpsc на crossbeam::channel
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, Sender};
 use std::sync::Arc;
@@ -23,7 +22,6 @@ impl AudioEngine {
     pub fn new() -> Result<Self, AudioError> {
         info!("Инициализация аудио движка");
 
-        // TODO(human): замените mpsc::sync_channel на channel::bounded (для обоих каналов)
         let (command_tx, command_rx) = crossbeam::channel::bounded(COMMAND_BUFFER_SIZE);
         let (event_tx, event_rx) = crossbeam::channel::bounded(EVENT_BUFFER_SIZE);
 
