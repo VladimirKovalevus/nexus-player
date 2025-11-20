@@ -1,49 +1,42 @@
 use crate::audio::engine::AudioEngine;
 use crate::playlist::playlist::Playlist;
-use crate::library::{TrackRepository, PlaylistRepository, SqliteTrackRepository, SqlitePlaylistRepository};
-use crate::db;
+use crate::library::LibraryService;
 use arc_swap::ArcSwap;
 use std::sync::Arc;
 use std::path::Path;
-use sqlx::SqlitePool;
 
 pub struct AppState {
-    
+    // Audio playback
     audio_engine: AudioEngine,
 
-    
+    // In-memory playback queue (lightweight audio::Track)
     playlist: ArcSwap<Playlist>,
     current_position: usize,
 
-    
-    db_pool: SqlitePool,
- 
-    track_repo: Arc<dyn TrackRepository>,
-    playlist_repo: Arc<dyn PlaylistRepository>,
+    // Library service (manages database, repositories, and library operations)
+    library: LibraryService,
 }
 
 impl AppState {
-    
+    /// Create new AppState with initialized library and audio engine
     pub async fn new(db_path: &Path) -> anyhow::Result<Self> {
-        
-        let db_pool = db::create_pool(db_path).await?;
+        // Initialize library service (database + repositories)
+        let library = LibraryService::new(db_path).await?;
 
-        
-        let track_repo: Arc<dyn TrackRepository> = Arc::new(SqliteTrackRepository::new(db_pool.clone()));
-        let playlist_repo: Arc<dyn PlaylistRepository> = Arc::new(SqlitePlaylistRepository::new(db_pool.clone()));
-
-        
+        // Initialize audio engine
         let audio_engine = AudioEngine::new()?;
 
         Ok(Self {
             audio_engine,
             current_position: 0,
             playlist: ArcSwap::new(Arc::new(Playlist::new())),
-            db_pool,
-            track_repo,
-            playlist_repo,
+            library,
         })
     }
+
+    // ========================================================================
+    // Component Access
+    // ========================================================================
 
     pub fn audio_engine(&self) -> &AudioEngine {
         &self.audio_engine
@@ -53,18 +46,14 @@ impl AppState {
         self.playlist.load_full()
     }
 
-    
-    pub fn db_pool(&self) -> &SqlitePool {
-        &self.db_pool
+    /// Get library service for track/playlist operations
+    pub fn library(&self) -> &LibraryService {
+        &self.library
     }
 
-    pub fn track_repo(&self) -> &Arc<dyn TrackRepository> {
-        &self.track_repo
-    }
-
-    pub fn playlist_repo(&self) -> &Arc<dyn PlaylistRepository> {
-        &self.playlist_repo
-    }
+    // ========================================================================
+    // Playback Queue Management
+    // ========================================================================
 
     pub fn update_playlist<F>(&self, f: F)
     where
