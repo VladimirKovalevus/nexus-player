@@ -1,40 +1,74 @@
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+mod commands;
+mod dto;
+mod events;
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use ::nexus_player_backend::audio::types::TrackSource;
-use ::nexus_player_backend::state::state::AppState;
-use nexus_player_backend::audio::types::Track;
-use tauri::State;
-
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-#[tauri::command]
-fn play(path: &str, state: State<'_, AppState>) -> String {
-    // let state_guard = state.lock().unwrap();
-    let state_guard = state;
-    state_guard.update_playlist(|p| {
-        p.add_track(Track {
-            id: 0,
-            format: None,
-            source: TrackSource::local(PathBuf::from(path)),
-        });
-    });
-    state_guard.play_next();
-    format!("Playing: {}", path)
-}
+use nexus_player_backend::state::state::AppState;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = AppState::new().expect("Не удалось инициализировать AppState");
+    tracing_subscriber::fmt::init();
+
     tauri::Builder::default()
-        .manage(app)
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, play])
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data directory");
+
+            std::fs::create_dir_all(&app_data_dir).expect("Failed to create app data directory");
+
+            let db_path = app_data_dir.join("nexus.db");
+
+            tracing::info!("Database path: {:?}", db_path);
+
+            let state = tauri::async_runtime::block_on(async {
+                AppState::new(&db_path)
+                    .await
+                    .expect("Failed to initialize AppState")
+            });
+
+            let state = Arc::new(state);
+
+            events::start_event_loop(app.handle().clone(), Arc::clone(&state));
+
+            app.manage(state);
+
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::get_all_tracks,
+            commands::get_track,
+            commands::search_tracks,
+            commands::add_track_from_file,
+            commands::delete_track,
+            commands::get_all_playlists,
+            commands::get_playlist_with_tracks,
+            commands::create_playlist,
+            commands::delete_playlist,
+            commands::add_track_to_playlist,
+            commands::remove_track_from_playlist,
+            commands::add_to_queue,
+            commands::remove_from_queue,
+            commands::clear_queue,
+            commands::get_queue,
+            commands::load_playlist_to_queue,
+            commands::play_at_index,
+            commands::play_next,
+            commands::play_previous,
+            commands::pause,
+            commands::resume,
+            commands::stop,
+            commands::seek,
+            commands::set_volume,
+            commands::get_audio_state,
+            commands::select_audio_file,
+            commands::select_audio_files,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

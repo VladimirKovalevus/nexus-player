@@ -21,6 +21,7 @@ anyhow = "1.0"
 symphonia = { version = "0.5", features = [
     "aac", "mp3", "flac", "vorbis", "wav", "pcm", "adpcm"
 ] }
+lofty = "0.21"
 cpal = "0.15"
 arc-swap = "1.7.1"
 crossbeam = "0.8"

@@ -1,64 +1,115 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import TrackList from './components/TrackList.vue';
+import PlaylistList from './components/PlaylistList.vue';
+import PlayerControl from './components/PlayerControl.vue';
 
-const greetMsg = ref('');
-const name = ref('');
+const trackListRef = ref<InstanceType<typeof TrackList> | null>(null);
+const playlistListRef = ref<InstanceType<typeof PlaylistList> | null>(null);
+const statusMessage = ref('');
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  console.log('test');
-  greetMsg.value = await invoke('greet', { name: name.value });
+// TODO(human): Implement the addTrackFromDialog function
+// This function should:
+// 1. Call 'select_audio_file' command to open file dialog
+// 2. If a file is selected, extract filename and create track metadata
+// 3. Call 'add_track_from_file' command with CreateTrackRequest
+// 4. Reload the track list using trackListRef
+// 5. Show success/error message in statusMessage
+const addTrackFromDialog = async () => {
+  const path = await invoke('select_audio_file');
+  await invoke('add_track_from_file',{path:path});
+  trackListRef.value?.reloadTracks()
 
-  console.log('KAIFy');
-}
-const back = () => {};
-const next = () => {};
-
-const start = async () => {
-  console.log('test');
-  const path =
-    '/home/ktoia/Downloads/Telegram Desktop/White Shore - Enjoy the Motion.mp3';
-
-  greetMsg.value = await invoke('play', { path: path });
-  console.log('KAIFy');
 };
-const select = () => {};
 </script>
 
 <template>
   <main class="container">
-    <h1>Welcome to Tauri + Vue</h1>
+    <h1>Nexus Audio Player</h1>
 
-    <div class="row">
-      <a href="https://vitejs.dev" target="_blank">
-        <img src="/vite.svg" class="logo vite" alt="Vite logo" />
-      </a>
-      <a href="https://tauri.app" target="_blank">
-        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo" />
-      </a>
-      <a href="https://vuejs.org/" target="_blank">
-        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-      </a>
+    <!-- Add Track Button and Status -->
+    <div class="controls">
+      <button class="add-track-btn" @click="addTrackFromDialog">
+        Add Track
+      </button>
+      <p v-if="statusMessage" class="status-message">{{ statusMessage }}</p>
     </div>
-    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
 
-    <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-    <button type="submit" @click="back">BACK</button>
-    <button type="submit" @click="start">START</button>
-    <button type="submit" @click="next">NEXT</button>
-    <button type="submit" @click="greet">SELECT</button>
-    <p>{{ greetMsg }}</p>
+    <!-- Track List Section -->
+    <section class="section">
+      <TrackList ref="trackListRef" />
+    </section>
+
+    <!-- Playlist List Section -->
+    <section class="section">
+      <PlaylistList ref="playlistListRef" />
+    </section>
+
+    <!-- Player Control -->
+    <PlayerControl />
   </main>
 </template>
 
 <style scoped>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
+h1 {
+  margin-bottom: 2rem;
+  color: #0f0f0f;
 }
 
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #249b73);
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.add-track-btn {
+  padding: 0.8em 2em;
+  font-size: 1.1rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.add-track-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.add-track-btn:active {
+  transform: translateY(0);
+}
+
+.status-message {
+  font-size: 0.9rem;
+  color: #666;
+  font-style: italic;
+}
+
+.section {
+  margin-bottom: 3rem;
+  width: 100%;
+}
+
+.container {
+  padding-bottom: 180px;
+}
+
+@media (prefers-color-scheme: dark) {
+  h1 {
+    color: #f6f6f6;
+  }
+
+  .status-message {
+    color: #aaa;
+  }
 }
 </style>
 <style>
@@ -80,10 +131,12 @@ const select = () => {};
 
 .container {
   margin: 0;
-  padding-top: 10vh;
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  align-items: center;
   text-align: center;
 }
 

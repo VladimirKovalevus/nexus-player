@@ -19,9 +19,9 @@ pub struct Track {
     pub artist: Option<String>,
     pub album: Option<String>,
     pub album_artist: Option<String>,
-    pub year: Option<u16>,
+    pub year: Option<u32>,
     pub genre: Option<String>,
-    pub track_number: Option<u16>,
+    pub track_number: Option<u32>,
 
     pub source: TrackSource,
     pub cache: CacheStatus,

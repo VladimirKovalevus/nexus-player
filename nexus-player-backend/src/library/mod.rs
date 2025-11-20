@@ -1,6 +1,7 @@
 mod db;
 
 pub mod convert;
+pub mod metadata;
 pub mod models;
 pub mod repository;
 pub mod types;
