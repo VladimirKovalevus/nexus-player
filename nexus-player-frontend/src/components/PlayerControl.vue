@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -40,9 +40,14 @@ const queueState = ref<QueueState>({
 });
 
 const seeking = ref(false);
-const pendingSeekValue = ref<number | null>(null);
+const seekPosition = ref(0);
 let updateInterval: number | null = null;
 let unlistenFn: (() => void) | null = null;
+
+// Computed property: use virtual seek position during seeking, otherwise use real audio position
+const displayPosition = computed(() => {
+  return seeking.value ? seekPosition.value : audioState.value.positionSecs;
+});
 
 const fetchAudioState = async () => {
   try {
@@ -84,7 +89,7 @@ const handleAudioEvent = (event: AudioEvent) => {
       fetchAudioState();
       break;
     case 'PositionUpdated':
-      if (!seeking.value && event.payload?.position_secs !== undefined) {
+      if (event.payload?.position_secs !== undefined) {
         audioState.value.positionSecs = event.payload.position_secs;
       }
       break;
@@ -145,14 +150,15 @@ const playPrevious = async () => {
 const onSeekStart = (event: Event) => {
   seeking.value = true;
   const target = event.target as HTMLInputElement;
-  pendingSeekValue.value = parseFloat(target.value);
-  console.log('seekStart', seeking.value, 'initial value:', pendingSeekValue.value);
+  seekPosition.value = parseFloat(target.value);
+  console.log('seekStart - locked position at:', seekPosition.value);
 };
 
 const onSeekChange = (event: Event) => {
   if (seeking.value) {
     const target = event.target as HTMLInputElement;
-    pendingSeekValue.value = parseFloat(target.value);
+    seekPosition.value = parseFloat(target.value);
+    console.log('seekChange - updating virtual position to:', seekPosition.value);
   }
 };
 
@@ -163,32 +169,40 @@ const onSeekEnd = async (event: Event) => {
   }
 
   const target = event.target as HTMLInputElement;
-  console.log('KTO TARGET',target)
   const position = parseFloat(target.value);
-  pendingSeekValue.value = position;
+  seekPosition.value = position;
 
-  console.log('seeking to position:', position);
+  console.log('seekEnd - committing position:', position);
+
+  // Optimistic update: immediately update audioState to prevent visual jump
+  audioState.value.positionSecs = position;
+  seeking.value = false;
 
   try {
     await invoke('seek', { positionSecs: position });
     console.log('seek successful');
   } catch (e) {
     console.error('Failed to seek:', e);
-  } finally {
-    seeking.value = false;
-    pendingSeekValue.value = null;
+    // On error, fetch real state to recover
+    await fetchAudioState();
   }
 };
 
 const handleGlobalMouseUp = () => {
-  if (seeking.value && pendingSeekValue.value !== null) {
-    console.log('Global mouseup detected while seeking, finalizing seek');
-    invoke('seek', { positionSecs: pendingSeekValue.value })
+  if (seeking.value) {
+    const position = seekPosition.value;
+    console.log('Global mouseup - committing position:', position);
+
+    // Optimistic update: immediately update audioState to prevent visual jump
+    audioState.value.positionSecs = position;
+    seeking.value = false;
+
+    invoke('seek', { positionSecs: position })
       .then(() => console.log('seek successful (global)'))
-      .catch((e) => console.error('Failed to seek (global):', e))
-      .finally(() => {
-        seeking.value = false;
-        pendingSeekValue.value = null;
+      .catch((e) => {
+        console.error('Failed to seek (global):', e);
+        // On error, fetch real state to recover
+        fetchAudioState();
       });
   }
 };
@@ -301,11 +315,11 @@ onUnmounted(() => {
     </div>
 
     <div class="playback-bar">
-      <span class="time">{{ formatTime(audioState.positionSecs) }}</span>
+      <span class="time">{{ formatTime(displayPosition) }}</span>
       <input
         type="range"
         class="seek-bar"
-        :value="audioState.positionSecs"
+        :value="displayPosition"
         :max="audioState.durationSecs || 0"
         step="0.1"
         @mousedown="onSeekStart"
