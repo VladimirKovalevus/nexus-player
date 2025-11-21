@@ -1,0 +1,200 @@
+use serde::{Deserialize, Serialize};
+
+use crate::library::TrackSource;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum ContentType {
+    Track,
+
+    Playlist,
+
+    Album,
+
+    Channel,
+}
+
+impl ContentType {
+    pub fn is_collection(&self) -> bool {
+        !matches!(self, ContentType::Track)
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum StreamingService {
+    YouTube,
+
+    SoundCloud,
+
+    Bandcamp,
+}
+
+impl StreamingService {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::YouTube => "YouTube",
+            Self::SoundCloud => "SoundCloud",
+            Self::Bandcamp => "Bandcamp",
+        }
+    }
+
+    pub fn search_prefix(&self, limit: usize) -> String {
+        match self {
+            Self::YouTube => format!("ytsearch{}", limit),
+            Self::SoundCloud => format!("scsearch{}", limit),
+            Self::Bandcamp => String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum SearchResult {
+    Track(TrackInfo),
+
+    Playlist(PlaylistInfo),
+
+    Album(AlbumInfo),
+
+    Channel(ChannelInfo),
+}
+
+impl SearchResult {
+    pub fn content_type(&self) -> ContentType {
+        match self {
+            SearchResult::Track(_) => ContentType::Track,
+            SearchResult::Playlist(_) => ContentType::Playlist,
+            SearchResult::Album(_) => ContentType::Album,
+            SearchResult::Channel(_) => ContentType::Channel,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TrackInfo {
+    pub source: TrackSource,
+
+    pub title: String,
+
+    pub artist: String,
+
+    pub duration: Option<std::time::Duration>,
+
+    pub thumbnail: Option<String>,
+
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlaylistInfo {
+    pub id: String,
+
+    pub url: String,
+
+    pub service: StreamingService,
+
+    pub title: String,
+
+    pub creator: String,
+
+    pub track_count: usize,
+
+    pub thumbnail: Option<String>,
+
+    pub description: Option<String>,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum AudioQuality {
+    Best,
+
+    High,
+
+    Medium,
+
+    Low,
+}
+
+impl Default for AudioQuality {
+    fn default() -> Self {
+        AudioQuality::High
+    }
+}
+
+impl AudioQuality {
+    pub fn approximate_bitrate(&self) -> u32 {
+        match self {
+            AudioQuality::Best => 320,
+            AudioQuality::High => 256,
+            AudioQuality::Medium => 128,
+            AudioQuality::Low => 64,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AlbumInfo {
+    pub id: String,
+
+    pub url: String,
+
+    pub service: StreamingService,
+
+    pub title: String,
+
+    pub artist: String,
+
+    pub track_count: usize,
+
+    pub year: Option<u32>,
+
+    pub thumbnail: Option<String>,
+
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChannelInfo {
+    pub id: String,
+
+    pub url: String,
+
+    pub service: StreamingService,
+
+    pub name: String,
+
+    pub subscriber_count: Option<u64>,
+
+    pub track_count: Option<usize>,
+
+    pub thumbnail: Option<String>,
+
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StreamMetadata {
+    pub title: Option<String>,
+
+    pub artist: Option<String>,
+
+    pub album: Option<String>,
+
+    pub duration: Option<std::time::Duration>,
+
+    pub artwork_url: Option<String>,
+
+    pub sample_rate: Option<u32>,
+
+    pub channels: Option<usize>,
+}
+
+impl Default for StreamMetadata {
+    fn default() -> Self {
+        Self {
+            title: None,
+            artist: None,
+            album: None,
+            duration: None,
+            artwork_url: None,
+            sample_rate: None,
+            channels: None,
+        }
+    }
+}
