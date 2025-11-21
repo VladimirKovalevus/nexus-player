@@ -4,9 +4,11 @@ import { invoke } from '@tauri-apps/api/core';
 import TrackList from './components/TrackList.vue';
 import PlaylistList from './components/PlaylistList.vue';
 import PlayerControl from './components/PlayerControl.vue';
+import PlaybackQueue from './components/PlaybackQueue.vue';
 
 const trackListRef = ref<InstanceType<typeof TrackList> | null>(null);
 const playlistListRef = ref<InstanceType<typeof PlaylistList> | null>(null);
+const playbackQueueRef = ref<InstanceType<typeof PlaybackQueue> | null>(null);
 const statusMessage = ref('');
 
 // TODO(human): Implement the addTrackFromDialog function
@@ -38,12 +40,23 @@ const addTrackFromDialog = async () => {
 
     <!-- Track List Section -->
     <section class="section">
-      <TrackList ref="trackListRef" />
+      <TrackList
+        ref="trackListRef"
+        @track-added-to-queue="playbackQueueRef?.fetchQueue()"
+      />
     </section>
 
     <!-- Playlist List Section -->
     <section class="section">
-      <PlaylistList ref="playlistListRef" />
+      <PlaylistList
+        ref="playlistListRef"
+        @playlist-loaded-to-queue="playbackQueueRef?.fetchQueue()"
+      />
+    </section>
+
+    <!-- Playback Queue Section -->
+    <section class="section">
+      <PlaybackQueue ref="playbackQueueRef" />
     </section>
 
     <!-- Player Control -->

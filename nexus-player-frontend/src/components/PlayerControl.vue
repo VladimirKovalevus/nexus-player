@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 interface AudioState {
   state: 'playing' | 'paused' | 'stopped' | 'buffering';
@@ -20,6 +21,11 @@ interface QueueState {
   shuffleEnabled: boolean;
 }
 
+interface AudioEvent {
+  type: string;
+  payload?: any;
+}
+
 const audioState = ref<AudioState>({
   state: 'stopped',
   positionSecs: 0,
@@ -34,7 +40,9 @@ const queueState = ref<QueueState>({
 });
 
 const seeking = ref(false);
+const pendingSeekValue = ref<number | null>(null);
 let updateInterval: number | null = null;
+let unlistenFn: (() => void) | null = null;
 
 const fetchAudioState = async () => {
   try {
@@ -54,12 +62,61 @@ const fetchQueueState = async () => {
   }
 };
 
+const handleAudioEvent = (event: AudioEvent) => {
+  // console.log('Audio event received:', event);
+
+  switch (event.type) {
+    case 'PlaybackStarted':
+      audioState.value.state = 'playing';
+      fetchAudioState();
+      break;
+    case 'PlaybackPaused':
+      audioState.value.state = 'paused';
+      break;
+    case 'PlaybackResumed':
+      audioState.value.state = 'playing';
+      break;
+    case 'PlaybackStopped':
+      audioState.value.state = 'stopped';
+      audioState.value.currentTrack = null;
+      break;
+    case 'TrackFinished':
+      fetchAudioState();
+      break;
+    case 'PositionUpdated':
+      if (!seeking.value && event.payload?.position_secs !== undefined) {
+        audioState.value.positionSecs = event.payload.position_secs;
+      }
+      break;
+    case 'DurationChanged':
+      if (event.payload?.duration_secs !== undefined) {
+        audioState.value.durationSecs = event.payload.duration_secs;
+      }
+      break;
+    case 'VolumeChanged':
+      if (event.payload?.volume !== undefined) {
+        audioState.value.volume = event.payload.volume;
+      }
+      break;
+    case 'AudioStateUpdated':
+      if (event.payload?.state) {
+        audioState.value = event.payload.state;
+      }
+      break;
+    case 'Error':
+      console.error('Audio error:', event.payload?.message);
+      break;
+  }
+};
+
 const togglePlayPause = async () => {
   try {
     if (audioState.value.state === 'playing') {
       await invoke('pause');
     } else if (audioState.value.state === 'paused') {
       await invoke('resume');
+    }else if (audioState.value.state === 'stopped'){
+    await invoke('play_at_index',{index:0})
     }
     await fetchAudioState();
   } catch (e) {
@@ -85,21 +142,54 @@ const playPrevious = async () => {
   }
 };
 
-const onSeekStart = () => {
+const onSeekStart = (event: Event) => {
   seeking.value = true;
+  const target = event.target as HTMLInputElement;
+  pendingSeekValue.value = parseFloat(target.value);
+  console.log('seekStart', seeking.value, 'initial value:', pendingSeekValue.value);
+};
+
+const onSeekChange = (event: Event) => {
+  if (seeking.value) {
+    const target = event.target as HTMLInputElement;
+    pendingSeekValue.value = parseFloat(target.value);
+  }
 };
 
 const onSeekEnd = async (event: Event) => {
+  if (!seeking.value) {
+    console.log('onSeekEnd called but not seeking, ignoring');
+    return;
+  }
+
   const target = event.target as HTMLInputElement;
+  console.log('KTO TARGET',target)
   const position = parseFloat(target.value);
+  pendingSeekValue.value = position;
+
+  console.log('seeking to position:', position);
 
   try {
     await invoke('seek', { positionSecs: position });
-    seeking.value = false;
-    await fetchAudioState();
+    console.log('seek successful');
   } catch (e) {
     console.error('Failed to seek:', e);
+  } finally {
     seeking.value = false;
+    pendingSeekValue.value = null;
+  }
+};
+
+const handleGlobalMouseUp = () => {
+  if (seeking.value && pendingSeekValue.value !== null) {
+    console.log('Global mouseup detected while seeking, finalizing seek');
+    invoke('seek', { positionSecs: pendingSeekValue.value })
+      .then(() => console.log('seek successful (global)'))
+      .catch((e) => console.error('Failed to seek (global):', e))
+      .finally(() => {
+        seeking.value = false;
+        pendingSeekValue.value = null;
+      });
   }
 };
 
@@ -141,16 +231,35 @@ const formatTime = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-onMounted(() => {
+onMounted(async () => {
   fetchAudioState();
   fetchQueueState();
-  updateInterval = window.setInterval(fetchAudioState, 1000);
+
+  try {
+    unlistenFn = await listen('audio-event', (event: any) => {
+      handleAudioEvent(event.payload);
+    });
+    console.log('Subscribed to audio events');
+  } catch (e) {
+    console.error('Failed to subscribe to audio events:', e);
+  }
+
+  window.addEventListener('mouseup', handleGlobalMouseUp);
+  window.addEventListener('touchend', handleGlobalMouseUp);
 });
 
 onUnmounted(() => {
+  if (unlistenFn) {
+    unlistenFn();
+    console.log('Unsubscribed from audio events');
+  }
+
   if (updateInterval !== null) {
     clearInterval(updateInterval);
   }
+
+  window.removeEventListener('mouseup', handleGlobalMouseUp);
+  window.removeEventListener('touchend', handleGlobalMouseUp);
 });
 </script>
 
@@ -201,14 +310,16 @@ onUnmounted(() => {
         step="0.1"
         @mousedown="onSeekStart"
         @touchstart="onSeekStart"
-        @change="onSeekEnd"
+        @input="onSeekChange"
+        @mouseup="onSeekEnd"
+        @touchend="onSeekEnd"
       />
       <span class="time">{{ formatTime(audioState.durationSecs) }}</span>
     </div>
   </div>
 </template>
 
-<style scoped>
+<style scoped >
 .player-control {
   position: fixed;
   bottom: 0;

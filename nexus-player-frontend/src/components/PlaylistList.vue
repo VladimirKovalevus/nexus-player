@@ -2,6 +2,10 @@
 import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
+const emit = defineEmits<{
+  'playlist-loaded-to-queue': []
+}>();
+
 // Playlists will be fetched from backend
 const playlists = ref<any[]>([]);
 const loading = ref(true);
@@ -34,6 +38,16 @@ const reloadPlaylists = async () => {
   }
 };
 
+// Load playlist to queue
+const loadPlaylistToQueue = async (playlistId: number) => {
+  try {
+    await invoke('load_playlist_to_queue', { playlistId });
+    emit('playlist-loaded-to-queue');
+  } catch (e) {
+    console.error('Error loading playlist to queue:', e);
+  }
+};
+
 // Format timestamp to readable date
 const formatDate = (timestamp: number): string => {
   return new Date(timestamp * 1000).toLocaleDateString();
@@ -56,6 +70,7 @@ defineExpose({ reloadPlaylists });
         v-for="playlist in playlists"
         :key="playlist.id"
         class="playlist-item"
+        @click="loadPlaylistToQueue(playlist.id)"
       >
         <div class="playlist-info">
           <div class="playlist-title">{{ playlist.title }}</div>

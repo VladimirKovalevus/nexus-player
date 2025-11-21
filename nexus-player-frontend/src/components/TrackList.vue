@@ -2,6 +2,10 @@
 import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
+const emit = defineEmits<{
+  'track-added-to-queue': []
+}>();
+
 // Tracks will be fetched from backend
 const tracks = ref<any[]>([]);
 const loading = ref(true);
@@ -35,8 +39,9 @@ const reloadTracks = async () => {
 };
 const trackClick = async (track)=>{
     console.log(track,'track Click')
-    const res =await invoke('add_to_queue',{trackId:track.id})
+    const res = await invoke('add_to_queue',{trackId:track.id})
     console.log(res,'res Click')
+    emit('track-added-to-queue');
 }
 
 // Format duration from seconds to MM:SS
