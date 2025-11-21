@@ -2757,6 +2757,7 @@ dependencies = [
  "rsoundcloud",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
  "symphonia",
  "tempfile",

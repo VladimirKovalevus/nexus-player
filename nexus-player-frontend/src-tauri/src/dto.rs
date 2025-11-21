@@ -103,6 +103,20 @@ impl From<audio::Track> for TrackDto {
     }
 }
 
+impl From<&audio::Track> for TrackDto {
+    fn from(track: &audio::Track) -> Self {
+        Self {
+            id: track.id as i64,
+            title: track.title.clone(),
+            artist: track.artist.clone(),
+            album: track.album.clone(),
+            duration_secs: track.duration.map(|d| d.as_secs_f64()),
+            artwork_url: track.artwork_url.clone(),
+            play_count: 0,
+        }
+    }
+}
+
 impl From<models::Playlist> for PlaylistDto {
     fn from(playlist: models::Playlist) -> Self {
         Self {

@@ -5,6 +5,7 @@ import TrackList from './components/TrackList.vue';
 import PlaylistList from './components/PlaylistList.vue';
 import PlayerControl from './components/PlayerControl.vue';
 import PlaybackQueue from './components/PlaybackQueue.vue';
+import StreamingSearch from './components/StreamingSearch.vue';
 
 const trackListRef = ref<InstanceType<typeof TrackList> | null>(null);
 const playlistListRef = ref<InstanceType<typeof PlaylistList> | null>(null);
@@ -37,6 +38,11 @@ const addTrackFromDialog = async () => {
       </button>
       <p v-if="statusMessage" class="status-message">{{ statusMessage }}</p>
     </div>
+
+    <!-- Streaming Search Section -->
+    <section class="section">
+      <StreamingSearch />
+    </section>
 
     <!-- Track List Section -->
     <section class="section">

@@ -5,6 +5,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
+use tracing::info;
 
 use crate::audio::types::MediaSource;
 use crate::library::TrackSource;
@@ -16,7 +17,7 @@ use crate::streaming::types::{
     StreamingService, TrackInfo,
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct YtDlpMetadata {
     title: Option<String>,
     artist: Option<String>,
@@ -74,6 +75,7 @@ impl YtDlpProvider {
     }
 
     async fn run_ytdlp(&self, args: &[&str]) -> StreamResult<String> {
+        info!("Запуск ytdlp {:?}", args);
         let output = Command::new(&self.executable)
             .args(args)
             .output()
@@ -190,7 +192,6 @@ impl StreamProvider for YtDlpProvider {
             }
         };
 
-
         Err(StreamError::NotSupported)
     }
 
@@ -201,7 +202,7 @@ impl StreamProvider for YtDlpProvider {
         limit: usize,
         _offset: usize,
     ) -> StreamResult<Vec<SearchResult>> {
-        let search_query = format!("ytsearch{}:{}", limit, query);
+        let search_query = format!("scsearch{}:{}", limit, query);
 
         let meta = self.fetch_json(&search_query, true).await?;
 
@@ -221,14 +222,15 @@ impl StreamProvider for YtDlpProvider {
 
             let url = url.unwrap();
 
+            info!("fo Watafo {:?} {:?}", entry_type, content_type);
             match (entry_type, &content_type) {
                 (Some("playlist"), None | Some(ContentType::Playlist)) => {
-                    if let Some(playlist) = self.metadata_to_playlist_info(entry, url) {
+                    if let Some(playlist) = self.metadata_to_playlist_info(entry.clone(), url) {
                         results.push(SearchResult::Playlist(playlist));
                     }
                 }
-                (Some("video") | None, None | Some(ContentType::Track)) => {
-                    if let Some(track) = self.metadata_to_track_info(entry, url) {
+                (Some("url") | None, None | Some(ContentType::Track)) => {
+                    if let Some(track) = self.metadata_to_track_info(entry.clone(), url) {
                         results.push(SearchResult::Track(track));
                     }
                 }

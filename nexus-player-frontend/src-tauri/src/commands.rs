@@ -46,16 +46,13 @@ pub async fn search_tracks(
 }
 
 #[tauri::command]
-pub async fn add_track_from_file(
-    state: State<'_, Arc<AppState>>,
-    path: String,
-) -> Result<i64> {
-    use nexus_player_backend::library::metadata::{parse_from_path, create_track_from_parsed};
+pub async fn add_track_from_file(state: State<'_, Arc<AppState>>, path: String) -> Result<i64> {
+    use nexus_player_backend::library::metadata::{create_track_from_parsed, parse_from_path};
 
     let file_path = PathBuf::from(&path);
 
-    let parsed = parse_from_path(&file_path)
-        .map_err(|e| format!("Failed to parse metadata: {}", e))?;
+    let parsed =
+        parse_from_path(&file_path).map_err(|e| format!("Failed to parse metadata: {}", e))?;
 
     let track = create_track_from_parsed(file_path, parsed);
 
