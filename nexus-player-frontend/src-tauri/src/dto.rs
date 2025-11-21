@@ -35,17 +35,8 @@ pub struct PlaylistWithTracksDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct QueueTrackDto {
-    pub index: usize,
-    pub track_id: usize,
-    pub title: String,
-    pub source: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct QueueStateDto {
-    pub tracks: Vec<QueueTrackDto>,
+    pub tracks: Vec<TrackDto>,
     pub current_index: Option<usize>,
     pub repeat_mode: String,
     pub shuffle_enabled: bool,
@@ -58,7 +49,7 @@ pub struct AudioStateDto {
     pub position_secs: f64,
     pub duration_secs: f64,
     pub volume: f32,
-    pub current_track: Option<QueueTrackDto>,
+    pub current_track: Option<TrackDto>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -93,6 +84,20 @@ impl From<models::Track> for TrackDto {
                 .and_then(|info| info.duration_secs),
             artwork_url: None,
             play_count: track.play_count,
+        }
+    }
+}
+
+impl From<audio::Track> for TrackDto {
+    fn from(track: audio::Track) -> Self {
+        Self {
+            id: track.id as i64,
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            duration_secs: track.duration.map(|d| d.as_secs_f64()),
+            artwork_url: track.artwork_url,
+            play_count: 0,
         }
     }
 }
@@ -132,19 +137,13 @@ impl From<audio::AudioState> for AudioStateDto {
             audio::PlaybackState::Buffering => "buffering",
         };
 
-        let current_track = state.current_track.map(|track| QueueTrackDto {
-            index: 0,
-            track_id: track.id,
-            title: "Unknown".to_string(),
-            source: track.source.as_str(),
-        });
-
         Self {
             state: state_str.to_string(),
             position_secs: state.position.as_secs_f64(),
             duration_secs: state.duration.as_secs_f64(),
             volume: state.volume,
-            current_track,
+            current_track: state.current_track.map(|t| t.into()),
         }
     }
 }
+

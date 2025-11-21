@@ -63,6 +63,10 @@ impl PlaybackEngine {
             TrackSource::Local(p) => self.play_local(&p),
             TrackSource::Http(p) => todo!(),
             TrackSource::External { system, id } => todo!(),
+            TrackSource::Cached {
+                cache_path,
+                original_url,
+            } => todo!(),
         }
     }
     fn play_local(&mut self, path: &Path) -> Result<(), AudioError> {

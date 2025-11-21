@@ -118,6 +118,12 @@ impl AudioFormat {
 pub struct Track {
     pub id: usize,
 
+    pub title: String,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub duration: Option<Duration>,
+    pub artwork_url: Option<String>,
+
     pub format: Option<AudioFormat>,
 
     pub source: TrackSource,
@@ -130,7 +136,15 @@ pub enum TrackSource {
 
     Http(String),
 
-    External { system: String, id: String },
+    External {
+        system: String,
+        id: String,
+    },
+
+    Cached {
+        cache_path: PathBuf,
+        original_url: String,
+    },
 }
 
 impl TrackSource {
@@ -149,11 +163,44 @@ impl TrackSource {
         }
     }
 
+    pub fn cached(cache_path: impl Into<PathBuf>, original_url: impl Into<String>) -> Self {
+        Self::Cached {
+            cache_path: cache_path.into(),
+            original_url: original_url.into(),
+        }
+    }
+
     pub fn as_str(&self) -> String {
         match self {
             Self::Local(path) => path.display().to_string(),
             Self::Http(url) => url.clone(),
             Self::External { system, id } => format!("{}:{}", system, id),
+            Self::Cached { cache_path, .. } => cache_path.display().to_string(),
+        }
+    }
+}
+
+impl From<crate::library::models::Track> for Track {
+    fn from(track: crate::library::models::Track) -> Self {
+        Self {
+            id: track.id.0 as usize,
+            title: track.metadata.title,
+            artist: track.artist,
+            album: track.album,
+            duration: track
+                .audio_info
+                .as_ref()
+                .and_then(|info| info.duration_secs.map(|secs| Duration::from_secs_f64(secs))),
+            artwork_url: None,
+            format: track.audio_info.as_ref().and_then(|info| {
+                info.sample_rate
+                    .zip(info.channels)
+                    .map(|(sr, ch)| AudioFormat {
+                        sample_rate: SampleRate(sr),
+                        channels: ch as u16,
+                    })
+            }),
+            source: track.source,
         }
     }
 }

@@ -191,21 +191,9 @@ pub fn clear_queue(state: State<'_, Arc<AppState>>) -> Result<()> {
 }
 
 #[tauri::command]
-pub fn get_queue(state: State<'_, Arc<AppState>>) -> Result<Vec<QueueTrackDto>> {
-    let tracks = state.get_queue();
-
-    let queue_tracks = tracks
-        .iter()
-        .enumerate()
-        .map(|(index, track)| QueueTrackDto {
-            index,
-            track_id: track.id,
-            title: "Unknown".to_string(),
-            source: track.source.as_str(),
-        })
-        .collect();
-
-    Ok(queue_tracks)
+pub fn get_queue(state: State<'_, Arc<AppState>>) -> Result<Vec<TrackDto>> {
+    let queue_tracks = state.get_queue();
+    Ok(queue_tracks.into_iter().map(|t| t.into()).collect())
 }
 
 #[tauri::command]
@@ -271,8 +259,7 @@ pub fn set_volume(state: State<'_, Arc<AppState>>, volume: f32) -> Result<()> {
 
 #[tauri::command]
 pub fn get_audio_state(state: State<'_, Arc<AppState>>) -> Result<AudioStateDto> {
-    let audio_state = state.audio_state();
-    Ok(audio_state.into())
+    Ok(state.audio_state().into())
 }
 
 #[tauri::command]
@@ -299,18 +286,7 @@ pub fn toggle_shuffle(state: State<'_, Arc<AppState>>) -> Result<()> {
 #[tauri::command]
 pub fn get_queue_state(state: State<'_, Arc<AppState>>) -> Result<QueueStateDto> {
     let queue = state.queue();
-    let tracks = queue.tracks();
-
-    let queue_tracks = tracks
-        .iter()
-        .enumerate()
-        .map(|(index, track)| QueueTrackDto {
-            index,
-            track_id: track.id,
-            title: "Unknown".to_string(),
-            source: track.source.as_str(),
-        })
-        .collect();
+    let tracks: Vec<TrackDto> = queue.tracks().into_iter().map(|t| t.into()).collect();
 
     let repeat_mode = match state.get_repeat_mode() {
         nexus_player_backend::playlist::playback_queue::RepeatMode::Off => "off",
@@ -319,7 +295,7 @@ pub fn get_queue_state(state: State<'_, Arc<AppState>>) -> Result<QueueStateDto>
     };
 
     Ok(QueueStateDto {
-        tracks: queue_tracks,
+        tracks,
         current_index: state.get_current_track_index(),
         repeat_mode: repeat_mode.to_string(),
         shuffle_enabled: state.is_shuffle_enabled(),

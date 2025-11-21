@@ -3,17 +3,22 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
+interface TrackDto {
+  id: number;
+  title: string;
+  artist: string | null;
+  album: string | null;
+  durationSecs: number | null;
+  artworkUrl: string | null;
+  playCount: number;
+}
+
 interface AudioState {
   state: 'playing' | 'paused' | 'stopped' | 'buffering';
   positionSecs: number;
   durationSecs: number;
   volume: number;
-  currentTrack: {
-    index: number;
-    trackId: number;
-    title: string;
-    source: string;
-  } | null;
+  currentTrack: TrackDto | null;
 }
 
 interface QueueState {

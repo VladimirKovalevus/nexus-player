@@ -117,6 +117,10 @@ fn serialize_track_source(
             Some(system.clone()),
             Some(id.clone()),
         ),
+        TrackSource::Cached {
+            cache_path,
+            original_url,
+        } => ("Cached".to_string(), None, None, None, None),
     }
 }
 
