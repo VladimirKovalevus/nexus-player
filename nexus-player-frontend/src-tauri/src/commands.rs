@@ -276,6 +276,57 @@ pub fn get_audio_state(state: State<'_, Arc<AppState>>) -> Result<AudioStateDto>
 }
 
 #[tauri::command]
+pub fn set_repeat_mode(state: State<'_, Arc<AppState>>, mode: String) -> Result<()> {
+    use nexus_player_backend::playlist::playback_queue::RepeatMode;
+
+    let repeat_mode = match mode.as_str() {
+        "off" => RepeatMode::Off,
+        "all" => RepeatMode::All,
+        "one" => RepeatMode::One,
+        _ => return Err("Invalid repeat mode".into()),
+    };
+
+    state.set_repeat_mode(repeat_mode);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn toggle_shuffle(state: State<'_, Arc<AppState>>) -> Result<()> {
+    state.toggle_shuffle();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_queue_state(state: State<'_, Arc<AppState>>) -> Result<QueueStateDto> {
+    let queue = state.queue();
+    let tracks = queue.tracks();
+
+    let queue_tracks = tracks
+        .iter()
+        .enumerate()
+        .map(|(index, track)| QueueTrackDto {
+            index,
+            track_id: track.id,
+            title: "Unknown".to_string(),
+            source: track.source.as_str(),
+        })
+        .collect();
+
+    let repeat_mode = match state.get_repeat_mode() {
+        nexus_player_backend::playlist::playback_queue::RepeatMode::Off => "off",
+        nexus_player_backend::playlist::playback_queue::RepeatMode::All => "all",
+        nexus_player_backend::playlist::playback_queue::RepeatMode::One => "one",
+    };
+
+    Ok(QueueStateDto {
+        tracks: queue_tracks,
+        current_index: state.get_current_track_index(),
+        repeat_mode: repeat_mode.to_string(),
+        shuffle_enabled: state.is_shuffle_enabled(),
+    })
+}
+
+#[tauri::command]
 pub async fn select_audio_file(app: tauri::AppHandle) -> Result<Option<String>> {
     let file_path = app
         .dialog()

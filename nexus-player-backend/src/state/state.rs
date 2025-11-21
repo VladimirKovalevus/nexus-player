@@ -3,6 +3,7 @@ use crate::audio::types::Track as AudioTrack;
 use crate::library::models::{Metadata, Playlist as LibraryPlaylist, Track as LibraryTrack};
 use crate::library::{LibraryService, PlaylistId, TrackId};
 use crate::playlist::playlist::Playlist;
+use crate::playlist::playback_queue::{PlaybackQueue, RepeatMode};
 use anyhow::{Context, Result};
 use arc_swap::ArcSwap;
 use std::path::Path;
@@ -12,8 +13,7 @@ use std::time::Duration;
 pub struct AppState {
     audio_engine: AudioEngine,
 
-    playlist: ArcSwap<Playlist>,
-    current_position: usize,
+    queue: ArcSwap<PlaybackQueue>,
 
     library: LibraryService,
 }
@@ -26,8 +26,7 @@ impl AppState {
 
         Ok(Self {
             audio_engine,
-            current_position: 0,
-            playlist: ArcSwap::new(Arc::new(Playlist::new())),
+            queue: ArcSwap::new(Arc::new(PlaybackQueue::new())),
             library,
         })
     }
@@ -36,61 +35,53 @@ impl AppState {
         &self.audio_engine
     }
 
-    pub fn playlist(&self) -> Arc<Playlist> {
-        self.playlist.load_full()
+    pub fn queue(&self) -> Arc<PlaybackQueue> {
+        self.queue.load_full()
     }
 
     pub fn library(&self) -> &LibraryService {
         &self.library
     }
 
-    pub fn update_playlist<F>(&self, f: F)
+    pub fn update_queue<F>(&self, f: F)
     where
-        F: FnOnce(&mut Playlist),
+        F: FnOnce(&mut PlaybackQueue),
     {
-        let current = self.playlist.load_full();
-
-        let mut new_playlist = (*current).clone();
-
-        f(&mut new_playlist);
-
-        self.playlist.store(Arc::new(new_playlist));
+        let current = self.queue.load_full();
+        let mut new_queue = (*current).clone();
+        f(&mut new_queue);
+        self.queue.store(Arc::new(new_queue));
     }
 
-    pub fn set_playlist(&self, playlist: Playlist) {
-        self.playlist.store(Arc::new(playlist));
+    pub fn update_queue_with_return<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut PlaybackQueue) -> R,
+    {
+        let current = self.queue.load_full();
+        let mut new_queue = (*current).clone();
+        let result = f(&mut new_queue);
+        self.queue.store(Arc::new(new_queue));
+        result
     }
 
     pub fn play_next(&self) {
-        let previous_index = if (self.current_position + 1 == self.playlist().len()) {
-            0
-        } else {
-            self.current_position + 1
-        };
-
-        let playlist = self.playlist();
-        if let Some(track) = playlist.get_track(previous_index) {
-            let mut track = track.clone();
-
-            tracing::info!("Воспроизведение следующего трека: {}", &track.id);
-            self.audio_engine.play(track);
-        }
+        self.update_queue(|queue| {
+            if let Some(track) = queue.next() {
+                tracing::info!("Воспроизведение следующего трека: {}", track.id);
+                self.audio_engine.play(track.clone());
+            } else {
+                tracing::info!("Достигнут конец очереди");
+            }
+        });
     }
 
     pub fn play_previous(&self) {
-        let previous_index = if (self.current_position == 0) {
-            0
-        } else {
-            self.current_position - 1
-        };
-
-        let playlist = self.playlist();
-        if let Some(track) = playlist.get_track(previous_index) {
-            let mut track = track.clone();
-
-            tracing::info!("Воспроизведение предыдущего трека: {}", &track.id);
-            self.audio_engine.play(track);
-        }
+        self.update_queue(|queue| {
+            if let Some(track) = queue.previous() {
+                tracing::info!("Воспроизведение предыдущего трека: {}", track.id);
+                self.audio_engine.play(track.clone());
+            }
+        });
     }
 
     pub fn handle_track_finished(&self, track_id: usize) {
@@ -106,7 +97,7 @@ impl AppState {
 
         let audio_track: AudioTrack = library_track.into();
 
-        let index = self.update_playlist_with_return(|playlist| playlist.add_track(audio_track));
+        let index = self.update_queue_with_return(|queue| queue.add_track(audio_track));
 
         tracing::info!(
             "Трек {} добавлен в очередь на позицию {}",
@@ -117,10 +108,7 @@ impl AppState {
     }
 
     pub fn remove_from_queue(&self, index: usize) -> Option<AudioTrack> {
-        let mut result = None;
-        self.update_playlist(|playlist| {
-            result = playlist.remove_track(index);
-        });
+        let result = self.update_queue_with_return(|queue| queue.remove_track(index));
 
         if result.is_some() {
             tracing::info!("Трек удален из очереди с позиции {}", index);
@@ -130,14 +118,14 @@ impl AppState {
     }
 
     pub fn clear_queue(&self) {
-        self.update_playlist(|playlist| {
-            playlist.clear();
+        self.update_queue(|queue| {
+            queue.clear();
         });
         tracing::info!("Очередь воспроизведения очищена");
     }
 
     pub fn get_queue(&self) -> Vec<AudioTrack> {
-        self.playlist().tracks().to_vec()
+        self.queue().tracks().to_vec()
     }
 
     pub async fn load_playlist_to_queue(&self, playlist_id: PlaylistId) -> Result<()> {
@@ -155,9 +143,11 @@ impl AppState {
             }
         }
 
-        self.set_playlist(Playlist::new());
-        self.update_playlist(|playlist| {
-            playlist.add_tracks(audio_tracks);
+        let mut playlist = Playlist::new();
+        playlist.add_tracks(audio_tracks);
+
+        self.update_queue(|queue| {
+            queue.load_from_playlist(playlist, None);
         });
 
         tracing::info!(
@@ -170,17 +160,18 @@ impl AppState {
     }
 
     pub fn play_at_index(&self, index: usize) {
-        let playlist = self.playlist();
-        if let Some(track) = playlist.get_track(index) {
-            tracing::info!(
-                "Воспроизведение трека на позиции {}: ID {}",
-                index,
-                track.id
-            );
-            self.audio_engine.play(track.clone());
-        } else {
-            tracing::warn!("Трек на позиции {} не найден", index);
-        }
+        self.update_queue(|queue| {
+            if let Some(track) = queue.jump_to(index) {
+                tracing::info!(
+                    "Воспроизведение трека на позиции {}: ID {}",
+                    index,
+                    track.id
+                );
+                self.audio_engine.play(track.clone());
+            } else {
+                tracing::warn!("Трек на позиции {} не найден", index);
+            }
+        });
     }
 
     pub fn pause(&self) {
@@ -299,14 +290,30 @@ impl AppState {
         Ok(())
     }
 
-    fn update_playlist_with_return<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&mut Playlist) -> R,
-    {
-        let current = self.playlist.load_full();
-        let mut new_playlist = (*current).clone();
-        let result = f(&mut new_playlist);
-        self.playlist.store(Arc::new(new_playlist));
-        result
+    pub fn set_repeat_mode(&self, mode: RepeatMode) {
+        self.update_queue(|queue| {
+            queue.set_repeat_mode(mode);
+        });
+        tracing::info!("Режим повтора изменен на {:?}", mode);
+    }
+
+    pub fn get_repeat_mode(&self) -> RepeatMode {
+        self.queue().repeat_mode()
+    }
+
+    pub fn toggle_shuffle(&self) {
+        self.update_queue(|queue| {
+            queue.toggle_shuffle();
+        });
+        let enabled = self.queue().shuffle_enabled();
+        tracing::info!("Shuffle {}", if enabled { "включен" } else { "выключен" });
+    }
+
+    pub fn is_shuffle_enabled(&self) -> bool {
+        self.queue().shuffle_enabled()
+    }
+
+    pub fn get_current_track_index(&self) -> Option<usize> {
+        self.queue().current_index()
     }
 }

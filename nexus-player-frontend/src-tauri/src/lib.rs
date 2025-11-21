@@ -66,6 +66,9 @@ pub fn run() {
             commands::seek,
             commands::set_volume,
             commands::get_audio_state,
+            commands::set_repeat_mode,
+            commands::toggle_shuffle,
+            commands::get_queue_state,
             commands::select_audio_file,
             commands::select_audio_files,
         ])

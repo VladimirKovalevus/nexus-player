@@ -15,12 +15,22 @@ interface AudioState {
   } | null;
 }
 
+interface QueueState {
+  repeatMode: 'off' | 'all' | 'one';
+  shuffleEnabled: boolean;
+}
+
 const audioState = ref<AudioState>({
   state: 'stopped',
   positionSecs: 0,
   durationSecs: 0,
   volume: 1.0,
   currentTrack: null
+});
+
+const queueState = ref<QueueState>({
+  repeatMode: 'off',
+  shuffleEnabled: false
 });
 
 const seeking = ref(false);
@@ -31,6 +41,16 @@ const fetchAudioState = async () => {
     audioState.value = await invoke('get_audio_state');
   } catch (e) {
     console.error('Failed to fetch audio state:', e);
+  }
+};
+
+const fetchQueueState = async () => {
+  try {
+    const state = await invoke('get_queue_state');
+    queueState.value.repeatMode = state.repeatMode;
+    queueState.value.shuffleEnabled = state.shuffleEnabled;
+  } catch (e) {
+    console.error('Failed to fetch queue state:', e);
   }
 };
 
@@ -83,6 +103,37 @@ const onSeekEnd = async (event: Event) => {
   }
 };
 
+const cycleRepeatMode = async () => {
+  const modes: Array<'off' | 'all' | 'one'> = ['off', 'all', 'one'];
+  const currentIndex = modes.indexOf(queueState.value.repeatMode);
+  const nextMode = modes[(currentIndex + 1) % modes.length];
+
+  try {
+    await invoke('set_repeat_mode', { mode: nextMode });
+    queueState.value.repeatMode = nextMode;
+  } catch (e) {
+    console.error('Failed to set repeat mode:', e);
+  }
+};
+
+const toggleShuffleMode = async () => {
+  try {
+    await invoke('toggle_shuffle');
+    queueState.value.shuffleEnabled = !queueState.value.shuffleEnabled;
+  } catch (e) {
+    console.error('Failed to toggle shuffle:', e);
+  }
+};
+
+const getRepeatIcon = (): string => {
+  switch (queueState.value.repeatMode) {
+    case 'off': return '🔁';
+    case 'all': return '🔁';
+    case 'one': return '🔂';
+    default: return '🔁';
+  }
+};
+
 const formatTime = (seconds: number): string => {
   if (!seconds || !isFinite(seconds)) return '0:00';
   const mins = Math.floor(seconds / 60);
@@ -92,6 +143,7 @@ const formatTime = (seconds: number): string => {
 
 onMounted(() => {
   fetchAudioState();
+  fetchQueueState();
   updateInterval = window.setInterval(fetchAudioState, 1000);
 });
 
@@ -112,6 +164,14 @@ onUnmounted(() => {
     </div>
 
     <div class="controls">
+      <button
+        class="control-btn small-btn"
+        @click="toggleShuffleMode"
+        :class="{ active: queueState.shuffleEnabled }"
+        title="Shuffle"
+      >
+        🔀
+      </button>
       <button class="control-btn" @click="playPrevious" title="Previous">
         ⏮
       </button>
@@ -120,6 +180,14 @@ onUnmounted(() => {
       </button>
       <button class="control-btn" @click="playNext" title="Next">
         ⏭
+      </button>
+      <button
+        class="control-btn small-btn"
+        @click="cycleRepeatMode"
+        :class="{ active: queueState.repeatMode !== 'off' }"
+        :title="`Repeat: ${queueState.repeatMode}`"
+      >
+        {{ getRepeatIcon() }}
       </button>
     </div>
 
@@ -205,6 +273,17 @@ onUnmounted(() => {
   border-width: 3px;
 }
 
+.small-btn {
+  width: 40px;
+  height: 40px;
+  font-size: 1rem;
+}
+
+.control-btn.active {
+  background-color: #396cd8;
+  color: white;
+}
+
 .playback-bar {
   display: flex;
   align-items: center;
@@ -281,6 +360,11 @@ onUnmounted(() => {
   }
 
   .control-btn:hover {
+    background-color: #24c8db;
+    color: #0f0f0f;
+  }
+
+  .control-btn.active {
     background-color: #24c8db;
     color: #0f0f0f;
   }

@@ -44,6 +44,15 @@ pub struct QueueTrackDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct QueueStateDto {
+    pub tracks: Vec<QueueTrackDto>,
+    pub current_index: Option<usize>,
+    pub repeat_mode: String,
+    pub shuffle_enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AudioStateDto {
     pub state: String,
     pub position_secs: f64,
