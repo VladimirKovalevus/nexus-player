@@ -1,4 +1,6 @@
+use crate::audio::types::MediaSource;
 use crate::error::AudioError;
+use std::io::{Read, Seek};
 use std::path::Path;
 use symphonia::core::audio::AudioBufferRef;
 use symphonia::core::codecs::{Decoder, DecoderOptions};
@@ -73,6 +75,59 @@ impl AudioDecoder {
 
         info!(
             "Трек найден: sample_rate={}, channels={}, frames={:?}",
+            sample_rate, channels, total_frames
+        );
+
+        let decoder = symphonia::default::get_codecs()
+            .make(codec_params, &DecoderOptions::default())
+            .map_err(|e| AudioError::DecodingError(format!("Не удалось создать декодер: {}", e)))?;
+
+        Ok(Self {
+            format_reader,
+            decoder,
+            track_id,
+            sample_rate,
+            channels,
+            total_frames,
+        })
+    }
+
+    pub fn from_reader(
+        reader: Box<dyn MediaSource>,
+        hint: Option<Hint>,
+    ) -> Result<Self, AudioError> {
+        let mss = MediaSourceStream::new(reader, Default::default());
+        let format_opts = FormatOptions::default();
+        let metadata_opts = MetadataOptions::default();
+
+        let hint = hint.unwrap_or(Hint::new());
+        let probed = symphonia::default::get_probe()
+            .format(&hint, mss, &format_opts, &metadata_opts)
+            .map_err(|e| {
+                AudioError::DecodingError(format!("Не удалось определить формат потока: {}", e))
+            })?;
+
+        let format_reader = probed.format;
+
+        // 5. Находим первый аудио трек
+        let track = format_reader
+            .tracks()
+            .iter()
+            .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
+            .ok_or_else(|| {
+                AudioError::DecodingError("Не найден аудио трек в потоке".to_string())
+            })?;
+
+        let track_id = track.id;
+
+        // Получаем параметры трека
+        let codec_params = &track.codec_params;
+        let sample_rate = codec_params.sample_rate.unwrap_or(44100);
+        let channels = codec_params.channels.map(|ch| ch.count()).unwrap_or(2);
+        let total_frames = codec_params.n_frames;
+
+        info!(
+            "Chunked streaming трек готов: sample_rate={}, channels={}, frames={:?}",
             sample_rate, channels, total_frames
         );
 

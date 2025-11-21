@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
+use symphonia::core::io::MediaSource as SymphoniaSource;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SampleRate(pub u32);
@@ -202,5 +203,67 @@ impl From<crate::library::models::Track> for Track {
             }),
             source: track.source,
         }
+    }
+}
+
+use std::fs::File;
+use std::io::{Read, Seek};
+
+pub trait MediaSource: SymphoniaSource + Read + Seek + Send {}
+
+impl<T: SymphoniaSource + Read + Seek + Send> MediaSource for T {}
+
+pub struct AudioSource {
+    reader: Box<dyn MediaSource>,
+    pub format: Option<AudioFormat>,
+    pub duration: Option<Duration>,
+}
+
+impl AudioSource {
+    pub fn new(reader: Box<dyn MediaSource>) -> Self {
+        Self {
+            reader,
+            format: None,
+            duration: None,
+        }
+    }
+
+    pub fn with_format(mut self, format: AudioFormat) -> Self {
+        self.format = Some(format);
+        self
+    }
+
+    pub fn with_duration(mut self, duration: Duration) -> Self {
+        self.duration = Some(duration);
+        self
+    }
+
+    pub fn into_reader(self) -> Box<dyn MediaSource> {
+        self.reader
+    }
+
+    pub fn from_track(track: Track) -> Result<Self, std::io::Error> {
+        let reader: Box<dyn MediaSource> = match track.source {
+            TrackSource::Local(path) => Box::new(File::open(path)?),
+            TrackSource::Cached { cache_path, .. } => Box::new(File::open(cache_path)?),
+            TrackSource::Http(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "HTTP sources not yet implemented",
+                ))
+            }
+            TrackSource::External { .. } => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "External sources not yet implemented",
+                ))
+            }
+        };
+
+        Ok(Self {
+            reader,
+            format: track.format,
+            duration: track.duration,
+        })
     }
 }

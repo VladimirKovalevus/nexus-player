@@ -4,3 +4,5 @@ pub mod error;
 pub mod library;
 pub mod playlist;
 pub mod state;
+pub mod streaming;
+

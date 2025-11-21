@@ -1,5 +1,5 @@
 use super::decoder::AudioDecoder;
-use crate::audio::types::{SampleRate, TrackSource};
+use crate::audio::types::{AudioSource, SampleRate, TrackSource};
 use crate::error::AudioError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
@@ -68,6 +68,34 @@ impl PlaybackEngine {
                 original_url,
             } => todo!(),
         }
+    }
+
+    pub fn play_audio_source(&mut self, audio_source: AudioSource) -> Result<(), AudioError> {
+        info!("Загрузка аудио из AudioSource");
+
+        let decoder = AudioDecoder::from_reader(audio_source.into_reader(), None)?;
+        let duration = decoder.duration().map(Duration::from_secs_f64);
+        let sample_rate = decoder.sample_rate();
+        let channels = decoder.channels();
+
+        info!(
+            "Sample rate: {}, channels: {}, duration: {:?}",
+            sample_rate, channels, duration
+        );
+
+        self.duration = duration;
+        *self.decoder.lock().unwrap() = Some(decoder);
+        *self.is_playing.lock().unwrap() = true;
+        *self.current_position.lock().unwrap() = Duration::ZERO;
+        *self.sample_rate.lock().unwrap() = sample_rate;
+        *self.samples_played.lock().unwrap() = 0;
+
+        self.sample_buffer.lock().unwrap().clear();
+        *self.buffer_position.lock().unwrap() = 0;
+
+        self.create_stream(sample_rate, channels)?;
+
+        Ok(())
     }
     fn play_local(&mut self, path: &Path) -> Result<(), AudioError> {
         info!("Загрузка файла: {:?}", path);
