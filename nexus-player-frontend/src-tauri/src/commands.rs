@@ -4,6 +4,7 @@ use nexus_player_backend::library::types::{
     AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackSource,
 };
 use nexus_player_backend::state::state::AppState;
+use nexus_player_backend::streaming::types::ContentType;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
@@ -326,4 +327,29 @@ pub async fn select_audio_files(app: tauri::AppHandle) -> Result<Vec<String>> {
         .into_iter()
         .map(|path| path.to_string())
         .collect())
+}
+
+#[tauri::command]
+pub async fn search_streaming(
+    state: State<'_, Arc<AppState>>,
+    provider: String,
+    content_type: Option<String>,
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<SearchResultDto>> {
+    let content_type_enum = content_type.and_then(|ct| match ct.as_str() {
+        "track" => Some(ContentType::Track),
+        "playlist" => Some(ContentType::Playlist),
+        "album" => Some(ContentType::Album),
+        "channel" => Some(ContentType::Channel),
+        _ => None,
+    });
+
+    let results = state
+        .streaming()
+        .search(&provider, content_type_enum, &query, limit.unwrap_or(10))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(results.into_iter().map(|r| r.into()).collect())
 }

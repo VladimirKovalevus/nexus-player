@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub use nexus_player_backend::library::types::{ArtworkId, PlaylistId, TrackId};
+use nexus_player_backend::streaming::types as streaming;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -143,6 +144,105 @@ impl From<audio::AudioState> for AudioStateDto {
             duration_secs: state.duration.as_secs_f64(),
             volume: state.volume,
             current_track: state.current_track.map(|t| t.into()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
+pub enum SearchResultDto {
+    Track(StreamingTrackDto),
+    Playlist(StreamingPlaylistDto),
+    Album(StreamingAlbumDto),
+    Channel(StreamingChannelDto),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingTrackDto {
+    pub title: String,
+    pub artist: String,
+    pub duration_secs: Option<f64>,
+    pub thumbnail: Option<String>,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingPlaylistDto {
+    pub id: String,
+    pub title: String,
+    pub creator: String,
+    pub track_count: usize,
+    pub thumbnail: Option<String>,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingAlbumDto {
+    pub id: String,
+    pub title: String,
+    pub artist: String,
+    pub track_count: usize,
+    pub year: Option<u32>,
+    pub thumbnail: Option<String>,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingChannelDto {
+    pub id: String,
+    pub name: String,
+    pub subscriber_count: Option<u64>,
+    pub thumbnail: Option<String>,
+    pub url: String,
+}
+
+impl From<streaming::SearchResult> for SearchResultDto {
+    fn from(result: streaming::SearchResult) -> Self {
+        match result {
+            streaming::SearchResult::Track(track) => {
+                SearchResultDto::Track(StreamingTrackDto {
+                    title: track.title,
+                    artist: track.artist,
+                    duration_secs: track.duration.map(|d| d.as_secs_f64()),
+                    thumbnail: track.thumbnail,
+                    url: track.source.as_str(),
+                })
+            }
+            streaming::SearchResult::Playlist(playlist) => {
+                SearchResultDto::Playlist(StreamingPlaylistDto {
+                    id: playlist.id,
+                    title: playlist.title,
+                    creator: playlist.creator,
+                    track_count: playlist.track_count,
+                    thumbnail: playlist.thumbnail,
+                    url: playlist.url,
+                })
+            }
+            streaming::SearchResult::Album(album) => {
+                SearchResultDto::Album(StreamingAlbumDto {
+                    id: album.id,
+                    title: album.title,
+                    artist: album.artist,
+                    track_count: album.track_count,
+                    year: album.year,
+                    thumbnail: album.thumbnail,
+                    url: album.url,
+                })
+            }
+            streaming::SearchResult::Channel(channel) => {
+                SearchResultDto::Channel(StreamingChannelDto {
+                    id: channel.id,
+                    name: channel.name,
+                    subscriber_count: channel.subscriber_count,
+                    thumbnail: channel.thumbnail,
+                    url: channel.url,
+                })
+            }
         }
     }
 }

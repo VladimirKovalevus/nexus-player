@@ -4,6 +4,7 @@ use crate::library::models::{Metadata, Playlist as LibraryPlaylist, Track as Lib
 use crate::library::{LibraryService, PlaylistId, TrackId};
 use crate::playlist::playlist::Playlist;
 use crate::playlist::playback_queue::{PlaybackQueue, RepeatMode};
+use crate::streaming::StreamingService;
 use anyhow::{Context, Result};
 use arc_swap::ArcSwap;
 use std::path::Path;
@@ -16,6 +17,8 @@ pub struct AppState {
     queue: ArcSwap<PlaybackQueue>,
 
     library: LibraryService,
+
+    streaming: StreamingService,
 }
 
 impl AppState {
@@ -24,10 +27,15 @@ impl AppState {
 
         let audio_engine = AudioEngine::new()?;
 
+        let cache_dir = db_path.parent().unwrap().join("cache");
+        let streaming = StreamingService::new(cache_dir, 1024)
+            .map_err(|e| anyhow::anyhow!("Failed to create streaming service: {}", e))?;
+
         Ok(Self {
             audio_engine,
             queue: ArcSwap::new(Arc::new(PlaybackQueue::new())),
             library,
+            streaming,
         })
     }
 
@@ -41,6 +49,10 @@ impl AppState {
 
     pub fn library(&self) -> &LibraryService {
         &self.library
+    }
+
+    pub fn streaming(&self) -> &StreamingService {
+        &self.streaming
     }
 
     pub fn update_queue<F>(&self, f: F)

@@ -71,6 +71,7 @@ pub fn run() {
             commands::get_queue_state,
             commands::select_audio_file,
             commands::select_audio_files,
+            commands::search_streaming,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
