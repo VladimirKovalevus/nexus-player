@@ -411,7 +411,10 @@ mod tests {
 
         assert_eq!(queue.shuffle_enabled(), true);
         assert_eq!(queue.shuffle_order.len(), 5);
-        assert_eq!(queue.tracks().iter().map(|t| t.id).collect::<Vec<_>>(), original_order);
+        assert_eq!(
+            queue.tracks().iter().map(|t| t.id).collect::<Vec<_>>(),
+            original_order
+        );
 
         queue.toggle_shuffle();
 
@@ -458,7 +461,7 @@ mod tests {
 
     #[test]
     fn test_load_from_playlist() {
-        let mut playlist = Playlist::new();
+        let mut playlist = Playlist::new("test".to_string());
         playlist.add_track(create_test_track(1));
         playlist.add_track(create_test_track(2));
 

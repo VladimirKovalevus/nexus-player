@@ -1,6 +1,10 @@
 use std::collections::HashMap;
+use std::fs::File;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+use crate::audio::types::{MediaSource, TrackSource};
+use crate::streaming::types::ResolvedContent;
 
 use super::cache::CacheManager;
 use super::error::{StreamError, StreamResult};
@@ -48,5 +52,14 @@ impl StreamingService {
 
     pub fn list_providers(&self) -> Vec<String> {
         self.providers.keys().cloned().collect()
+    }
+
+    pub async fn resolve(&self, source: &SearchResult) -> StreamResult<ResolvedContent> {
+        match source {
+            SearchResult::Track(track) => Ok(ResolvedContent::Track(track.into())),
+            SearchResult::Playlist(playlist) => Ok(ResolvedContent::Playlist(playlist.into())),
+            SearchResult::Album(_) => todo!(),
+            SearchResult::Channel(_) => todo!(),
+        }
     }
 }

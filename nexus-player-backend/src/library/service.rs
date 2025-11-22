@@ -155,6 +155,124 @@ impl LibraryService {
             .await
     }
 
+    /// Create playlist with tracks in a single transaction
+    ///
+    /// Takes a runtime playlist (from streaming/playback), saves all tracks to library,
+    /// creates the playlist, and links tracks together atomically.
+    pub async fn create_playlist_with_tracks(
+        &self,
+        runtime_playlist: crate::playlist::playlist::Playlist,
+    ) -> Result<models::PlaylistWithTracks> {
+        let mut tx = self.pool.begin().await?;
+
+        let mut saved_track_ids = Vec::new();
+
+        for audio_track in runtime_playlist.tracks() {
+            let library_track: models::Track = audio_track.clone().into();
+
+            let track_id = sqlx::query_scalar::<_, i64>(
+                r#"
+                INSERT INTO tracks (
+                    title, description, artist, album, album_artist, year, genre, track_number,
+                    source_type, source_path, cache_status, duration_secs, sample_rate,
+                    channels, bitrate, format, play_count, added_at, updated_at
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+                "#,
+            )
+            .bind(&library_track.metadata.title)
+            .bind(&library_track.metadata.description)
+            .bind(&library_track.artist)
+            .bind(&library_track.album)
+            .bind(&library_track.album_artist)
+            .bind(library_track.year.map(|y| y as i64))
+            .bind(&library_track.genre)
+            .bind(library_track.track_number.map(|t| t as i64))
+            .bind("local")
+            .bind("")
+            .bind("none")
+            .bind(library_track.audio_info.as_ref().and_then(|i| i.duration_secs))
+            .bind(library_track.audio_info.as_ref().and_then(|i| i.sample_rate).map(|s| s as i64))
+            .bind(library_track.audio_info.as_ref().and_then(|i| i.channels).map(|c| c as i64))
+            .bind(library_track.audio_info.as_ref().and_then(|i| i.bitrate).map(|b| b as i64))
+            .bind(library_track.audio_info.as_ref().map(|i| i.format.as_str()))
+            .bind(library_track.play_count as i64)
+            .bind(library_track.added_at.timestamp())
+            .bind(library_track.updated_at.timestamp())
+            .fetch_one(&mut *tx)
+            .await
+            .context("Failed to insert track")?;
+
+            saved_track_ids.push(TrackId(track_id));
+        }
+
+        let playlist_library = models::Playlist {
+            id: PlaylistId(0),
+            metadata: models::Metadata {
+                title: runtime_playlist.title.clone(),
+                description: runtime_playlist.description.clone(),
+                artwork: None,
+            },
+            creator: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        let playlist_id = sqlx::query_scalar::<_, i64>(
+            r#"
+            INSERT INTO playlists (title, description, creator, artwork_id, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "#,
+        )
+        .bind(&playlist_library.metadata.title)
+        .bind(&playlist_library.metadata.description)
+        .bind(&playlist_library.creator)
+        .bind(None::<i64>)
+        .bind(playlist_library.created_at.timestamp())
+        .bind(playlist_library.updated_at.timestamp())
+        .fetch_one(&mut *tx)
+        .await
+        .context("Failed to create playlist")?;
+
+        let playlist_id = PlaylistId(playlist_id);
+
+        let mut playlist_tracks = Vec::new();
+
+        for (position, track_id) in saved_track_ids.iter().enumerate() {
+            let now = chrono::Utc::now();
+
+            sqlx::query(
+                r#"
+                INSERT INTO playlist_tracks (playlist_id, track_id, position, added_at)
+                VALUES (?1, ?2, ?3, ?4)
+                "#,
+            )
+            .bind(playlist_id.0)
+            .bind(track_id.0)
+            .bind(position as i64)
+            .bind(now.timestamp())
+            .execute(&mut *tx)
+            .await
+            .context("Failed to add track to playlist")?;
+
+            playlist_tracks.push(models::PlaylistTrack {
+                track_id: *track_id,
+                position: position as u32,
+                added_at: now,
+            });
+        }
+
+        tx.commit().await.context("Failed to commit transaction")?;
+
+        let mut playlist = playlist_library;
+        playlist.id = playlist_id;
+
+        Ok(models::PlaylistWithTracks {
+            playlist,
+            tracks: playlist_tracks,
+        })
+    }
+
     // ========================================================================
     // Utility
     // ========================================================================

@@ -16,6 +16,10 @@ use crate::streaming::types::{
     AlbumInfo, AudioQuality, ChannelInfo, ContentType, PlaylistInfo, SearchResult, StreamMetadata,
     StreamingService, TrackInfo,
 };
+#[derive(Clone, Debug, Deserialize)]
+struct YtDlpThumbnail {
+    url: String,
+}
 
 #[derive(Clone, Debug, Deserialize)]
 struct YtDlpMetadata {
@@ -24,7 +28,7 @@ struct YtDlpMetadata {
     uploader: Option<String>,
     album: Option<String>,
     duration: Option<f64>,
-    thumbnail: Option<String>,
+    thumbnails: Option<Vec<YtDlpThumbnail>>,
     url: Option<String>,
     ext: Option<String>,
 
@@ -121,7 +125,7 @@ impl YtDlpProvider {
         }
     }
 
-    fn metadata_to_track_info(&self, meta: YtDlpMetadata, source_url: &str) -> Option<TrackInfo> {
+    fn metadata_to_track_info(&self, meta: YtDlpMetadata) -> Option<TrackInfo> {
         let title = meta.title?;
         let artist = meta
             .artist
@@ -130,14 +134,22 @@ impl YtDlpProvider {
 
         let duration = meta.duration.map(|d| std::time::Duration::from_secs_f64(d));
 
-        let source = TrackSource::Http(source_url.to_string());
+        let source_url = meta.webpage_url.as_deref().or(meta.url.as_deref());
+        if source_url.is_none() {
+            return None;
+        }
+
+        let source = TrackSource::Http(source_url.unwrap().to_string());
+        let thumbnail = meta
+            .thumbnails
+            .and_then(|t| t.first().map(|t| t.url.clone()));
 
         Some(TrackInfo {
             source,
             title,
             artist,
             duration,
-            thumbnail: meta.thumbnail,
+            thumbnail: thumbnail,
             description: meta.description,
         })
     }
@@ -169,13 +181,16 @@ impl StreamProvider for YtDlpProvider {
         };
 
         let meta = self.fetch_json(url, false).await?;
+        let thumbnail = meta
+            .thumbnails
+            .and_then(|t| t.first().map(|t| t.url.clone()));
 
         Ok(StreamMetadata {
             title: meta.title,
             artist: meta.artist.or(meta.uploader),
             album: meta.album,
             duration: meta.duration.map(|d| std::time::Duration::from_secs_f64(d)),
-            artwork_url: meta.thumbnail,
+            artwork_url: thumbnail,
             sample_rate: meta.asr,
             channels: None,
         })
@@ -192,7 +207,30 @@ impl StreamProvider for YtDlpProvider {
             }
         };
 
-        Err(StreamError::NotSupported)
+        if let Some(cached_path) = self.cache.get(url).await {
+            let file = File::open(&cached_path).map_err(|e| StreamError::IoError(e))?;
+            return Ok(Box::new(file));
+        }
+
+        let cache_path = self.cache.reserve(url).await?;
+
+        let format = self.get_format_selector();
+        let cache_path_str = cache_path
+            .to_str()
+            .ok_or_else(|| StreamError::Other("Invalid cache path".to_string()))?;
+
+        self.run_ytdlp(&["-f", &format, "-o", cache_path_str, url])
+            .await?;
+
+        let file_size = std::fs::metadata(&cache_path)
+            .map_err(|e| StreamError::IoError(e))?
+            .len();
+
+        self.cache.put(url, file_size).await?;
+
+        let file = File::open(&cache_path).map_err(|e| StreamError::IoError(e))?;
+
+        Ok(Box::new(file))
     }
 
     async fn search_typed(
@@ -222,15 +260,14 @@ impl StreamProvider for YtDlpProvider {
 
             let url = url.unwrap();
 
-            info!("fo Watafo {:?} {:?}", entry_type, content_type);
             match (entry_type, &content_type) {
                 (Some("playlist"), None | Some(ContentType::Playlist)) => {
-                    if let Some(playlist) = self.metadata_to_playlist_info(entry.clone(), url) {
+                    if let Some(playlist) = self.metadata_to_playlist_info(entry.clone()) {
                         results.push(SearchResult::Playlist(playlist));
                     }
                 }
                 (Some("url") | None, None | Some(ContentType::Track)) => {
-                    if let Some(track) = self.metadata_to_track_info(entry.clone(), url) {
+                    if let Some(track) = self.metadata_to_track_info(entry.clone()) {
                         results.push(SearchResult::Track(track));
                     }
                 }
@@ -282,8 +319,7 @@ impl StreamProvider for YtDlpProvider {
 }
 
 impl YtDlpProvider {
-    fn metadata_to_playlist_info(&self, meta: YtDlpMetadata, url: &str) -> Option<PlaylistInfo> {
-        let service = Self::extract_service(url)?;
+    fn metadata_to_playlist_info(&self, meta: YtDlpMetadata) -> Option<PlaylistInfo> {
         let id = meta.id?;
         let title = meta.playlist_title.or(meta.title)?;
         let creator = meta
@@ -291,14 +327,33 @@ impl YtDlpProvider {
             .or(meta.uploader)
             .unwrap_or_else(|| "Unknown".to_string());
 
+        let thumbnail = meta
+            .thumbnails
+            .and_then(|t| t.first().map(|t| t.url.clone()));
+
+        let source_url = meta.webpage_url.as_deref().or(meta.url.as_deref());
+        if source_url.is_none() {
+            return None;
+        }
+        let service = Self::extract_service(source_url.unwrap())?;
+        let tracks = meta
+            .entries
+            .and_then(|entries| {
+                entries
+                    .iter()
+                    .map(|e| self.metadata_to_track_info(e.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
         Some(PlaylistInfo {
             id,
-            url: url.to_string(),
+            url: source_url.unwrap().to_string(),
             service,
             title,
             creator,
+            tracks: tracks,
             track_count: meta.playlist_count.unwrap_or(0),
-            thumbnail: meta.thumbnail,
+            thumbnail: thumbnail,
             description: meta.description,
         })
     }

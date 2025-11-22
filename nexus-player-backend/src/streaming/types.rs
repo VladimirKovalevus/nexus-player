@@ -1,6 +1,7 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::library::TrackSource;
+use crate::{audio::types::Track, library::TrackSource, playlist::playlist::Playlist};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum ContentType {
@@ -94,6 +95,8 @@ pub struct PlaylistInfo {
 
     pub creator: String,
 
+    pub tracks: Vec<TrackInfo>,
+
     pub track_count: usize,
 
     pub thumbnail: Option<String>,
@@ -131,6 +134,8 @@ impl AudioQuality {
 #[derive(Debug, Clone)]
 pub struct AlbumInfo {
     pub id: String,
+
+    pub tracks: Vec<TrackInfo>,
 
     pub url: String,
 
@@ -195,6 +200,61 @@ impl Default for StreamMetadata {
             artwork_url: None,
             sample_rate: None,
             channels: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ResolvedContent {
+    Track(Track),
+    Playlist(Playlist),
+}
+
+impl From<&PlaylistInfo> for Playlist {
+    fn from(row: &PlaylistInfo) -> Self {
+        Playlist {
+            title: row.title.clone(),
+            artwork: row.thumbnail.clone(),
+            description: row.description.clone(),
+            tracks: row.tracks.iter().map(|e| e.into()).collect(),
+        }
+    }
+}
+impl From<PlaylistInfo> for Playlist {
+    fn from(row: PlaylistInfo) -> Self {
+        Playlist {
+            title: row.title,
+            artwork: row.thumbnail,
+            description: row.description,
+            tracks: row.tracks.into_iter().map(|e| e.into()).collect(),
+        }
+    }
+}
+impl From<TrackInfo> for Track {
+    fn from(row: TrackInfo) -> Self {
+        Track {
+            id: 0,
+            title: row.title,
+            artist: Some(row.artist),
+            album: None,
+            duration: row.duration,
+            artwork_url: row.thumbnail,
+            format: None,
+            source: row.source,
+        }
+    }
+}
+impl From<&TrackInfo> for Track {
+    fn from(row: &TrackInfo) -> Self {
+        Track {
+            id: 0,
+            title: row.title.clone(),
+            artist: Some(row.artist.clone()),
+            album: None,
+            duration: row.duration,
+            artwork_url: row.thumbnail.clone(),
+            format: None,
+            source: row.source.clone(),
         }
     }
 }

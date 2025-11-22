@@ -30,6 +30,19 @@ pub struct Artwork {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DownloadStrategy {
+    Stream,
+    Cache,
+    Progressive,
+}
+
+impl Default for DownloadStrategy {
+    fn default() -> Self {
+        Self::Cache
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CacheStatus {
     None,

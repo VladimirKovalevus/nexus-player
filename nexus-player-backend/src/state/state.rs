@@ -2,8 +2,8 @@ use crate::audio::engine::AudioEngine;
 use crate::audio::types::Track as AudioTrack;
 use crate::library::models::{Metadata, Playlist as LibraryPlaylist, Track as LibraryTrack};
 use crate::library::{LibraryService, PlaylistId, TrackId};
-use crate::playlist::playlist::Playlist;
 use crate::playlist::playback_queue::{PlaybackQueue, RepeatMode};
+use crate::playlist::playlist::Playlist;
 use crate::streaming::StreamingService;
 use anyhow::{Context, Result};
 use arc_swap::ArcSwap;
@@ -155,7 +155,7 @@ impl AppState {
             }
         }
 
-        let mut playlist = Playlist::new();
+        let mut playlist = Playlist::new("queue".to_string());
         playlist.add_tracks(audio_tracks);
 
         self.update_queue(|queue| {
@@ -318,7 +318,14 @@ impl AppState {
             queue.toggle_shuffle();
         });
         let enabled = self.queue().shuffle_enabled();
-        tracing::info!("Shuffle {}", if enabled { "включен" } else { "выключен" });
+        tracing::info!(
+            "Shuffle {}",
+            if enabled {
+                "включен"
+            } else {
+                "выключен"
+            }
+        );
     }
 
     pub fn is_shuffle_enabled(&self) -> bool {

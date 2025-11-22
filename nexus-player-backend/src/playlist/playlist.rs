@@ -1,16 +1,24 @@
 use std::time::Duration;
 
-use crate::audio::types::Track;
+use crate::{audio::types::Track, library};
 
 #[derive(Debug, Clone)]
 pub struct Playlist {
     //#TODO METADATA
-    tracks: Vec<Track>,
+    pub title: String,
+    pub description: Option<String>,
+    pub artwork: Option<String>,
+    pub tracks: Vec<Track>,
 }
 
 impl Playlist {
-    pub fn new() -> Self {
-        Self { tracks: Vec::new() }
+    pub fn new(title: String) -> Self {
+        Self {
+            tracks: Vec::new(),
+            title: title,
+            description: None,
+            artwork: None,
+        }
     }
 
     pub fn add_track(&mut self, mut track: Track) -> usize {

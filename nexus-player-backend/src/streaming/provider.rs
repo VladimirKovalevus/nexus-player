@@ -1,5 +1,6 @@
 use crate::audio::types::MediaSource;
 use crate::library::TrackSource;
+use crate::streaming::types::ResolvedContent;
 
 use super::error::StreamResult;
 use super::types::{ContentType, SearchResult, StreamMetadata};
@@ -15,6 +16,8 @@ pub trait StreamProvider: Send + Sync {
     async fn fetch_metadata(&self, source: &TrackSource) -> StreamResult<StreamMetadata>;
 
     async fn get_stream(&self, source: &TrackSource) -> StreamResult<Box<dyn MediaSource>>;
+
+    async fn get_stream_v2(&self, source: &ResolvedContent) -> StreamResult<Box<dyn MediaSource>>;
 
     async fn search_typed(
         &self,
