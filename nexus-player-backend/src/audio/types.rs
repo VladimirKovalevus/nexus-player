@@ -22,6 +22,8 @@ impl SampleRate {
 pub enum AudioCommand {
     Play(Track),
 
+    PlaySource(EngineTrack),
+
     Pause,
 
     Resume,
@@ -36,7 +38,7 @@ pub enum AudioCommand {
 }
 #[derive(Debug, Clone)]
 pub enum AudioEvent {
-    PlaybackStarted { track: Track },
+    PlaybackStarted,
 
     PlaybackPaused,
 
@@ -44,7 +46,7 @@ pub enum AudioEvent {
 
     PlaybackStopped,
 
-    TrackFinished { track_id: usize },
+    TrackFinished,
 
     PositionUpdated { position: Duration },
 
@@ -130,6 +132,12 @@ pub struct Track {
     pub source: TrackSource,
 }
 
+#[derive(Debug, Clone)]
+pub struct EngineTrack {
+    pub track: Track,
+    pub audio_source: AudioSource,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 pub enum TrackSource {
@@ -209,12 +217,25 @@ impl From<crate::library::models::Track> for Track {
 use std::fs::File;
 use std::io::{Read, Seek};
 
-pub trait MediaSource: SymphoniaSource + Read + Seek + Send {}
+pub trait MediaSource: SymphoniaSource + Read + Seek + Send + std::fmt::Debug {
+    fn clone_box(&self) -> Box<dyn MediaSource>;
+}
 
-impl<T: SymphoniaSource + Read + Seek + Send> MediaSource for T {}
+impl Clone for Box<dyn MediaSource> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
+}
 
+impl MediaSource for File {
+    fn clone_box(&self) -> Box<dyn MediaSource> {
+        Box::new(self.try_clone().expect("Failed to clone file descriptor"))
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct AudioSource {
-    reader: Box<dyn MediaSource>,
+    pub reader: Box<dyn MediaSource>,
     pub format: Option<AudioFormat>,
     pub duration: Option<Duration>,
 }

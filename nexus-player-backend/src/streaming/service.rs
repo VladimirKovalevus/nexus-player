@@ -9,7 +9,7 @@ use crate::streaming::types::ResolvedContent;
 use super::cache::CacheManager;
 use super::error::{StreamError, StreamResult};
 use super::provider::StreamProvider;
-use super::providers::YtDlpProvider;
+use super::providers::{BandcampProvider, SoundCloudProvider, YtDlpProvider};
 use super::types::{ContentType, SearchResult};
 
 pub struct StreamingService {
@@ -22,11 +22,15 @@ impl StreamingService {
 
         let ytdlp = Arc::new(YtDlpProvider::new(cache)) as Arc<dyn StreamProvider>;
 
+        let bandcamp = Arc::new(BandcampProvider::new(ytdlp.clone())) as Arc<dyn StreamProvider>;
+        let soundcloud =
+            Arc::new(SoundCloudProvider::new(ytdlp.clone())) as Arc<dyn StreamProvider>;
+
         let mut providers = HashMap::new();
         providers.insert("ytdlp".to_string(), ytdlp.clone());
-        providers.insert("youtube".to_string(), ytdlp.clone());
-        providers.insert("soundcloud".to_string(), ytdlp.clone());
-        providers.insert("bandcamp".to_string(), ytdlp);
+        providers.insert("youtube".to_string(), ytdlp);
+        providers.insert("bandcamp".to_string(), bandcamp);
+        providers.insert("soundcloud".to_string(), soundcloud);
 
         Ok(Self { providers })
     }
@@ -54,7 +58,7 @@ impl StreamingService {
         self.providers.keys().cloned().collect()
     }
 
-    pub async fn resolve(&self, source: &SearchResult) -> StreamResult<ResolvedContent> {
+    pub fn resolve(&self, source: &SearchResult) -> StreamResult<ResolvedContent> {
         match source {
             SearchResult::Track(track) => Ok(ResolvedContent::Track(track.into())),
             SearchResult::Playlist(playlist) => Ok(ResolvedContent::Playlist(playlist.into())),

@@ -1,5 +1,6 @@
 use super::playback::PlaybackEngine;
 use super::types::{AudioCommand, AudioEvent, AudioState, PlaybackState, Track};
+use crate::audio::types::AudioSource;
 use crate::error::AudioError;
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, Sender};
@@ -167,6 +168,40 @@ impl AudioEngine {
 
                             // Проверяем завершение трека
                             let _ = event_tx.send(AudioEvent::PlaybackStarted { track });
+                            info!("Воспроизведение началось, длительность: {:?}", duration);
+                        }
+                        Err(e) => {
+                            warn!("Ошибка воспроизведения: {}", e);
+                            let _ = event_tx.send(AudioEvent::Error {
+                                message: format!("Ошибка воспроизведения: {}", e),
+                            });
+                        }
+                    }
+                }
+                Ok(AudioCommand::PlaySource(source)) => {
+                    let result = playback.play_audio_source(source.audio_source);
+
+                    match result {
+                        Ok(_) => {
+                            // Получаем длительность
+                            let duration = playback.duration().unwrap_or(Duration::ZERO);
+
+                            // Обновляем состояние
+                            {
+                                let mut s = state.write().unwrap();
+                                s.playback_state = PlaybackState::Playing;
+                                s.position = Duration::ZERO;
+                                s.duration = duration;
+                            }
+
+                            // Отправляем события
+                            if duration > Duration::ZERO {
+                                let _ = event_tx.send(AudioEvent::DurationChanged { duration });
+                            }
+                            last_position_update = std::time::Instant::now();
+
+                            // Проверяем завершение трека
+                            let _ = event_tx.send(AudioEvent::PlaybackStarted { track:source.track});
                             info!("Воспроизведение началось, длительность: {:?}", duration);
                         }
                         Err(e) => {
