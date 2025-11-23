@@ -4,7 +4,7 @@ use nexus_player_backend::library::types::{
     AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackSource,
 };
 use nexus_player_backend::state::state::AppState;
-use nexus_player_backend::streaming::types::ContentType;
+use nexus_player_backend::streaming::types::{ContentType, ResolvedContent};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
@@ -349,4 +349,51 @@ pub async fn search_streaming(
         .map_err(|e| e.to_string())?;
 
     Ok(results.into_iter().map(|r| r.into()).collect())
+}
+
+#[tauri::command]
+pub async fn handle_streaming_track(
+    state: State<'_, Arc<AppState>>,
+    search_result: SearchResultDto,
+    strategy: String,
+) -> Result<Option<i64>> {
+    use nexus_player_backend::library::types::DownloadStrategy;
+
+    tracing::info!("search_result {:?}", search_result);
+    let download_strategy = match strategy.as_str() {
+        "stream" => DownloadStrategy::Stream,
+        "cache" => DownloadStrategy::Cache,
+        "progressive" => DownloadStrategy::Progressive,
+        _ => return Err("Invalid download strategy".into()),
+    };
+
+    match download_strategy {
+        DownloadStrategy::Cache => {
+            let backend_search_result: nexus_player_backend::streaming::types::SearchResult =
+                search_result.into();
+
+            let resolved = state
+                .streaming()
+                .resolve(&backend_search_result)
+                .map_err(|e| e.to_string())?;
+
+            match resolved {
+                ResolvedContent::Track(track) => {
+                    state.update_queue(|q| {
+                        tracing::info!("add track {:?}", track);
+                        q.add_track(track);
+                    });
+                }
+                ResolvedContent::Playlist(playlist) => {
+                    state.update_queue(|q| {
+                        tracing::info!("add playlist{:?}", playlist);
+                        q.load_from_playlist(playlist, None);
+                    });
+                }
+            }
+            Ok(None)
+        }
+        DownloadStrategy::Stream => Err("Stream strategy not yet implemented".into()),
+        DownloadStrategy::Progressive => Err("Progressive strategy not yet implemented".into()),
+    }
 }

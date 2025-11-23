@@ -39,15 +39,13 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
 
             for event in events {
                 let frontend_event = match event {
-                    AudioEvent::PlaybackStarted { track } => {
-                        FrontendEvent::PlaybackStarted { track_id: track.id }
-                    }
+                    AudioEvent::PlaybackStarted => FrontendEvent::PlaybackStarted { track_id: 0 },
                     AudioEvent::PlaybackPaused => FrontendEvent::PlaybackPaused,
                     AudioEvent::PlaybackResumed => FrontendEvent::PlaybackResumed,
                     AudioEvent::PlaybackStopped => FrontendEvent::PlaybackStopped,
-                    AudioEvent::TrackFinished { track_id } => {
-                        state.handle_track_finished(track_id);
-                        FrontendEvent::TrackFinished { track_id }
+                    AudioEvent::TrackFinished => {
+                        state.handle_track_finished(0);
+                        FrontendEvent::TrackFinished { track_id: 0 }
                     }
                     AudioEvent::PositionUpdated { position } => FrontendEvent::PositionUpdated {
                         position_secs: position.as_secs_f64(),

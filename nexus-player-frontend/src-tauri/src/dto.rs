@@ -190,6 +190,7 @@ pub struct StreamingPlaylistDto {
     pub creator: String,
     pub track_count: usize,
     pub thumbnail: Option<String>,
+    pub tracks: Vec<StreamingTrackDto>,
     pub url: String,
 }
 
@@ -202,6 +203,7 @@ pub struct StreamingAlbumDto {
     pub track_count: usize,
     pub year: Option<u32>,
     pub thumbnail: Option<String>,
+    pub tracks: Vec<StreamingTrackDto>,
     pub url: String,
 }
 
@@ -218,15 +220,13 @@ pub struct StreamingChannelDto {
 impl From<streaming::SearchResult> for SearchResultDto {
     fn from(result: streaming::SearchResult) -> Self {
         match result {
-            streaming::SearchResult::Track(track) => {
-                SearchResultDto::Track(StreamingTrackDto {
-                    title: track.title,
-                    artist: track.artist,
-                    duration_secs: track.duration.map(|d| d.as_secs_f64()),
-                    thumbnail: track.thumbnail,
-                    url: track.source.as_str(),
-                })
-            }
+            streaming::SearchResult::Track(track) => SearchResultDto::Track(StreamingTrackDto {
+                title: track.title,
+                artist: track.artist,
+                duration_secs: track.duration.map(|d| d.as_secs_f64()),
+                thumbnail: track.thumbnail,
+                url: track.source.as_str(),
+            }),
             streaming::SearchResult::Playlist(playlist) => {
                 SearchResultDto::Playlist(StreamingPlaylistDto {
                     id: playlist.id,
@@ -234,20 +234,20 @@ impl From<streaming::SearchResult> for SearchResultDto {
                     creator: playlist.creator,
                     track_count: playlist.track_count,
                     thumbnail: playlist.thumbnail,
+                    tracks: playlist.tracks.into_iter().map(|el| el.into()).collect(),
                     url: playlist.url,
                 })
             }
-            streaming::SearchResult::Album(album) => {
-                SearchResultDto::Album(StreamingAlbumDto {
-                    id: album.id,
-                    title: album.title,
-                    artist: album.artist,
-                    track_count: album.track_count,
-                    year: album.year,
-                    thumbnail: album.thumbnail,
-                    url: album.url,
-                })
-            }
+            streaming::SearchResult::Album(album) => SearchResultDto::Album(StreamingAlbumDto {
+                id: album.id,
+                title: album.title,
+                artist: album.artist,
+                track_count: album.track_count,
+                year: album.year,
+                thumbnail: album.thumbnail,
+                tracks: album.tracks.into_iter().map(|el| el.into()).collect(),
+                url: album.url,
+            }),
             streaming::SearchResult::Channel(channel) => {
                 SearchResultDto::Channel(StreamingChannelDto {
                     id: channel.id,
@@ -260,4 +260,92 @@ impl From<streaming::SearchResult> for SearchResultDto {
         }
     }
 }
+impl From<streaming::TrackInfo> for StreamingTrackDto {
+    fn from(track: streaming::TrackInfo) -> Self {
+        Self {
+            title: track.title,
+            artist: track.artist,
+            duration_secs: track.duration.map(|d| d.as_secs_f64()),
+            thumbnail: track.thumbnail,
+            url: track.source.as_str(),
+        }
+    }
+}
 
+impl From<SearchResultDto> for streaming::SearchResult {
+    fn from(dto: SearchResultDto) -> Self {
+        match dto {
+            SearchResultDto::Track(track) => {
+                streaming::SearchResult::Track(streaming::TrackInfo {
+                    source: nexus_player_backend::library::TrackSource::Http(track.url),
+                    title: track.title,
+                    artist: track.artist,
+                    duration: track.duration_secs.map(std::time::Duration::from_secs_f64),
+                    thumbnail: track.thumbnail,
+                    description: None,
+                })
+            }
+            SearchResultDto::Playlist(playlist) => {
+                streaming::SearchResult::Playlist(streaming::PlaylistInfo {
+                    id: playlist.id,
+                    url: playlist.url,
+                    service: streaming::StreamingService::YouTube,
+                    title: playlist.title,
+                    creator: playlist.creator,
+                    tracks: playlist
+                        .tracks
+                        .into_iter()
+                        .map(|t| streaming::TrackInfo {
+                            source: nexus_player_backend::library::TrackSource::Http(t.url),
+                            title: t.title,
+                            artist: t.artist,
+                            duration: t.duration_secs.map(std::time::Duration::from_secs_f64),
+                            thumbnail: t.thumbnail,
+                            description: None,
+                        })
+                        .collect(),
+                    track_count: playlist.track_count,
+                    thumbnail: playlist.thumbnail,
+                    description: None,
+                })
+            }
+            SearchResultDto::Album(album) => {
+                streaming::SearchResult::Album(streaming::AlbumInfo {
+                    id: album.id,
+                    url: album.url,
+                    service: streaming::StreamingService::YouTube,
+                    title: album.title,
+                    artist: album.artist,
+                    tracks: album
+                        .tracks
+                        .into_iter()
+                        .map(|t| streaming::TrackInfo {
+                            source: nexus_player_backend::library::TrackSource::Http(t.url),
+                            title: t.title,
+                            artist: t.artist,
+                            duration: t.duration_secs.map(std::time::Duration::from_secs_f64),
+                            thumbnail: t.thumbnail,
+                            description: None,
+                        })
+                        .collect(),
+                    track_count: album.track_count,
+                    year: album.year,
+                    thumbnail: album.thumbnail,
+                    description: None,
+                })
+            }
+            SearchResultDto::Channel(channel) => {
+                streaming::SearchResult::Channel(streaming::ChannelInfo {
+                    id: channel.id,
+                    url: channel.url,
+                    service: streaming::StreamingService::YouTube,
+                    name: channel.name,
+                    subscriber_count: channel.subscriber_count,
+                    track_count: None,
+                    thumbnail: channel.thumbnail,
+                    description: None,
+                })
+            }
+        }
+    }
+}
