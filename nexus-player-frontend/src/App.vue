@@ -10,20 +10,13 @@ import StreamingSearch from './components/StreamingSearch.vue';
 const trackListRef = ref<InstanceType<typeof TrackList> | null>(null);
 const playlistListRef = ref<InstanceType<typeof PlaylistList> | null>(null);
 const playbackQueueRef = ref<InstanceType<typeof PlaybackQueue> | null>(null);
+const playerControlRef = ref<InstanceType<typeof PlayerControl> | null>(null);
 const statusMessage = ref('');
 
-// TODO(human): Implement the addTrackFromDialog function
-// This function should:
-// 1. Call 'select_audio_file' command to open file dialog
-// 2. If a file is selected, extract filename and create track metadata
-// 3. Call 'add_track_from_file' command with CreateTrackRequest
-// 4. Reload the track list using trackListRef
-// 5. Show success/error message in statusMessage
 const addTrackFromDialog = async () => {
   const path = await invoke('select_audio_file');
-  await invoke('add_track_from_file',{path:path});
-  trackListRef.value?.reloadTracks()
-
+  await invoke('add_track_from_file', { path: path });
+  trackListRef.value?.reloadTracks();
 };
 </script>
 
@@ -41,7 +34,14 @@ const addTrackFromDialog = async () => {
 
     <!-- Streaming Search Section -->
     <section class="section">
-      <StreamingSearch />
+      <StreamingSearch
+        @refetch="
+          {
+            playerControlRef?.fetchAudioState();
+            playbackQueueRef?.fetchQueue();
+          }
+        "
+      />
     </section>
 
     <!-- Track List Section -->
@@ -66,7 +66,7 @@ const addTrackFromDialog = async () => {
     </section>
 
     <!-- Player Control -->
-    <PlayerControl />
+    <PlayerControl ref="playerControlRef" />
   </main>
 </template>
 

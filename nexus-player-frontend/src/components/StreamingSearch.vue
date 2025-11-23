@@ -41,7 +41,11 @@ interface StreamingChannel {
   url: string;
 }
 
-type SearchResult = StreamingTrack | StreamingPlaylist | StreamingAlbum | StreamingChannel;
+type SearchResult =
+  | StreamingTrack
+  | StreamingPlaylist
+  | StreamingAlbum
+  | StreamingChannel;
 
 const query = ref('');
 const selectedProvider = ref('youtube');
@@ -107,8 +111,16 @@ const formatNumber = (num?: number): string => {
   return num.toString();
 };
 
-const handleResultClick = (result: SearchResult) => {
+const emit = defineEmits<{
+  refetch: [];
+}>();
+const handleResultClick = async (result: SearchResult) => {
   console.log('Clicked result:', result);
+  await invoke('handle_streaming_track', {
+    searchResult: result,
+    strategy: 'cache',
+  });
+  emit('refetch');
   // TODO(human): Implement result click handler
   // For tracks: Add to queue or play immediately
   // For playlists/albums: Expand and show tracks
@@ -138,8 +150,16 @@ const handleResultClick = (result: SearchResult) => {
       <div class="filters">
         <div class="filter-group">
           <label for="provider-select">Provider:</label>
-          <select id="provider-select" v-model="selectedProvider" class="filter-select">
-            <option v-for="provider in providers" :key="provider.value" :value="provider.value">
+          <select
+            id="provider-select"
+            v-model="selectedProvider"
+            class="filter-select"
+          >
+            <option
+              v-for="provider in providers"
+              :key="provider.value"
+              :value="provider.value"
+            >
               {{ provider.label }}
             </option>
           </select>
@@ -147,8 +167,16 @@ const handleResultClick = (result: SearchResult) => {
 
         <div class="filter-group">
           <label for="content-type-select">Type:</label>
-          <select id="content-type-select" v-model="selectedContentType" class="filter-select">
-            <option v-for="type in contentTypes" :key="type.value ?? 'all'" :value="type.value">
+          <select
+            id="content-type-select"
+            v-model="selectedContentType"
+            class="filter-select"
+          >
+            <option
+              v-for="type in contentTypes"
+              :key="type.value ?? 'all'"
+              :value="type.value"
+            >
               {{ type.label }}
             </option>
           </select>
@@ -196,7 +224,9 @@ const handleResultClick = (result: SearchResult) => {
           <div v-if="result.type === 'track'" class="result-content">
             <div class="result-title">{{ result.title }}</div>
             <div class="result-meta">{{ result.artist }}</div>
-            <div class="result-meta">{{ formatDuration(result.durationSecs) }}</div>
+            <div class="result-meta">
+              {{ formatDuration(result.durationSecs) }}
+            </div>
           </div>
 
           <!-- Playlist Result -->
@@ -228,7 +258,10 @@ const handleResultClick = (result: SearchResult) => {
     </div>
 
     <!-- No Results -->
-    <div v-else-if="!loading && searchResults.length === 0 && query" class="no-results">
+    <div
+      v-else-if="!loading && searchResults.length === 0 && query"
+      class="no-results"
+    >
       No results found for "{{ query }}"
     </div>
   </div>
@@ -272,13 +305,13 @@ h3 {
 }
 
 .search-input:focus {
-  border-color: #4CAF50;
+  border-color: #4caf50;
 }
 
 .search-btn {
   padding: 12px 32px;
   font-size: 16px;
-  background-color: #4CAF50;
+  background-color: #4caf50;
   color: white;
   border: none;
   border-radius: 8px;
@@ -324,7 +357,7 @@ h3 {
 }
 
 .filter-select:focus {
-  border-color: #4CAF50;
+  border-color: #4caf50;
 }
 
 .error-message {
@@ -398,19 +431,19 @@ h3 {
 }
 
 .result-track {
-  border-left: 4px solid #4CAF50;
+  border-left: 4px solid #4caf50;
 }
 
 .result-playlist {
-  border-left: 4px solid #2196F3;
+  border-left: 4px solid #2196f3;
 }
 
 .result-album {
-  border-left: 4px solid #FF9800;
+  border-left: 4px solid #ff9800;
 }
 
 .result-channel {
-  border-left: 4px solid #9C27B0;
+  border-left: 4px solid #9c27b0;
 }
 
 .no-results {

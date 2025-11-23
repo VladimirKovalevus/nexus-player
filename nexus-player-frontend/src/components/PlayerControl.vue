@@ -36,12 +36,12 @@ const audioState = ref<AudioState>({
   positionSecs: 0,
   durationSecs: 0,
   volume: 1.0,
-  currentTrack: null
+  currentTrack: null,
 });
 
 const queueState = ref<QueueState>({
   repeatMode: 'off',
-  shuffleEnabled: false
+  shuffleEnabled: false,
 });
 
 const seeking = ref(false);
@@ -61,6 +61,7 @@ const fetchAudioState = async () => {
     console.error('Failed to fetch audio state:', e);
   }
 };
+defineExpose({ fetchAudioState });
 
 const fetchQueueState = async () => {
   try {
@@ -125,8 +126,8 @@ const togglePlayPause = async () => {
       await invoke('pause');
     } else if (audioState.value.state === 'paused') {
       await invoke('resume');
-    }else if (audioState.value.state === 'stopped'){
-    await invoke('play_at_index',{index:0})
+    } else if (audioState.value.state === 'stopped') {
+      await invoke('play_at_index', { index: 0 });
     }
     await fetchAudioState();
   } catch (e) {
@@ -163,7 +164,10 @@ const onSeekChange = (event: Event) => {
   if (seeking.value) {
     const target = event.target as HTMLInputElement;
     seekPosition.value = parseFloat(target.value);
-    console.log('seekChange - updating virtual position to:', seekPosition.value);
+    console.log(
+      'seekChange - updating virtual position to:',
+      seekPosition.value,
+    );
   }
 };
 
@@ -236,10 +240,14 @@ const toggleShuffleMode = async () => {
 
 const getRepeatIcon = (): string => {
   switch (queueState.value.repeatMode) {
-    case 'off': return '🔁';
-    case 'all': return '🔁';
-    case 'one': return '🔂';
-    default: return '🔁';
+    case 'off':
+      return '🔁';
+    case 'all':
+      return '🔁';
+    case 'one':
+      return '🔂';
+    default:
+      return '🔁';
   }
 };
 
@@ -303,12 +311,14 @@ onUnmounted(() => {
       <button class="control-btn" @click="playPrevious" title="Previous">
         ⏮
       </button>
-      <button class="control-btn play-btn" @click="togglePlayPause" title="Play/Pause">
+      <button
+        class="control-btn play-btn"
+        @click="togglePlayPause"
+        title="Play/Pause"
+      >
         {{ audioState.state === 'playing' ? '⏸' : '▶' }}
       </button>
-      <button class="control-btn" @click="playNext" title="Next">
-        ⏭
-      </button>
+      <button class="control-btn" @click="playNext" title="Next">⏭</button>
       <button
         class="control-btn small-btn"
         @click="cycleRepeatMode"
@@ -338,7 +348,7 @@ onUnmounted(() => {
   </div>
 </template>
 
-<style scoped >
+<style scoped>
 .player-control {
   position: fixed;
   bottom: 0;
