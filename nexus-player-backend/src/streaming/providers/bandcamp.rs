@@ -101,11 +101,10 @@ impl StreamProvider for BandcampProvider {
         "Bandcamp"
     }
 
-    fn resolve(&self, source: &TrackSource) -> bool {
+    async fn resolve(&self, source: &TrackSource) -> StreamResult<String> {
         match source {
-            TrackSource::Http(url) => Self::is_bandcamp_url(url),
-            TrackSource::External { system, .. } => system == "bandcamp",
-            _ => false,
+            TrackSource::Http(_) => self.ytdlp.resolve(source).await,
+            _ => Err(StreamError::NotSupported),
         }
     }
 
@@ -162,6 +161,7 @@ impl StreamProvider for BandcampProvider {
         let mut search_results = Vec::new();
 
         for item in results.into_iter().take(limit) {
+            tracing::info!("Bandcamp Item: {:?}", item);
             match item {
                 bandcamp::SearchResultItem::Album(album) => {
                     if content_type.is_none() || content_type == Some(ContentType::Album) {

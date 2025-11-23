@@ -52,11 +52,10 @@ impl StreamProvider for SoundCloudProvider {
         "SoundCloud"
     }
 
-    fn resolve(&self, source: &TrackSource) -> bool {
+    async fn resolve(&self, source: &TrackSource) -> StreamResult<String> {
         match source {
-            TrackSource::Http(url) => Self::is_soundcloud_url(url),
-            TrackSource::External { system, .. } => system == "soundcloud",
-            _ => false,
+            TrackSource::Http(_) => self.ytdlp.resolve(source).await,
+            _ => Err(StreamError::NotSupported),
         }
     }
 

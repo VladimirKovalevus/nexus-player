@@ -11,7 +11,7 @@ use async_trait::async_trait;
 pub trait StreamProvider: Send + Sync {
     fn name(&self) -> &str;
 
-    fn resolve(&self, source: &TrackSource) -> bool;
+    async fn resolve(&self, source: &TrackSource) -> StreamResult<String>;
 
     async fn fetch_metadata(&self, source: &TrackSource) -> StreamResult<StreamMetadata>;
 

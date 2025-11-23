@@ -3,6 +3,8 @@ use serde::Deserialize;
 use std::fs::File;
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
+use thiserror::Error;
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 use tracing::info;
@@ -17,6 +19,7 @@ use crate::streaming::types::{
     AlbumInfo, AudioQuality, ChannelInfo, ContentType, PlaylistInfo, ResolvedContent, SearchResult,
     StreamMetadata, StreamingService, TrackInfo,
 };
+
 #[derive(Clone, Debug, Deserialize)]
 struct YtDlpThumbnail {
     url: String,
@@ -109,6 +112,44 @@ impl YtDlpProvider {
         serde_json::from_str(&json_output)
             .map_err(|e| StreamError::MetadataError(format!("Failed to parse yt-dlp JSON: {}", e)))
     }
+    pub async fn get_audio_url(&self, url: &str, quality: AudioQuality) -> StreamResult<String> {
+        tracing::debug!("Получение аудио URL: {} (качество: {:?})", url, quality);
+
+        let format_selector = self.get_format_selector();
+
+        let output = tokio::time::timeout(
+            Duration::from_secs_f64(10 as f64),
+            Command::new(&self.executable)
+                .args(&[
+                    "--get-url",
+                    "--format",
+                    &format_selector,
+                    "--no-playlist",
+                    url,
+                ])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output(),
+        )
+        .await
+        .map_err(|_| StreamError::Timeout)?
+        .map_err(|e| StreamError::Other(e.to_string()))?;
+
+        if !output.status.success() {
+            let error = String::from_utf8_lossy(&output.stderr);
+            return Err(StreamError::MetadataError(error.to_string()));
+        }
+
+        let audio_url = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .next()
+            .ok_or_else(|| StreamError::NotSupported)?
+            .trim()
+            .to_string();
+
+        tracing::debug!("Получен аудио URL: {}", audio_url);
+        Ok(audio_url)
+    }
 
     fn get_format_selector(&self) -> String {
         "bestaudio/best".to_string()
@@ -169,11 +210,13 @@ impl StreamProvider for YtDlpProvider {
         "YtDlp"
     }
 
-    fn resolve(&self, source: &TrackSource) -> bool {
+    async fn resolve(&self, source: &TrackSource) -> StreamResult<String> {
         match source {
-            TrackSource::Http(url) => Self::extract_service(url).is_some(),
-            TrackSource::External { system, .. } => system == "ytdlp",
-            _ => false,
+            TrackSource::Http(url) => self.get_audio_url(url, AudioQuality::Best).await,
+            TrackSource::External { id, system } if system == "ytdlp" => {
+                self.get_audio_url(id, AudioQuality::Best).await
+            }
+            _ => Err(StreamError::NotSupported),
         }
     }
 
@@ -224,8 +267,8 @@ impl StreamProvider for YtDlpProvider {
 
         let direct_url = self.get_direct_url(url).await?;
 
-        let chunked_source = ChunkedMediaSource::new(direct_url)
-            .map_err(|e| StreamError::IoError(e))?;
+        let chunked_source =
+            ChunkedMediaSource::new(direct_url).map_err(|e| StreamError::IoError(e))?;
 
         Ok(Box::new(chunked_source))
     }
