@@ -7,14 +7,15 @@ use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 use tracing::info;
 
+use crate::audio::chunked::ChunkedMediaSource;
 use crate::audio::types::MediaSource;
 use crate::library::TrackSource;
 use crate::streaming::cache::CacheManager;
 use crate::streaming::error::{StreamError, StreamResult};
 use crate::streaming::provider::StreamProvider;
 use crate::streaming::types::{
-    AlbumInfo, AudioQuality, ChannelInfo, ContentType, PlaylistInfo, SearchResult, StreamMetadata,
-    StreamingService, TrackInfo,
+    AlbumInfo, AudioQuality, ChannelInfo, ContentType, PlaylistInfo, ResolvedContent, SearchResult,
+    StreamMetadata, StreamingService, TrackInfo,
 };
 #[derive(Clone, Debug, Deserialize)]
 struct YtDlpThumbnail {
@@ -111,6 +112,13 @@ impl YtDlpProvider {
 
     fn get_format_selector(&self) -> String {
         "bestaudio/best".to_string()
+    }
+
+    async fn get_direct_url(&self, url: &str) -> StreamResult<String> {
+        let meta = self.fetch_json(url, false).await?;
+
+        meta.url
+            .ok_or_else(|| StreamError::NoStreamAvailable("No direct URL found".to_string()))
     }
 
     fn extract_service(url: &str) -> Option<StreamingService> {
@@ -212,25 +220,27 @@ impl StreamProvider for YtDlpProvider {
             return Ok(Box::new(file));
         }
 
-        let cache_path = self.cache.reserve(url).await?;
+        info!("Используем streaming mode для: {}", url);
 
-        let format = self.get_format_selector();
-        let cache_path_str = cache_path
-            .to_str()
-            .ok_or_else(|| StreamError::Other("Invalid cache path".to_string()))?;
+        let direct_url = self.get_direct_url(url).await?;
 
-        self.run_ytdlp(&["-f", &format, "-o", cache_path_str, url])
-            .await?;
+        let chunked_source = ChunkedMediaSource::new(direct_url)
+            .map_err(|e| StreamError::IoError(e))?;
 
-        let file_size = std::fs::metadata(&cache_path)
-            .map_err(|e| StreamError::IoError(e))?
-            .len();
+        Ok(Box::new(chunked_source))
+    }
 
-        self.cache.put(url, file_size).await?;
-
-        let file = File::open(&cache_path).map_err(|e| StreamError::IoError(e))?;
-
-        Ok(Box::new(file))
+    async fn get_stream_v2(&self, content: &ResolvedContent) -> StreamResult<Box<dyn MediaSource>> {
+        match content {
+            ResolvedContent::Track(track) => self.get_stream(&track.source).await,
+            ResolvedContent::Playlist(playlist) => {
+                if let Some(first_track) = playlist.tracks().first() {
+                    self.get_stream(&first_track.source).await
+                } else {
+                    Err(StreamError::Other("Playlist is empty".to_string()))
+                }
+            }
+        }
     }
 
     async fn search_typed(
