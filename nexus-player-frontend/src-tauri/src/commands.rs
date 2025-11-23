@@ -4,7 +4,7 @@ use nexus_player_backend::library::types::{
     AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackSource,
 };
 use nexus_player_backend::state::state::AppState;
-use nexus_player_backend::streaming::types::{ContentType, ResolvedContent};
+use nexus_player_backend::streaming::types::{ContentType, ResolvedContent, SearchResult};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
@@ -372,24 +372,20 @@ pub async fn handle_streaming_track(
             let backend_search_result: nexus_player_backend::streaming::types::SearchResult =
                 search_result.into();
 
-            let resolved = state
-                .streaming()
-                .resolve(&backend_search_result)
-                .map_err(|e| e.to_string())?;
-
-            match resolved {
-                ResolvedContent::Track(track) => {
+            match backend_search_result {
+                SearchResult::Track(track) => {
                     state.update_queue(|q| {
                         tracing::info!("add track {:?}", track);
-                        q.add_track(track);
+                        q.add_track(track.into());
                     });
                 }
-                ResolvedContent::Playlist(playlist) => {
+                SearchResult::Playlist(playlist) => {
                     state.update_queue(|q| {
                         tracing::info!("add playlist{:?}", playlist);
-                        q.load_from_playlist(playlist, None);
+                        q.load_from_playlist(playlist.into(), None);
                     });
                 }
+                _ => todo!(),
             }
             Ok(None)
         }
