@@ -3,7 +3,6 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::audio::chunked::ChunkedMediaSource;
 use crate::audio::types::{MediaSource, TrackSource};
 use crate::streaming::types::ResolvedContent;
 
@@ -65,24 +64,14 @@ impl StreamingService {
                 let file = File::open(path)?;
                 Ok(Box::new(file))
             }
-            TrackSource::Http(raw_url) => {
+            TrackSource::Http(_) => {
                 if let Some(ytdlp_provider) = self.providers.get("ytdlp") {
-                    let rw = TrackSource::Http(raw_url.clone());
-                    let url = ytdlp_provider.resolve(&rw).await?;
-                    let media = ChunkedMediaSource::new(url.into())?;
-                    Ok(Box::new(media))
+                    ytdlp_provider.get_stream(source).await
                 } else {
                     Err(StreamError::NoProviderFound)
                 }
             }
             _ => todo!(),
         }
-
-        // match source {
-        //     SearchResult::Track(track) => Ok(ResolvedContent::Track(track.into())),
-        //     SearchResult::Playlist(playlist) => Ok(ResolvedContent::Playlist(playlist.into())),
-        //     SearchResult::Album(_) => todo!(),
-        //     SearchResult::Channel(_) => todo!(),
-        // }
     }
 }

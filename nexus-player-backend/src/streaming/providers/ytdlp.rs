@@ -9,7 +9,6 @@ use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 use tracing::info;
 
-use crate::audio::chunked::ChunkedMediaSource;
 use crate::audio::types::MediaSource;
 use crate::library::TrackSource;
 use crate::streaming::cache::CacheManager;
@@ -162,6 +161,34 @@ impl YtDlpProvider {
             .ok_or_else(|| StreamError::NoStreamAvailable("No direct URL found".to_string()))
     }
 
+    async fn download_file(&self, url: &str, output_path: &std::path::Path) -> StreamResult<()> {
+        info!("Скачивание файла: {} -> {:?}", url, output_path);
+
+        let format_selector = self.get_format_selector();
+        let output_template = output_path.to_string_lossy().to_string();
+
+        let output = Command::new(&self.executable)
+            .args(&[
+                "--format",
+                &format_selector,
+                "--output",
+                &output_template,
+                "--no-playlist",
+                url,
+            ])
+            .output()
+            .await
+            .map_err(|e| StreamError::Other(format!("Failed to execute yt-dlp: {}", e)))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(StreamError::Other(format!("yt-dlp download error: {}", stderr)));
+        }
+
+        info!("Файл успешно скачан: {:?}", output_path);
+        Ok(())
+    }
+
     fn extract_service(url: &str) -> Option<StreamingService> {
         if url.contains("youtube.com") || url.contains("youtu.be") {
             Some(StreamingService::YouTube)
@@ -259,18 +286,25 @@ impl StreamProvider for YtDlpProvider {
         };
 
         if let Some(cached_path) = self.cache.get(url).await {
+            info!("Используем кэшированный файл для: {}", url);
             let file = File::open(&cached_path).map_err(|e| StreamError::IoError(e))?;
             return Ok(Box::new(file));
         }
 
-        info!("Используем streaming mode для: {}", url);
+        info!("Скачиваем файл для: {}", url);
 
-        let direct_url = self.get_direct_url(url).await?;
+        let output_path = self.cache.reserve(url).await?;
 
-        let chunked_source =
-            ChunkedMediaSource::new(direct_url).map_err(|e| StreamError::IoError(e))?;
+        self.download_file(url, &output_path).await?;
 
-        Ok(Box::new(chunked_source))
+        let file_metadata = std::fs::metadata(&output_path)
+            .map_err(|e| StreamError::IoError(e))?;
+        let file_size = file_metadata.len();
+
+        self.cache.put(url, file_size).await?;
+
+        let file = File::open(&output_path).map_err(|e| StreamError::IoError(e))?;
+        Ok(Box::new(file))
     }
 
     async fn get_stream_v2(&self, content: &ResolvedContent) -> StreamResult<Box<dyn MediaSource>> {
