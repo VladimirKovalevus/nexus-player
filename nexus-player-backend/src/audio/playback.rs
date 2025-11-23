@@ -1,5 +1,5 @@
 use super::decoder::AudioDecoder;
-use crate::audio::types::{AudioSource, SampleRate, TrackSource};
+use crate::audio::types::{AudioSource, MediaSource, SampleRate, TrackSource};
 use crate::error::AudioError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
@@ -70,10 +70,13 @@ impl PlaybackEngine {
         }
     }
 
-    pub fn play_audio_source(&mut self, audio_source: AudioSource) -> Result<(), AudioError> {
+    pub fn play_audio_source(
+        &mut self,
+        audio_source: Box<dyn MediaSource>,
+    ) -> Result<(), AudioError> {
         info!("Загрузка аудио из AudioSource");
 
-        let decoder = AudioDecoder::from_reader(audio_source.into_reader(), None)?;
+        let decoder = AudioDecoder::from_reader(audio_source, None)?;
         let duration = decoder.duration().map(Duration::from_secs_f64);
         let sample_rate = decoder.sample_rate();
         let channels = decoder.channels();

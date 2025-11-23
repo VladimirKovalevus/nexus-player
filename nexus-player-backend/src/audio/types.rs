@@ -22,7 +22,7 @@ impl SampleRate {
 pub enum AudioCommand {
     Play(Track),
 
-    PlaySource(EngineTrack),
+    PlaySource(Box<dyn MediaSource>),
 
     Pause,
 
@@ -65,8 +65,6 @@ pub enum AudioEvent {
 pub struct AudioState {
     pub playback_state: PlaybackState,
 
-    pub current_track: Option<Track>,
-
     pub position: Duration,
 
     pub duration: Duration,
@@ -78,7 +76,6 @@ impl Default for AudioState {
     fn default() -> Self {
         Self {
             playback_state: PlaybackState::Stopped,
-            current_track: None,
             position: Duration::ZERO,
             duration: Duration::ZERO,
             volume: 1.0,

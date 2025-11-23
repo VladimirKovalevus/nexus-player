@@ -1,6 +1,6 @@
 use super::playback::PlaybackEngine;
 use super::types::{AudioCommand, AudioEvent, AudioState, PlaybackState, Track};
-use crate::audio::types::AudioSource;
+use crate::audio::types::{AudioSource, MediaSource};
 use crate::error::AudioError;
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, Sender};
@@ -41,6 +41,10 @@ impl AudioEngine {
     pub fn play(&self, track: Track) {
         info!("Команда: воспроизвести трек {}", track.id);
         let _ = self.command_tx.send(AudioCommand::Play(track));
+    }
+    pub fn play_source(&self, audio: Box<dyn MediaSource>) {
+        info!("Команда: воспроизвести трек ");
+        let _ = self.command_tx.send(AudioCommand::PlaySource(audio));
     }
 
     pub fn pause(&self) {
@@ -128,12 +132,7 @@ impl AudioEngine {
                     if let Some(duration) = playback.duration() {
                         if position >= duration {
                             info!("Трек завершен");
-                            let track_id =
-                                state.read().unwrap().current_track.as_ref().map(|t| t.id);
-                            if let Some(id) = track_id {
-                                let _ = event_tx.send(AudioEvent::TrackFinished { track_id: id });
-                            }
-
+                            let _ = event_tx.send(AudioEvent::TrackFinished);
                             state.write().unwrap().playback_state = PlaybackState::Stopped;
                             playback.stop();
                         }
@@ -155,7 +154,6 @@ impl AudioEngine {
                             {
                                 let mut s = state.write().unwrap();
                                 s.playback_state = PlaybackState::Playing;
-                                s.current_track = Some(track.clone());
                                 s.position = Duration::ZERO;
                                 s.duration = duration;
                             }
@@ -167,7 +165,7 @@ impl AudioEngine {
                             last_position_update = std::time::Instant::now();
 
                             // Проверяем завершение трека
-                            let _ = event_tx.send(AudioEvent::PlaybackStarted { track });
+                            let _ = event_tx.send(AudioEvent::PlaybackStarted);
                             info!("Воспроизведение началось, длительность: {:?}", duration);
                         }
                         Err(e) => {
@@ -179,7 +177,7 @@ impl AudioEngine {
                     }
                 }
                 Ok(AudioCommand::PlaySource(source)) => {
-                    let result = playback.play_audio_source(source.audio_source);
+                    let result = playback.play_audio_source(source);
 
                     match result {
                         Ok(_) => {
@@ -201,7 +199,7 @@ impl AudioEngine {
                             last_position_update = std::time::Instant::now();
 
                             // Проверяем завершение трека
-                            let _ = event_tx.send(AudioEvent::PlaybackStarted { track:source.track});
+                            let _ = event_tx.send(AudioEvent::PlaybackStarted);
                             info!("Воспроизведение началось, длительность: {:?}", duration);
                         }
                         Err(e) => {
@@ -235,7 +233,6 @@ impl AudioEngine {
                     {
                         let mut s = state.write().unwrap();
                         s.playback_state = PlaybackState::Stopped;
-                        s.current_track = None;
                         s.position = Duration::ZERO;
                     }
 
