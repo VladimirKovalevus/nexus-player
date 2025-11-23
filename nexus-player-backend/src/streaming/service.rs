@@ -3,6 +3,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::audio::chunked::ChunkedMediaSource;
 use crate::audio::types::{MediaSource, TrackSource};
 use crate::streaming::types::ResolvedContent;
 
@@ -58,12 +59,30 @@ impl StreamingService {
         self.providers.keys().cloned().collect()
     }
 
-    pub fn resolve(&self, source: &SearchResult) -> StreamResult<ResolvedContent> {
+    pub async fn resolve(&self, source: &TrackSource) -> StreamResult<Box<dyn MediaSource>> {
         match source {
-            SearchResult::Track(track) => Ok(ResolvedContent::Track(track.into())),
-            SearchResult::Playlist(playlist) => Ok(ResolvedContent::Playlist(playlist.into())),
-            SearchResult::Album(_) => todo!(),
-            SearchResult::Channel(_) => todo!(),
+            TrackSource::Local(path) => {
+                let file = File::open(path)?;
+                Ok(Box::new(file))
+            }
+            TrackSource::Http(raw_url) => {
+                if let Some(ytdlp_provider) = self.providers.get("ytdlp") {
+                    let rw = TrackSource::Http(raw_url.clone());
+                    let url = ytdlp_provider.resolve(&rw).await?;
+                    let media = ChunkedMediaSource::new(url.into())?;
+                    Ok(Box::new(media))
+                } else {
+                    Err(StreamError::NoProviderFound)
+                }
+            }
+            _ => todo!(),
         }
+
+        // match source {
+        //     SearchResult::Track(track) => Ok(ResolvedContent::Track(track.into())),
+        //     SearchResult::Playlist(playlist) => Ok(ResolvedContent::Playlist(playlist.into())),
+        //     SearchResult::Album(_) => todo!(),
+        //     SearchResult::Channel(_) => todo!(),
+        // }
     }
 }
