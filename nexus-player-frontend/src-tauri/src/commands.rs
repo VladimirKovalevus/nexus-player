@@ -208,20 +208,20 @@ pub async fn load_playlist_to_queue(
 }
 
 #[tauri::command]
-pub fn play_at_index(state: State<'_, Arc<AppState>>, index: usize) -> Result<()> {
-    state.play_at_index(index);
+pub async fn play_at_index(state: State<'_, Arc<AppState>>, index: usize) -> Result<()> {
+    state.play_at_index(index).await;
     Ok(())
 }
 
 #[tauri::command]
-pub fn play_next(state: State<'_, Arc<AppState>>) -> Result<()> {
-    state.play_next();
+pub async fn play_next(state: State<'_, Arc<AppState>>) -> Result<()> {
+    state.play_next().await;
     Ok(())
 }
 
 #[tauri::command]
-pub fn play_previous(state: State<'_, Arc<AppState>>) -> Result<()> {
-    state.play_previous();
+pub async fn play_previous(state: State<'_, Arc<AppState>>) -> Result<()> {
+    state.play_previous().await;
     Ok(())
 }
 

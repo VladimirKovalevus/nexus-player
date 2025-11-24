@@ -1,3 +1,4 @@
+use crate::audio;
 use crate::audio::engine::AudioEngine;
 use crate::audio::types::Track as AudioTrack;
 use crate::library::models::{Metadata, Playlist as LibraryPlaylist, Track as LibraryTrack};
@@ -76,24 +77,48 @@ impl AppState {
         result
     }
 
-    pub fn play_next(&self) {
-        self.update_queue(|queue| {
+    pub async fn play_next(&self) {
+        let track = self.update_queue_with_return(|queue| {
             if let Some(track) = queue.next() {
-                tracing::info!("Воспроизведение следующего трека: {}", track.id);
-                self.audio_engine.play(track.clone());
+                tracing::info!(
+                    "Воспроизведение трека на позиции {}: ID {}",
+                    "next",
+                    track.id
+                );
+                Some(track.clone())
             } else {
-                tracing::info!("Достигнут конец очереди");
+                tracing::warn!("Трек на позиции {} не найден", "next");
+                None
             }
         });
+        if let Some(track) = track {
+            let audio = self.streaming().resolve(track.source).await.ok();
+            if let Some(audio) = audio {
+                self.audio_engine().play_source(audio);
+            }
+        }
     }
 
-    pub fn play_previous(&self) {
-        self.update_queue(|queue| {
+    pub async fn play_previous(&self) {
+        let track = self.update_queue_with_return(|queue| {
             if let Some(track) = queue.previous() {
-                tracing::info!("Воспроизведение предыдущего трека: {}", track.id);
-                self.audio_engine.play(track.clone());
+                tracing::info!(
+                    "Воспроизведение трека на позиции {}: ID {}",
+                    "previous",
+                    track.id
+                );
+                Some(track.clone())
+            } else {
+                tracing::warn!("Трек на позиции {} не найден", "previous");
+                None
             }
         });
+        if let Some(track) = track {
+            let audio = self.streaming().resolve(track.source).await.ok();
+            if let Some(audio) = audio {
+                self.audio_engine().play_source(audio);
+            }
+        }
     }
 
     pub fn handle_track_finished(&self, track_id: usize) {
@@ -171,19 +196,26 @@ impl AppState {
         Ok(())
     }
 
-    pub fn play_at_index(&self, index: usize) {
-        self.update_queue(|queue| {
+    pub async fn play_at_index(&self, index: usize) {
+        let track = self.update_queue_with_return(|queue| {
             if let Some(track) = queue.jump_to(index) {
                 tracing::info!(
                     "Воспроизведение трека на позиции {}: ID {}",
                     index,
                     track.id
                 );
-                self.audio_engine.play(track.clone());
+                Some(track.clone())
             } else {
                 tracing::warn!("Трек на позиции {} не найден", index);
+                None
             }
         });
+        if let Some(track) = track {
+            let audio = self.streaming().resolve(track.source).await.ok();
+            if let Some(audio) = audio {
+                self.audio_engine().play_source(audio);
+            }
+        }
     }
 
     pub fn pause(&self) {

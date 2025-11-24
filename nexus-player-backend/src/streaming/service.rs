@@ -58,7 +58,7 @@ impl StreamingService {
         self.providers.keys().cloned().collect()
     }
 
-    pub async fn resolve(&self, source: &TrackSource) -> StreamResult<Box<dyn MediaSource>> {
+    pub async fn resolve(&self, source: TrackSource) -> StreamResult<Box<dyn MediaSource>> {
         match source {
             TrackSource::Local(path) => {
                 let file = File::open(path)?;
@@ -66,7 +66,8 @@ impl StreamingService {
             }
             TrackSource::Http(_) => {
                 if let Some(ytdlp_provider) = self.providers.get("ytdlp") {
-                    ytdlp_provider.get_stream(source).await
+                    let source = source;
+                    ytdlp_provider.get_stream(&source).await
                 } else {
                     Err(StreamError::NoProviderFound)
                 }

@@ -84,7 +84,7 @@ impl CacheManager {
     fn compute_key(url: &str) -> String {
         let mut hasher = Sha256::new();
         hasher.update(url.as_bytes());
-        format!("{:x}", hasher.finalize())
+        format!("{:x}.mp3", hasher.finalize())
     }
 
     fn current_timestamp() -> u64 {

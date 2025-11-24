@@ -169,6 +169,9 @@ impl YtDlpProvider {
 
         let output = Command::new(&self.executable)
             .args(&[
+                "-x",
+                "--audio-format",
+                "mp3",
                 "--format",
                 &format_selector,
                 "--output",
@@ -182,7 +185,10 @@ impl YtDlpProvider {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(StreamError::Other(format!("yt-dlp download error: {}", stderr)));
+            return Err(StreamError::Other(format!(
+                "yt-dlp download error: {}",
+                stderr
+            )));
         }
 
         info!("Файл успешно скачан: {:?}", output_path);
@@ -297,13 +303,13 @@ impl StreamProvider for YtDlpProvider {
 
         self.download_file(url, &output_path).await?;
 
-        let file_metadata = std::fs::metadata(&output_path)
-            .map_err(|e| StreamError::IoError(e))?;
+        let file_metadata = std::fs::metadata(&output_path).map_err(|e| StreamError::IoError(e))?;
         let file_size = file_metadata.len();
 
         self.cache.put(url, file_size).await?;
 
         let file = File::open(&output_path).map_err(|e| StreamError::IoError(e))?;
+        info!("file {:?}", file.metadata());
         Ok(Box::new(file))
     }
 
