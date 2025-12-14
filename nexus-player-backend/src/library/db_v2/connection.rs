@@ -10,7 +10,7 @@ pub async fn establish_connection(database_url: &str) -> Result<DatabaseConnecti
         .acquire_timeout(Duration::from_secs(8))
         .idle_timeout(Duration::from_secs(8))
         .max_lifetime(Duration::from_secs(8))
-        .sqlx_logging(true);
+        .sqlx_logging(false);
 
     let db = Database::connect(opt)
         .await
@@ -19,7 +19,9 @@ pub async fn establish_connection(database_url: &str) -> Result<DatabaseConnecti
     Ok(db)
 }
 
-pub async fn establish_connection_with_migrations(database_url: &str) -> Result<DatabaseConnection> {
+pub async fn establish_connection_with_migrations(
+    database_url: &str,
+) -> Result<DatabaseConnection> {
     let db = establish_connection(database_url).await?;
 
     Ok(db)

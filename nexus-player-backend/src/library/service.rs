@@ -3,41 +3,42 @@
 //! This service encapsulates database connection and repositories,
 //! providing a clean API for track and playlist management.
 
+use anyhow::{Context, Result};
+use sea_orm::DatabaseConnection;
+use sqlx::SqlitePool;
 use std::path::Path;
 use std::sync::Arc;
-use anyhow::{Result, Context};
-use sqlx::SqlitePool;
 
-use crate::db;
 use super::{
-    TrackRepository, PlaylistRepository,
-    SqliteTrackRepository, SqlitePlaylistRepository,
-    models, TrackId, PlaylistId,
+    db_v2, models, PlaylistId, PlaylistRepositoryV2, SeaOrmPlaylistRepository,
+    SeaOrmTrackRepository, TrackId, TrackRepositoryV2,
 };
+use crate::db;
 
 /// Service for managing music library (tracks and playlists)
 pub struct LibraryService {
     pool: SqlitePool,
-    track_repo: Arc<dyn TrackRepository>,
-    playlist_repo: Arc<dyn PlaylistRepository>,
+    db: DatabaseConnection,
+    track_repo: Arc<dyn TrackRepositoryV2>,
+    playlist_repo: Arc<dyn PlaylistRepositoryV2>,
 }
 
 impl LibraryService {
     /// Create new LibraryService with initialized database
     pub async fn new(db_path: &Path) -> Result<Self> {
-        // Initialize database and run migrations
         let pool = db::create_pool(db_path).await?;
 
-        // Create repositories
-        let track_repo: Arc<dyn TrackRepository> = Arc::new(
-            SqliteTrackRepository::new(pool.clone())
-        );
-        let playlist_repo: Arc<dyn PlaylistRepository> = Arc::new(
-            SqlitePlaylistRepository::new(pool.clone())
-        );
+        let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
+        let db = db_v2::establish_connection(&db_url).await?;
+
+        let track_repo: Arc<dyn TrackRepositoryV2> =
+            Arc::new(SeaOrmTrackRepository::new(db.clone()));
+        let playlist_repo: Arc<dyn PlaylistRepositoryV2> =
+            Arc::new(SeaOrmPlaylistRepository::new(db.clone()));
 
         Ok(Self {
             pool,
+            db,
             track_repo,
             playlist_repo,
         })
@@ -107,7 +108,10 @@ impl LibraryService {
     }
 
     /// Get playlist with tracks
-    pub async fn get_playlist_with_tracks(&self, id: PlaylistId) -> Result<Option<models::PlaylistWithTracks>> {
+    pub async fn get_playlist_with_tracks(
+        &self,
+        id: PlaylistId,
+    ) -> Result<Option<models::PlaylistWithTracks>> {
         self.playlist_repo.get_with_tracks(id).await
     }
 
@@ -127,9 +131,14 @@ impl LibraryService {
     }
 
     /// Add track to playlist
-    pub async fn add_track_to_playlist(&self, playlist_id: PlaylistId, track_id: TrackId) -> Result<()> {
+    pub async fn add_track_to_playlist(
+        &self,
+        playlist_id: PlaylistId,
+        track_id: TrackId,
+    ) -> Result<()> {
         // Get current playlist to determine position
-        let playlist = self.playlist_repo
+        let playlist = self
+            .playlist_repo
             .get_with_tracks(playlist_id)
             .await?
             .context("Playlist not found")?;
@@ -142,14 +151,20 @@ impl LibraryService {
     }
 
     /// Remove track from playlist
-    pub async fn remove_track_from_playlist(&self, playlist_id: PlaylistId, track_id: TrackId) -> Result<()> {
-        self.playlist_repo
-            .remove_track(playlist_id, track_id)
-            .await
+    pub async fn remove_track_from_playlist(
+        &self,
+        playlist_id: PlaylistId,
+        track_id: TrackId,
+    ) -> Result<()> {
+        self.playlist_repo.remove_track(playlist_id, track_id).await
     }
 
     /// Reorder tracks in playlist
-    pub async fn reorder_playlist_tracks(&self, playlist_id: PlaylistId, track_ids: Vec<TrackId>) -> Result<()> {
+    pub async fn reorder_playlist_tracks(
+        &self,
+        playlist_id: PlaylistId,
+        track_ids: Vec<TrackId>,
+    ) -> Result<()> {
         self.playlist_repo
             .reorder_tracks(playlist_id, track_ids)
             .await
@@ -163,49 +178,54 @@ impl LibraryService {
         &self,
         runtime_playlist: crate::playlist::playlist::Playlist,
     ) -> Result<models::PlaylistWithTracks> {
-        let mut tx = self.pool.begin().await?;
+        use chrono::Utc;
+        use sea_orm::{ActiveModelTrait, ActiveValue, TransactionTrait};
+
+        use super::entities_v2::{playlist, playlist_track, track};
+
+        let txn = self.db.begin().await?;
 
         let mut saved_track_ids = Vec::new();
 
         for audio_track in runtime_playlist.tracks() {
             let library_track: models::Track = audio_track.clone().into();
+            let entity_track: track::Model = library_track.into();
 
-            let track_id = sqlx::query_scalar::<_, i64>(
-                r#"
-                INSERT INTO tracks (
-                    title, description, artist, album, album_artist, year, genre, track_number,
-                    source_type, source_path, cache_status, duration_secs, sample_rate,
-                    channels, bitrate, format, play_count, added_at, updated_at
-                )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
-                "#,
-            )
-            .bind(&library_track.metadata.title)
-            .bind(&library_track.metadata.description)
-            .bind(&library_track.artist)
-            .bind(&library_track.album)
-            .bind(&library_track.album_artist)
-            .bind(library_track.year.map(|y| y as i64))
-            .bind(&library_track.genre)
-            .bind(library_track.track_number.map(|t| t as i64))
-            .bind("local")
-            .bind("")
-            .bind("none")
-            .bind(library_track.audio_info.as_ref().and_then(|i| i.duration_secs))
-            .bind(library_track.audio_info.as_ref().and_then(|i| i.sample_rate).map(|s| s as i64))
-            .bind(library_track.audio_info.as_ref().and_then(|i| i.channels).map(|c| c as i64))
-            .bind(library_track.audio_info.as_ref().and_then(|i| i.bitrate).map(|b| b as i64))
-            .bind(library_track.audio_info.as_ref().map(|i| i.format.as_str()))
-            .bind(library_track.play_count as i64)
-            .bind(library_track.added_at.timestamp())
-            .bind(library_track.updated_at.timestamp())
-            .fetch_one(&mut *tx)
-            .await
-            .context("Failed to insert track")?;
+            let active_track = track::ActiveModel {
+                id: ActiveValue::NotSet,
+                title: ActiveValue::Set(entity_track.title),
+                artist: ActiveValue::Set(entity_track.artist),
+                description: ActiveValue::Set(entity_track.description),
+                artwork_id: ActiveValue::Set(entity_track.artwork_id),
+                album: ActiveValue::Set(entity_track.album),
+                album_artist: ActiveValue::Set(entity_track.album_artist),
+                year: ActiveValue::Set(entity_track.year),
+                genre: ActiveValue::Set(entity_track.genre),
+                track_number: ActiveValue::Set(entity_track.track_number),
+                source_type: ActiveValue::Set(entity_track.source_type),
+                source_data: ActiveValue::Set(entity_track.source_data),
+                cache_type: ActiveValue::Set(entity_track.cache_type),
+                cache_data: ActiveValue::Set(entity_track.cache_data),
+                file_format: ActiveValue::Set(entity_track.file_format),
+                duration_secs: ActiveValue::Set(entity_track.duration_secs),
+                sample_rate: ActiveValue::Set(entity_track.sample_rate),
+                channels: ActiveValue::Set(entity_track.channels),
+                bitrate: ActiveValue::Set(entity_track.bitrate),
+                play_count: ActiveValue::Set(entity_track.play_count),
+                last_played: ActiveValue::Set(entity_track.last_played),
+                added_at: ActiveValue::Set(entity_track.added_at),
+                updated_at: ActiveValue::Set(entity_track.updated_at),
+            };
 
-            saved_track_ids.push(TrackId(track_id));
+            let result = active_track
+                .insert(&txn)
+                .await
+                .context("Failed to insert track")?;
+
+            saved_track_ids.push(TrackId(result.id));
         }
 
+        let now = Utc::now();
         let playlist_library = models::Playlist {
             id: PlaylistId(0),
             metadata: models::Metadata {
@@ -214,58 +234,65 @@ impl LibraryService {
                 artwork: None,
             },
             creator: None,
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
+            created_at: now,
+            updated_at: now,
         };
 
-        let playlist_id = sqlx::query_scalar::<_, i64>(
-            r#"
-            INSERT INTO playlists (title, description, creator, artwork_id, created_at, updated_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-            "#,
-        )
-        .bind(&playlist_library.metadata.title)
-        .bind(&playlist_library.metadata.description)
-        .bind(&playlist_library.creator)
-        .bind(None::<i64>)
-        .bind(playlist_library.created_at.timestamp())
-        .bind(playlist_library.updated_at.timestamp())
-        .fetch_one(&mut *tx)
-        .await
-        .context("Failed to create playlist")?;
+        let entity_playlist: playlist::Model = playlist_library.into();
+        let active_playlist = playlist::ActiveModel {
+            id: ActiveValue::NotSet,
+            title: ActiveValue::Set(entity_playlist.title),
+            description: ActiveValue::Set(entity_playlist.description),
+            creator: ActiveValue::Set(entity_playlist.creator),
+            artwork_id: ActiveValue::Set(entity_playlist.artwork_id),
+            created_at: ActiveValue::Set(entity_playlist.created_at),
+            updated_at: ActiveValue::Set(entity_playlist.updated_at),
+        };
 
-        let playlist_id = PlaylistId(playlist_id);
+        let playlist_result = active_playlist
+            .insert(&txn)
+            .await
+            .context("Failed to create playlist")?;
+
+        let playlist_id = PlaylistId(playlist_result.id);
 
         let mut playlist_tracks = Vec::new();
 
         for (position, track_id) in saved_track_ids.iter().enumerate() {
-            let now = chrono::Utc::now();
+            let now_ts = Utc::now().timestamp();
 
-            sqlx::query(
-                r#"
-                INSERT INTO playlist_tracks (playlist_id, track_id, position, added_at)
-                VALUES (?1, ?2, ?3, ?4)
-                "#,
-            )
-            .bind(playlist_id.0)
-            .bind(track_id.0)
-            .bind(position as i64)
-            .bind(now.timestamp())
-            .execute(&mut *tx)
-            .await
-            .context("Failed to add track to playlist")?;
+            let active_playlist_track = playlist_track::ActiveModel {
+                playlist_id: ActiveValue::Set(playlist_id.0),
+                track_id: ActiveValue::Set(track_id.0),
+                position: ActiveValue::Set(position as i64),
+                added_at: ActiveValue::Set(now_ts),
+            };
+
+            active_playlist_track
+                .insert(&txn)
+                .await
+                .context("Failed to add track to playlist")?;
 
             playlist_tracks.push(models::PlaylistTrack {
                 track_id: *track_id,
                 position: position as u32,
-                added_at: now,
+                added_at: Utc::now(),
             });
         }
 
-        tx.commit().await.context("Failed to commit transaction")?;
+        txn.commit().await.context("Failed to commit transaction")?;
 
-        let mut playlist = playlist_library;
-        playlist.id = playlist_id;
+        let playlist = models::Playlist {
+            id: playlist_id,
+            metadata: models::Metadata {
+                title: runtime_playlist.title,
+                description: runtime_playlist.description,
+                artwork: None,
+            },
+            creator: None,
+            created_at: now,
+            updated_at: now,
+        };
 
         Ok(models::PlaylistWithTracks {
             playlist,
@@ -280,5 +307,10 @@ impl LibraryService {
     /// Get direct access to database pool (for advanced use)
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
+    }
+
+    /// Get direct access to SeaORM database connection
+    pub fn db(&self) -> &DatabaseConnection {
+        &self.db
     }
 }
