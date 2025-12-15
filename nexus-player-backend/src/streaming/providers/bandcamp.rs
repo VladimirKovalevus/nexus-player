@@ -104,6 +104,7 @@ impl StreamProvider for BandcampProvider {
     async fn resolve(&self, source: &TrackSource) -> StreamResult<String> {
         match source {
             TrackSource::Http(_) => self.ytdlp.resolve(source).await,
+            TrackSource::External { id: _, system: _ } => self.ytdlp.resolve(source).await,
             _ => Err(StreamError::NotSupported),
         }
     }
@@ -173,7 +174,6 @@ impl StreamProvider for BandcampProvider {
                 bandcamp::SearchResultItem::Track(track) => {
                     if content_type.is_none() || content_type == Some(ContentType::Track) {
                         let track_url = track.url.item_url.clone();
-
                         let track_info = TrackInfo {
                             source: TrackSource::External {
                                 system: "bandcamp".to_string(),

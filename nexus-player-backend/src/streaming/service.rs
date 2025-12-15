@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::audio::types::{MediaSource, TrackSource};
+use crate::streaming::external::StreamingMediaSource;
 use crate::streaming::types::ResolvedContent;
 
 use super::cache::CacheManager;
@@ -11,9 +12,11 @@ use super::error::{StreamError, StreamResult};
 use super::provider::StreamProvider;
 use super::providers::{BandcampProvider, SoundCloudProvider, YtDlpProvider};
 use super::types::{ContentType, SearchResult};
+use streaming::state::manager::DownloadManager;
 
 pub struct StreamingService {
     providers: HashMap<String, Arc<dyn StreamProvider>>,
+    download_manager: DownloadManager,
 }
 
 impl StreamingService {
@@ -32,7 +35,12 @@ impl StreamingService {
         providers.insert("bandcamp".to_string(), bandcamp);
         providers.insert("soundcloud".to_string(), soundcloud);
 
-        Ok(Self { providers })
+        let manager = DownloadManager::new();
+
+        Ok(Self {
+            providers,
+            download_manager: manager,
+        })
     }
 
     pub async fn search(
@@ -66,8 +74,21 @@ impl StreamingService {
             }
             TrackSource::Http(_) => {
                 if let Some(ytdlp_provider) = self.providers.get("ytdlp") {
-                    let source = source;
                     ytdlp_provider.get_stream(&source).await
+                } else {
+                    Err(StreamError::NoProviderFound)
+                }
+            }
+            TrackSource::External { system, id } => {
+                if let Some(provider) = self.providers.get(&system) {
+                    let source = TrackSource::External { system, id };
+                    match provider.resolve(&source).await {
+                        Ok(url) => match self.download_manager.add_track(&url, 1).await {
+                            Ok(s) => Ok(Box::new(StreamingMediaSource(s))),
+                            Err(e) => Err(StreamError::Other(e.to_string())),
+                        },
+                        Err(e) => Err(StreamError::Other(e.to_string())),
+                    }
                 } else {
                     Err(StreamError::NoProviderFound)
                 }

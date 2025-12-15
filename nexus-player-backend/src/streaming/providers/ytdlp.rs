@@ -246,7 +246,7 @@ impl StreamProvider for YtDlpProvider {
     async fn resolve(&self, source: &TrackSource) -> StreamResult<String> {
         match source {
             TrackSource::Http(url) => self.get_audio_url(url, AudioQuality::Best).await,
-            TrackSource::External { id, system } if system == "ytdlp" => {
+            TrackSource::External { id, system } => {
                 self.get_audio_url(id, AudioQuality::Best).await
             }
             _ => Err(StreamError::NotSupported),
