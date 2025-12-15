@@ -93,11 +93,14 @@ impl AudioDecoder {
     }
 
     pub fn from_reader(
-        reader: Box<dyn MediaSource>,
+        mut reader: Box<dyn MediaSource>,
         hint: Option<Hint>,
     ) -> Result<Self, AudioError> {
         let mss = MediaSourceStream::new(reader, Default::default());
-        let format_opts = FormatOptions::default();
+        let mut format_opts = FormatOptions::default();
+        format_opts.enable_gapless = true;
+        format_opts.prebuild_seek_index = true;
+
         let metadata_opts = MetadataOptions::default();
 
         let hint = hint.unwrap_or(Hint::new());
@@ -109,7 +112,6 @@ impl AudioDecoder {
 
         let format_reader = probed.format;
 
-        // 5. Находим первый аудио трек
         let track = format_reader
             .tracks()
             .iter()
@@ -120,7 +122,6 @@ impl AudioDecoder {
 
         let track_id = track.id;
 
-        // Получаем параметры трека
         let codec_params = &track.codec_params;
         let sample_rate = codec_params.sample_rate.unwrap_or(44100);
         let channels = codec_params.channels.map(|ch| ch.count()).unwrap_or(2);
@@ -153,7 +154,7 @@ impl AudioDecoder {
         let seeked_to = self
             .format_reader
             .seek(
-                SeekMode::Accurate,
+                SeekMode::Coarse,
                 SeekTo::Time {
                     time: ts,
                     track_id: Some(self.track_id),

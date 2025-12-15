@@ -117,7 +117,6 @@ impl AudioFormat {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
     pub id: usize,
-
     pub title: String,
     pub artist: Option<String>,
     pub album: Option<String>,
