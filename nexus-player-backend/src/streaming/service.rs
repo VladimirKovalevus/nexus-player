@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use crate::audio::types::{MediaSource, TrackSource};
 use crate::streaming::external::StreamingMediaSource;
-use crate::streaming::types::ResolvedContent;
 
 use super::cache::CacheManager;
 use super::error::{StreamError, StreamResult};
@@ -66,7 +65,11 @@ impl StreamingService {
         self.providers.keys().cloned().collect()
     }
 
-    pub async fn resolve(&self, source: TrackSource) -> StreamResult<Box<dyn MediaSource>> {
+    pub async fn resolve(
+        &self,
+        source: TrackSource,
+        track_id: u64,
+    ) -> StreamResult<Box<dyn MediaSource>> {
         match source {
             TrackSource::Local(path) => {
                 let file = File::open(path)?;
@@ -83,7 +86,7 @@ impl StreamingService {
                 if let Some(provider) = self.providers.get(&system) {
                     let source = TrackSource::External { system, id };
                     match provider.resolve(&source).await {
-                        Ok(url) => match self.download_manager.add_track(&url, 1).await {
+                        Ok(url) => match self.download_manager.add_track(&url, track_id).await {
                             Ok(s) => Ok(Box::new(StreamingMediaSource(s))),
                             Err(e) => Err(StreamError::Other(e.to_string())),
                         },
@@ -95,5 +98,10 @@ impl StreamingService {
             }
             _ => todo!(),
         }
+    }
+    pub async fn set_context(&self, track_id: u64, next: Option<u64>) {
+        self.download_manager
+            .set_context(Some(track_id), next)
+            .await;
     }
 }
