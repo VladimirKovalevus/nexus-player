@@ -4,15 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 #===============
 #=Tracing/error=
 #===============
-tracing = "0.1"
-thiserror = "1.0"
-anyhow = "1.0"
+tracing = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
 #===============
 
 #===============
@@ -43,15 +43,16 @@ sea-orm = { version = "1.1", features = [
     "macros",
     "with-chrono"
 ] }
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true }
 async-trait = "0.1"
 parking_lot = "0.12"
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { workspace = true }
 #===============
 reqwest = { version = "0.11", features = ["stream", "blocking"] }
 bandcamp = "0.3.4"
 rsoundcloud = "0.2"
 sha2 = "0.10.9"
+streaming = { path = "../../streaming" }
 
 
 [dev-dependencies]
