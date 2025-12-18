@@ -1,5 +1,6 @@
 use crate::audio;
 use crate::audio::engine::AudioEngine;
+use crate::audio::types::Track;
 use crate::audio::types::Track as AudioTrack;
 use crate::library::models::{Metadata, Playlist as LibraryPlaylist, Track as LibraryTrack};
 use crate::library::{LibraryService, PlaylistId, TrackId};
@@ -91,10 +92,17 @@ impl AppState {
                 None
             }
         });
+        self.play(track).await;
+    }
+    async fn play(&self, track: Option<Track>) {
         if let Some(track) = track {
-            let audio = self.streaming().resolve(track.source).await.ok();
-            if let Some(audio) = audio {
-                self.audio_engine().play_source(audio);
+            match self.streaming().resolve(track.source).await {
+                Ok(audio) => {
+                    self.audio_engine().play_source(audio);
+                }
+                Err(e) => {
+                    tracing::warn!("Ошибка {}", e);
+                }
             }
         }
     }
@@ -113,16 +121,13 @@ impl AppState {
                 None
             }
         });
-        if let Some(track) = track {
-            let audio = self.streaming().resolve(track.source).await.ok();
-            if let Some(audio) = audio {
-                self.audio_engine().play_source(audio);
-            }
-        }
+
+        self.play(track).await;
     }
 
-    pub fn handle_track_finished(&self, track_id: usize) {
+    pub async fn handle_track_finished(&self, track_id: usize) {
         tracing::info!("Обработка завершения трека ID: {}", track_id);
+        self.play_next().await;
     }
 
     pub async fn add_to_queue(&self, track_id: TrackId) -> Result<usize> {
@@ -210,12 +215,7 @@ impl AppState {
                 None
             }
         });
-        if let Some(track) = track {
-            let audio = self.streaming().resolve(track.source).await.ok();
-            if let Some(audio) = audio {
-                self.audio_engine().play_source(audio);
-            }
-        }
+        self.play(track).await;
     }
 
     pub fn pause(&self) {
