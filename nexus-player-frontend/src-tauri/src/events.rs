@@ -44,7 +44,10 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                     AudioEvent::PlaybackResumed => FrontendEvent::PlaybackResumed,
                     AudioEvent::PlaybackStopped => FrontendEvent::PlaybackStopped,
                     AudioEvent::TrackFinished => {
-                        state.handle_track_finished(0);
+                        let cl = state.clone();
+                        tauri::async_runtime::block_on(async move {
+                            cl.handle_track_finished(0).await;
+                        });
                         FrontendEvent::TrackFinished { track_id: 0 }
                     }
                     AudioEvent::PositionUpdated { position } => FrontendEvent::PositionUpdated {

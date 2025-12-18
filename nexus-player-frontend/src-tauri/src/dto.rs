@@ -175,12 +175,19 @@ pub enum SearchResultDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TrackSourceDto {
+    pub url: String,
+    pub system: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StreamingTrackDto {
     pub title: String,
     pub artist: String,
     pub duration_secs: Option<f64>,
     pub thumbnail: Option<String>,
-    pub url: String,
+    pub source: TrackSourceDto,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -221,13 +228,22 @@ pub struct StreamingChannelDto {
 impl From<streaming::SearchResult> for SearchResultDto {
     fn from(result: streaming::SearchResult) -> Self {
         match result {
-            streaming::SearchResult::Track(track) => SearchResultDto::Track(StreamingTrackDto {
-                title: track.title,
-                artist: track.artist,
-                duration_secs: track.duration.map(|d| d.as_secs_f64()),
-                thumbnail: track.thumbnail,
-                url: track.source.as_str(),
-            }),
+            streaming::SearchResult::Track(track) => {
+                let (url, system) = match &track.source {
+                    nexus_player_backend::library::TrackSource::External { id, system } => {
+                        (id.clone(), system.clone())
+                    }
+                    _ => (track.source.as_str(), "unknown".to_string()),
+                };
+
+                SearchResultDto::Track(StreamingTrackDto {
+                    title: track.title,
+                    artist: track.artist,
+                    duration_secs: track.duration.map(|d| d.as_secs_f64()),
+                    thumbnail: track.thumbnail,
+                    source: TrackSourceDto { url, system },
+                })
+            }
             streaming::SearchResult::Playlist(playlist) => {
                 SearchResultDto::Playlist(StreamingPlaylistDto {
                     id: playlist.id,
@@ -263,12 +279,19 @@ impl From<streaming::SearchResult> for SearchResultDto {
 }
 impl From<streaming::TrackInfo> for StreamingTrackDto {
     fn from(track: streaming::TrackInfo) -> Self {
+        let (url, system) = match &track.source {
+            nexus_player_backend::library::TrackSource::External { id, system } => {
+                (id.clone(), system.clone())
+            }
+            _ => (track.source.as_str(), "unknown".to_string()),
+        };
+
         Self {
             title: track.title,
             artist: track.artist,
             duration_secs: track.duration.map(|d| d.as_secs_f64()),
             thumbnail: track.thumbnail,
-            url: track.source.as_str(),
+            source: TrackSourceDto { url, system },
         }
     }
 }
@@ -277,7 +300,10 @@ impl From<SearchResultDto> for streaming::SearchResult {
     fn from(dto: SearchResultDto) -> Self {
         match dto {
             SearchResultDto::Track(track) => streaming::SearchResult::Track(streaming::TrackInfo {
-                source: nexus_player_backend::library::TrackSource::Http(track.url),
+                source: nexus_player_backend::library::TrackSource::External {
+                    id: track.source.url,
+                    system: track.source.system,
+                },
                 title: track.title,
                 artist: track.artist,
                 duration: track.duration_secs.map(std::time::Duration::from_secs_f64),
@@ -295,7 +321,10 @@ impl From<SearchResultDto> for streaming::SearchResult {
                         .tracks
                         .into_iter()
                         .map(|t| streaming::TrackInfo {
-                            source: nexus_player_backend::library::TrackSource::Http(t.url),
+                            source: nexus_player_backend::library::TrackSource::External {
+                                id: t.source.url,
+                                system: t.source.system,
+                            },
                             title: t.title,
                             artist: t.artist,
                             duration: t.duration_secs.map(std::time::Duration::from_secs_f64),
@@ -318,7 +347,10 @@ impl From<SearchResultDto> for streaming::SearchResult {
                     .tracks
                     .into_iter()
                     .map(|t| streaming::TrackInfo {
-                        source: nexus_player_backend::library::TrackSource::Http(t.url),
+                        source: nexus_player_backend::library::TrackSource::External {
+                            id: t.source.url,
+                            system: t.source.system,
+                        },
                         title: t.title,
                         artist: t.artist,
                         duration: t.duration_secs.map(std::time::Duration::from_secs_f64),
