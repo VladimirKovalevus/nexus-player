@@ -154,7 +154,7 @@ impl AudioDecoder {
         let seeked_to = self
             .format_reader
             .seek(
-                SeekMode::Coarse,
+                SeekMode::Accurate,
                 SeekTo::Time {
                     time: ts,
                     track_id: Some(self.track_id),
@@ -162,6 +162,7 @@ impl AudioDecoder {
             )
             .map_err(|e| AudioError::DecodingError(format!("Ошибка перемотки: {}", e)))?;
 
+        self.decoder.reset();
         info!("Перемотка выполнена на позицию: {:?}", seeked_to.actual_ts);
 
         Ok(seeked_to.actual_ts)

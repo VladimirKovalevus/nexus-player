@@ -130,7 +130,8 @@ impl AudioEngine {
                     let _ = event_tx.send(AudioEvent::PositionUpdated { position });
 
                     if let Some(duration) = playback.duration() {
-                        if position >= duration {
+                        let threshold = Duration::from_millis(100);
+                        if position + threshold >= duration {
                             info!("Трек завершен");
                             let _ = event_tx.send(AudioEvent::TrackFinished);
                             state.write().unwrap().playback_state = PlaybackState::Stopped;
