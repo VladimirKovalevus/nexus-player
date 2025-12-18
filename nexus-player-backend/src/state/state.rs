@@ -96,9 +96,30 @@ impl AppState {
     }
     async fn play(&self, track: Option<Track>) {
         if let Some(track) = track {
-            match self.streaming().resolve(track.source).await {
+            match self
+                .streaming()
+                .resolve(track.source, track.id as u64)
+                .await
+            {
                 Ok(audio) => {
                     self.audio_engine().play_source(audio);
+
+                    let current_id = track.id as u64;
+                    let q = self.queue();
+                    let next_track = q.peek_next();
+
+                    if let Some(next) = next_track {
+                        if next.id as u64 != current_id {
+                            self.streaming()
+                                .resolve(next.source.clone(), next.id as u64)
+                                .await;
+                            self.streaming()
+                                .set_context(current_id, Some(next.id as u64))
+                                .await;
+                        }
+                    } else {
+                        self.streaming().set_context(current_id, None).await;
+                    }
                 }
                 Err(e) => {
                     tracing::warn!("Ошибка {}", e);

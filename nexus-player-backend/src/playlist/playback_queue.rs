@@ -123,6 +123,21 @@ impl PlaybackQueue {
         self.current()
     }
 
+    pub fn peek_next(&self) -> Option<&Track> {
+        if self.tracks.is_empty() {
+            return None;
+        }
+
+        let next_index = self.calculate_next_index()?;
+
+        if self.shuffle_enabled {
+            let track_index = *self.shuffle_order.get(next_index)?;
+            self.tracks.get(track_index)
+        } else {
+            self.tracks.get(next_index)
+        }
+    }
+
     pub fn previous(&mut self) -> Option<&Track> {
         if self.tracks.is_empty() {
             return None;
