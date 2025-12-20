@@ -1,4 +1,5 @@
 use anyhow::Result;
+use rand::random;
 use serde::{Deserialize, Serialize};
 
 use crate::{audio::types::Track, library::TrackSource, playlist::playlist::Playlist};
@@ -232,8 +233,9 @@ impl From<PlaylistInfo> for Playlist {
 }
 impl From<TrackInfo> for Track {
     fn from(row: TrackInfo) -> Self {
+        let id = random::<usize>();
         Track {
-            id: 0,
+            id,
             title: row.title,
             artist: Some(row.artist),
             album: None,
@@ -246,8 +248,9 @@ impl From<TrackInfo> for Track {
 }
 impl From<&TrackInfo> for Track {
     fn from(row: &TrackInfo) -> Self {
+        let id = random::<usize>();
         Track {
-            id: 0,
+            id,
             title: row.title.clone(),
             artist: Some(row.artist.clone()),
             album: None,

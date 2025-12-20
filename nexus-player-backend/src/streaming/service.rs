@@ -85,12 +85,18 @@ impl StreamingService {
             TrackSource::External { system, id } => {
                 if let Some(provider) = self.providers.get(&system) {
                     let source = TrackSource::External { system, id };
-                    match provider.resolve(&source).await {
-                        Ok(url) => match self.download_manager.add_track(&url, track_id).await {
-                            Ok(s) => Ok(Box::new(StreamingMediaSource(s))),
+                    if let Some(stream) = self.download_manager.get_track(track_id).await {
+                        Ok(Box::new(StreamingMediaSource(stream)))
+                    } else {
+                        match provider.resolve(&source).await {
+                            Ok(url) => {
+                                match self.download_manager.add_track(&url, track_id).await {
+                                    Ok(s) => Ok(Box::new(StreamingMediaSource(s))),
+                                    Err(e) => Err(StreamError::Other(e.to_string())),
+                                }
+                            }
                             Err(e) => Err(StreamError::Other(e.to_string())),
-                        },
-                        Err(e) => Err(StreamError::Other(e.to_string())),
+                        }
                     }
                 } else {
                     Err(StreamError::NoProviderFound)
@@ -103,5 +109,8 @@ impl StreamingService {
         self.download_manager
             .set_context(Some(track_id), next)
             .await;
+    }
+    pub async fn debug(&self) {
+        let _ = self.download_manager.debug_to_file().await;
     }
 }

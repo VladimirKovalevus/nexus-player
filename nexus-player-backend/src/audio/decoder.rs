@@ -154,7 +154,7 @@ impl AudioDecoder {
         let seeked_to = self
             .format_reader
             .seek(
-                SeekMode::Accurate,
+                SeekMode::Coarse,
                 SeekTo::Time {
                     time: ts,
                     track_id: Some(self.track_id),
