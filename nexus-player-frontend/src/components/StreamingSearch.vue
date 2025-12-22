@@ -121,10 +121,6 @@ const handleResultClick = async (result: SearchResult) => {
     strategy: 'cache',
   });
   emit('refetch');
-  // TODO(human): Implement result click handler
-  // For tracks: Add to queue or play immediately
-  // For playlists/albums: Expand and show tracks
-  // For channels: Navigate to channel view
 };
 </script>
 
@@ -132,7 +128,6 @@ const handleResultClick = async (result: SearchResult) => {
   <div class="streaming-search">
     <h2>Streaming Search</h2>
 
-    <!-- Search Controls -->
     <div class="search-controls">
       <div class="search-input-group">
         <input
@@ -194,10 +189,8 @@ const handleResultClick = async (result: SearchResult) => {
       </div>
     </div>
 
-    <!-- Error Message -->
     <div v-if="error" class="error-message">{{ error }}</div>
 
-    <!-- Search Results -->
     <div v-if="searchResults.length > 0" class="results">
       <h3>Results ({{ searchResults.length }})</h3>
       <div class="results-list">
@@ -208,7 +201,6 @@ const handleResultClick = async (result: SearchResult) => {
           :class="`result-${result.type}`"
           @click="handleResultClick(result)"
         >
-          <!-- Thumbnail -->
           <div class="result-thumbnail">
             <img
               v-if="result.thumbnail"
@@ -220,7 +212,6 @@ const handleResultClick = async (result: SearchResult) => {
             </div>
           </div>
 
-          <!-- Track Result -->
           <div v-if="result.type === 'track'" class="result-content">
             <div class="result-title">{{ result.title }}</div>
             <div class="result-meta">{{ result.artist }}</div>
@@ -229,14 +220,12 @@ const handleResultClick = async (result: SearchResult) => {
             </div>
           </div>
 
-          <!-- Playlist Result -->
           <div v-else-if="result.type === 'playlist'" class="result-content">
             <div class="result-title">📂 {{ result.title }}</div>
             <div class="result-meta">by {{ result.creator }}</div>
             <div class="result-meta">{{ result.trackCount }} tracks</div>
           </div>
 
-          <!-- Album Result -->
           <div v-else-if="result.type === 'album'" class="result-content">
             <div class="result-title">💿 {{ result.title }}</div>
             <div class="result-meta">{{ result.artist }}</div>
@@ -246,7 +235,6 @@ const handleResultClick = async (result: SearchResult) => {
             </div>
           </div>
 
-          <!-- Channel Result -->
           <div v-else-if="result.type === 'channel'" class="result-content">
             <div class="result-title">📺 {{ result.name }}</div>
             <div class="result-meta" v-if="result.subscriberCount">
@@ -257,7 +245,6 @@ const handleResultClick = async (result: SearchResult) => {
       </div>
     </div>
 
-    <!-- No Results -->
     <div
       v-else-if="!loading && searchResults.length === 0 && query"
       class="no-results"

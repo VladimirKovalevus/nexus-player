@@ -2,46 +2,16 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { useAudioStore } from '../stores/audio';
 
-interface TrackDto {
-  id: number;
-  title: string;
-  artist: string | null;
-  album: string | null;
-  durationSecs: number | null;
-  artworkUrl: string | null;
-  playCount: number;
+const audioStore = useAudioStore();
+
+interface Props {
+  queueVisible?: boolean;
 }
 
-interface AudioState {
-  state: 'playing' | 'paused' | 'stopped' | 'buffering';
-  positionSecs: number;
-  durationSecs: number;
-  volume: number;
-  currentTrack: TrackDto | null;
-}
-
-interface QueueState {
-  repeatMode: 'off' | 'all' | 'one';
-  shuffleEnabled: boolean;
-}
-
-interface AudioEvent {
-  type: string;
-  payload?: any;
-}
-
-const audioState = ref<AudioState>({
-  state: 'stopped',
-  positionSecs: 0,
-  durationSecs: 0,
-  volume: 1.0,
-  currentTrack: null,
-});
-
-const queueState = ref<QueueState>({
-  repeatMode: 'off',
-  shuffleEnabled: false,
+const props = withDefaults(defineProps<Props>(), {
+  queueVisible: true,
 });
 
 const seeking = ref(false);
@@ -49,14 +19,18 @@ const seekPosition = ref(0);
 let updateInterval: number | null = null;
 let unlistenFn: (() => void) | null = null;
 
-// Computed property: use virtual seek position during seeking, otherwise use real audio position
+const emit = defineEmits<{
+  toggleQueue: [];
+}>();
+
 const displayPosition = computed(() => {
-  return seeking.value ? seekPosition.value : audioState.value.positionSecs;
+  return seeking.value ? seekPosition.value : audioStore.position;
 });
 
 const fetchAudioState = async () => {
   try {
-    audioState.value = await invoke('get_audio_state');
+    const state = await invoke('get_audio_state');
+    audioStore.updateAudioState(state);
   } catch (e) {
     console.error('Failed to fetch audio state:', e);
   }
@@ -66,67 +40,19 @@ defineExpose({ fetchAudioState });
 const fetchQueueState = async () => {
   try {
     const state = await invoke('get_queue_state');
-    queueState.value.repeatMode = state.repeatMode;
-    queueState.value.shuffleEnabled = state.shuffleEnabled;
+    audioStore.updateQueueState(state);
   } catch (e) {
     console.error('Failed to fetch queue state:', e);
   }
 };
 
-const handleAudioEvent = (event: AudioEvent) => {
-  // console.log('Audio event received:', event);
-
-  switch (event.type) {
-    case 'PlaybackStarted':
-      audioState.value.state = 'playing';
-      fetchAudioState();
-      break;
-    case 'PlaybackPaused':
-      audioState.value.state = 'paused';
-      break;
-    case 'PlaybackResumed':
-      audioState.value.state = 'playing';
-      break;
-    case 'PlaybackStopped':
-      audioState.value.state = 'stopped';
-      audioState.value.currentTrack = null;
-      break;
-    case 'TrackFinished':
-      fetchAudioState();
-      break;
-    case 'PositionUpdated':
-      if (event.payload?.position_secs !== undefined) {
-        audioState.value.positionSecs = event.payload.position_secs;
-      }
-      break;
-    case 'DurationChanged':
-      if (event.payload?.duration_secs !== undefined) {
-        audioState.value.durationSecs = event.payload.duration_secs;
-      }
-      break;
-    case 'VolumeChanged':
-      if (event.payload?.volume !== undefined) {
-        audioState.value.volume = event.payload.volume;
-      }
-      break;
-    case 'AudioStateUpdated':
-      if (event.payload?.state) {
-        audioState.value = event.payload.state;
-      }
-      break;
-    case 'Error':
-      console.error('Audio error:', event.payload?.message);
-      break;
-  }
-};
-
 const togglePlayPause = async () => {
   try {
-    if (audioState.value.state === 'playing') {
+    if (audioStore.isPlaying) {
       await invoke('pause');
-    } else if (audioState.value.state === 'paused') {
+    } else if (audioStore.isPaused) {
       await invoke('resume');
-    } else if (audioState.value.state === 'stopped') {
+    } else if (audioStore.isStopped) {
       await invoke('play_at_index', { index: 0 });
     }
     await fetchAudioState();
@@ -183,8 +109,7 @@ const onSeekEnd = async (event: Event) => {
 
   console.log('seekEnd - committing position:', position);
 
-  // Optimistic update: immediately update audioState to prevent visual jump
-  audioState.value.positionSecs = position;
+  audioStore.setPosition(position);
   seeking.value = false;
 
   try {
@@ -192,7 +117,6 @@ const onSeekEnd = async (event: Event) => {
     console.log('seek successful');
   } catch (e) {
     console.error('Failed to seek:', e);
-    // On error, fetch real state to recover
     await fetchAudioState();
   }
 };
@@ -202,15 +126,13 @@ const handleGlobalMouseUp = () => {
     const position = seekPosition.value;
     console.log('Global mouseup - committing position:', position);
 
-    // Optimistic update: immediately update audioState to prevent visual jump
-    audioState.value.positionSecs = position;
+    audioStore.setPosition(position);
     seeking.value = false;
 
     invoke('seek', { positionSecs: position })
       .then(() => console.log('seek successful (global)'))
       .catch((e) => {
         console.error('Failed to seek (global):', e);
-        // On error, fetch real state to recover
         fetchAudioState();
       });
   }
@@ -218,12 +140,12 @@ const handleGlobalMouseUp = () => {
 
 const cycleRepeatMode = async () => {
   const modes: Array<'off' | 'all' | 'one'> = ['off', 'all', 'one'];
-  const currentIndex = modes.indexOf(queueState.value.repeatMode);
+  const currentIndex = modes.indexOf(audioStore.repeatMode);
   const nextMode = modes[(currentIndex + 1) % modes.length];
 
   try {
     await invoke('set_repeat_mode', { mode: nextMode });
-    queueState.value.repeatMode = nextMode;
+    audioStore.queueState.repeatMode = nextMode;
   } catch (e) {
     console.error('Failed to set repeat mode:', e);
   }
@@ -232,22 +154,9 @@ const cycleRepeatMode = async () => {
 const toggleShuffleMode = async () => {
   try {
     await invoke('toggle_shuffle');
-    queueState.value.shuffleEnabled = !queueState.value.shuffleEnabled;
+    audioStore.queueState.shuffleEnabled = !audioStore.shuffleEnabled;
   } catch (e) {
     console.error('Failed to toggle shuffle:', e);
-  }
-};
-
-const getRepeatIcon = (): string => {
-  switch (queueState.value.repeatMode) {
-    case 'off':
-      return '🔁';
-    case 'all':
-      return '🔁';
-    case 'one':
-      return '🔂';
-    default:
-      return '🔁';
   }
 };
 
@@ -264,7 +173,14 @@ onMounted(async () => {
 
   try {
     unlistenFn = await listen('audio-event', (event: any) => {
-      handleAudioEvent(event.payload);
+      audioStore.handleAudioEvent(event.payload);
+
+      if (
+        event.payload.type === 'PlaybackStarted' ||
+        event.payload.type === 'TrackFinished'
+      ) {
+        fetchAudioState();
+      }
     });
     console.log('Subscribed to audio events');
   } catch (e) {
@@ -293,8 +209,8 @@ onUnmounted(() => {
 <template>
   <div class="player-control">
     <div class="track-info">
-      <div v-if="audioState.currentTrack" class="current-track">
-        {{ audioState.currentTrack.title }}
+      <div v-if="audioStore.currentTrack" class="current-track">
+        {{ audioStore.currentTrack.title }}
       </div>
       <div v-else class="no-track">No track playing</div>
     </div>
@@ -303,7 +219,7 @@ onUnmounted(() => {
       <button
         class="control-btn small-btn"
         @click="toggleShuffleMode"
-        :class="{ active: queueState.shuffleEnabled }"
+        :class="{ active: audioStore.shuffleEnabled }"
         title="Shuffle"
       >
         🔀
@@ -316,49 +232,89 @@ onUnmounted(() => {
         @click="togglePlayPause"
         title="Play/Pause"
       >
-        {{ audioState.state === 'playing' ? '⏸' : '▶' }}
+        {{ audioStore.isPlaying ? '⏸' : '▶' }}
       </button>
       <button class="control-btn" @click="playNext" title="Next">⏭</button>
       <button
         class="control-btn small-btn"
         @click="cycleRepeatMode"
-        :class="{ active: queueState.repeatMode !== 'off' }"
-        :title="`Repeat: ${queueState.repeatMode}`"
+        :class="{ active: audioStore.repeatMode !== 'off' }"
+        :title="`Repeat: ${audioStore.repeatMode}`"
       >
-        {{ getRepeatIcon() }}
+        {{ audioStore.repeatIcon }}
       </button>
     </div>
 
-    <div class="playback-bar">
-      <span class="time">{{ formatTime(displayPosition) }}</span>
-      <input
-        type="range"
-        class="seek-bar"
-        :value="displayPosition"
-        :max="audioState.durationSecs || 0"
-        step="0.1"
-        @mousedown="onSeekStart"
-        @touchstart="onSeekStart"
-        @input="onSeekChange"
-        @mouseup="onSeekEnd"
-        @touchend="onSeekEnd"
-      />
-      <span class="time">{{ formatTime(audioState.durationSecs) }}</span>
+    <div class="bottom-section">
+      <div class="playback-bar">
+        <span class="time">{{ formatTime(displayPosition) }}</span>
+        <input
+          type="range"
+          class="seek-bar"
+          :value="displayPosition"
+          :max="audioStore.duration || 0"
+          step="0.1"
+          @mousedown="onSeekStart"
+          @touchstart="onSeekStart"
+          @input="onSeekChange"
+          @mouseup="onSeekEnd"
+          @touchend="onSeekEnd"
+        />
+        <span class="time">{{ formatTime(audioStore.duration) }}</span>
+      </div>
+
+      <button
+        class="queue-toggle-btn"
+        :class="{ active: queueVisible }"
+        @click="emit('toggleQueue')"
+        :title="queueVisible ? 'Скрыть очередь' : 'Показать очередь'"
+      >
+        <svg
+          v-if="queueVisible"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+        <svg
+          v-else
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="8" y1="6" x2="21" y2="6"></line>
+          <line x1="8" y1="12" x2="21" y2="12"></line>
+          <line x1="8" y1="18" x2="21" y2="18"></line>
+          <line x1="3" y1="6" x2="3.01" y2="6"></line>
+          <line x1="3" y1="12" x2="3.01" y2="12"></line>
+          <line x1="3" y1="18" x2="3.01" y2="18"></line>
+        </svg>
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
 .player-control {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: #ffffff;
-  border-top: 2px solid #e0e0e0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--color-bg-player);
+  border-top: 1px solid var(--color-border);
   padding: 1rem 2rem;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: space-between;
   gap: 0.75rem;
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
 }
@@ -370,12 +326,12 @@ onUnmounted(() => {
 .current-track {
   font-weight: 600;
   font-size: 1rem;
-  color: #0f0f0f;
+  color: var(--color-text-primary);
 }
 
 .no-track {
   font-size: 0.9rem;
-  color: #999;
+  color: var(--color-text-muted);
 }
 
 .controls {
@@ -387,7 +343,7 @@ onUnmounted(() => {
 
 .control-btn {
   background: none;
-  border: 2px solid #396cd8;
+  border: 2px solid var(--color-accent-primary);
   border-radius: 50%;
   width: 48px;
   height: 48px;
@@ -397,11 +353,11 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  color: #396cd8;
+  color: var(--color-accent-primary);
 }
 
 .control-btn:hover {
-  background-color: #396cd8;
+  background-color: var(--color-accent-primary);
   color: white;
   transform: scale(1.05);
 }
@@ -420,20 +376,59 @@ onUnmounted(() => {
 }
 
 .control-btn.active {
-  background-color: #396cd8;
+  background-color: var(--color-accent-primary);
   color: white;
 }
 
+.bottom-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .playback-bar {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
+.queue-toggle-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--color-text-secondary);
+}
+
+.queue-toggle-btn:hover {
+  background-color: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
+  color: white;
+  transform: translateY(-2px);
+}
+
+.queue-toggle-btn:active {
+  transform: translateY(0);
+}
+
+.queue-toggle-btn.active {
+  background-color: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
+  color: white;
+}
+
 .time {
   font-family: 'Courier New', monospace;
   font-size: 0.875rem;
-  color: #666;
+  color: var(--color-text-secondary);
   min-width: 40px;
   text-align: center;
 }
@@ -443,7 +438,7 @@ onUnmounted(() => {
   height: 6px;
   -webkit-appearance: none;
   appearance: none;
-  background: #e0e0e0;
+  background: var(--color-bg-secondary);
   border-radius: 3px;
   outline: none;
   cursor: pointer;
@@ -454,7 +449,7 @@ onUnmounted(() => {
   appearance: none;
   width: 16px;
   height: 16px;
-  background: #396cd8;
+  background: var(--color-accent-primary);
   border-radius: 50%;
   cursor: pointer;
   transition: all 0.2s;
@@ -462,13 +457,13 @@ onUnmounted(() => {
 
 .seek-bar::-webkit-slider-thumb:hover {
   transform: scale(1.2);
-  background: #2856b8;
+  background: var(--color-accent-hover);
 }
 
 .seek-bar::-moz-range-thumb {
   width: 16px;
   height: 16px;
-  background: #396cd8;
+  background: var(--color-accent-primary);
   border-radius: 50%;
   cursor: pointer;
   border: none;
@@ -477,60 +472,6 @@ onUnmounted(() => {
 
 .seek-bar::-moz-range-thumb:hover {
   transform: scale(1.2);
-  background: #2856b8;
-}
-
-@media (prefers-color-scheme: dark) {
-  .player-control {
-    background-color: #1a1a1a;
-    border-top-color: #333;
-  }
-
-  .current-track {
-    color: #f6f6f6;
-  }
-
-  .no-track {
-    color: #666;
-  }
-
-  .control-btn {
-    border-color: #24c8db;
-    color: #24c8db;
-  }
-
-  .control-btn:hover {
-    background-color: #24c8db;
-    color: #0f0f0f;
-  }
-
-  .control-btn.active {
-    background-color: #24c8db;
-    color: #0f0f0f;
-  }
-
-  .time {
-    color: #aaa;
-  }
-
-  .seek-bar {
-    background: #333;
-  }
-
-  .seek-bar::-webkit-slider-thumb {
-    background: #24c8db;
-  }
-
-  .seek-bar::-webkit-slider-thumb:hover {
-    background: #1ca8c8;
-  }
-
-  .seek-bar::-moz-range-thumb {
-    background: #24c8db;
-  }
-
-  .seek-bar::-moz-range-thumb:hover {
-    background: #1ca8c8;
-  }
+  background: var(--color-accent-hover);
 }
 </style>

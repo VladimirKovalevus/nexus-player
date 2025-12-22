@@ -1,0 +1,39 @@
+// Theme System - CSS Variables для runtime переключения тем
+@import './variables.scss';
+
+:root {
+  // Dark theme (по умолчанию)
+  --color-bg-primary: #{$dark-bg-primary};
+  --color-bg-secondary: #{$dark-bg-secondary};
+  --color-bg-sidebar: #{$dark-bg-sidebar};
+  --color-bg-player: #{$dark-bg-player};
+  --color-bg-hover: #{$dark-bg-hover};
+
+  --color-text-primary: #{$dark-text-primary};
+  --color-text-secondary: #{$dark-text-secondary};
+  --color-text-muted: #{$dark-text-muted};
+
+  --color-border: #{$dark-border};
+  --color-border-light: #{$dark-border-light};
+
+  // Акценты (одинаковы для обеих тем)
+  --color-accent-primary: #{$color-accent-primary};
+  --color-accent-hover: #{$color-accent-hover};
+  --color-accent-purple: #{$color-accent-purple};
+}
+
+// Light theme
+[data-theme='light'] {
+  --color-bg-primary: #{$light-bg-primary};
+  --color-bg-secondary: #{$light-bg-secondary};
+  --color-bg-sidebar: #{$light-bg-sidebar};
+  --color-bg-player: #{$light-bg-player};
+  --color-bg-hover: #{$light-bg-hover};
+
+  --color-text-primary: #{$light-text-primary};
+  --color-text-secondary: #{$light-text-secondary};
+  --color-text-muted: #{$light-text-muted};
+
+  --color-border: #{$light-border};
+  --color-border-light: #{$light-border-light};
+}

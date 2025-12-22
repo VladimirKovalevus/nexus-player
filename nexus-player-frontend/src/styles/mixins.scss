@@ -1,0 +1,72 @@
+// SCSS Mixins - Утилиты для стилизации
+
+// Flexbox shortcuts
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@mixin flex-start {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+// Обрезка текста с многоточием
+@mixin text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Скрытие скроллбара (кастомные скроллы)
+@mixin hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+// Кастомный скроллбар
+@mixin custom-scrollbar($thumb-color, $track-color) {
+  scrollbar-width: thin;
+  scrollbar-color: $thumb-color $track-color;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: $track-color;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $thumb-color;
+    border-radius: 4px;
+  }
+}
+
+// Hover эффект с transition
+@mixin hover-lift($offset: -2px) {
+  transition: transform $transition-base;
+
+  &:hover {
+    transform: translateY($offset);
+  }
+}
+
+// Backdrop blur (для модальных окон и оверлеев)
+@mixin backdrop-blur($blur: 10px, $opacity: 0.8) {
+  backdrop-filter: blur($blur);
+  background-color: rgba(0, 0, 0, $opacity);
+}

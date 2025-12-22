@@ -261,7 +261,7 @@ pub fn get_audio_state(state: State<'_, Arc<AppState>>) -> Result<AudioStateDto>
 }
 
 #[tauri::command]
-pub fn set_repeat_mode(state: State<'_, Arc<AppState>>, mode: String) -> Result<()> {
+pub async fn set_repeat_mode(state: State<'_, Arc<AppState>>, mode: String) -> Result<()> {
     use nexus_player_backend::playlist::playback_queue::RepeatMode;
 
     let repeat_mode = match mode.as_str() {
@@ -272,6 +272,7 @@ pub fn set_repeat_mode(state: State<'_, Arc<AppState>>, mode: String) -> Result<
     };
 
     state.set_repeat_mode(repeat_mode);
+    state.streaming().debug().await;
     Ok(())
 }
 
@@ -292,12 +293,14 @@ pub fn get_queue_state(state: State<'_, Arc<AppState>>) -> Result<QueueStateDto>
         nexus_player_backend::playlist::playback_queue::RepeatMode::One => "one",
     };
 
-    Ok(QueueStateDto {
+    let q = QueueStateDto {
         tracks,
         current_index: state.get_current_track_index(),
         repeat_mode: repeat_mode.to_string(),
         shuffle_enabled: state.is_shuffle_enabled(),
-    })
+    };
+
+    Ok(q)
 }
 
 #[tauri::command]

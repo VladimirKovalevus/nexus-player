@@ -1,4 +1,4 @@
-use crate::dto::AudioStateDto;
+use crate::dto::{AudioStateDto, QueueStateDto, TrackDto};
 use nexus_player_backend::audio::types::{AudioEvent, AudioState};
 use nexus_player_backend::state::state::AppState;
 use serde::Serialize;
@@ -9,7 +9,9 @@ use tauri::{AppHandle, Emitter, Manager};
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum FrontendEvent {
-    PlaybackStarted { track_id: usize },
+    PlaybackStarted {
+        track_id: usize,
+    },
 
     PlaybackPaused,
 
@@ -17,17 +19,30 @@ pub enum FrontendEvent {
 
     PlaybackStopped,
 
-    TrackFinished { track_id: usize },
+    TrackFinished {
+        track_id: usize,
+    },
 
-    PositionUpdated { position_secs: f64 },
+    PositionUpdated {
+        position_secs: f64,
+    },
 
-    DurationChanged { duration_secs: f64 },
+    DurationChanged {
+        duration_secs: f64,
+    },
 
-    VolumeChanged { volume: f32 },
+    VolumeChanged {
+        volume: f32,
+    },
 
-    AudioStateUpdated { state: AudioStateDto },
+    AudioStateUpdated {
+        state: AudioStateDto,
+        queue: QueueStateDto,
+    },
 
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
@@ -72,9 +87,28 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
             }
 
             let audio_state: AudioStateDto = state.audio_state().into();
+
+            let queue = state.queue();
+            let tracks: Vec<TrackDto> = queue.tracks().into_iter().map(|t| t.into()).collect();
+
+            let repeat_mode = match state.get_repeat_mode() {
+                nexus_player_backend::playlist::playback_queue::RepeatMode::Off => "off",
+                nexus_player_backend::playlist::playback_queue::RepeatMode::All => "all",
+                nexus_player_backend::playlist::playback_queue::RepeatMode::One => "one",
+            };
+
+            let queue_state = QueueStateDto {
+                tracks,
+                current_index: state.get_current_track_index(),
+                repeat_mode: repeat_mode.to_string(),
+                shuffle_enabled: state.is_shuffle_enabled(),
+            };
             if let Err(e) = app_handle.emit(
                 "audio-event",
-                &FrontendEvent::AudioStateUpdated { state: audio_state },
+                &FrontendEvent::AudioStateUpdated {
+                    state: audio_state,
+                    queue: queue_state,
+                },
             ) {
                 tracing::error!("Failed to emit audio state: {}", e);
             }
