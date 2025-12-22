@@ -20,6 +20,8 @@ export interface AudioState {
 }
 
 export interface QueueState {
+  tracks: TrackDto[];
+  currentIndex: number | null;
   repeatMode: 'off' | 'all' | 'one';
   shuffleEnabled: boolean;
 }
@@ -39,6 +41,8 @@ export const useAudioStore = defineStore('audio', () => {
   });
 
   const queueState = ref<QueueState>({
+    tracks: [],
+    currentIndex: null,
     repeatMode: 'off',
     shuffleEnabled: false,
   });
@@ -52,6 +56,8 @@ export const useAudioStore = defineStore('audio', () => {
   const volume = computed(() => audioState.value.volume);
   const repeatMode = computed(() => queueState.value.repeatMode);
   const shuffleEnabled = computed(() => queueState.value.shuffleEnabled);
+  const tracks = computed(() => queueState.value.tracks);
+  const currentIndex = computed(() => queueState.value.currentIndex);
 
   const repeatIcon = computed((): string => {
     switch (queueState.value.repeatMode) {
@@ -134,6 +140,8 @@ export const useAudioStore = defineStore('audio', () => {
     volume,
     repeatMode,
     shuffleEnabled,
+    tracks,
+    currentIndex,
     repeatIcon,
     handleAudioEvent,
     updateAudioState,

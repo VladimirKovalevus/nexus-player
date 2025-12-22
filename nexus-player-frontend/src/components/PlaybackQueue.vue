@@ -1,24 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import MediaCardCompact from './common/MediaCardCompact.vue';
-
-interface TrackDto {
-  id: number;
-  title: string;
-  artist: string | null;
-  album: string | null;
-  durationSecs: number | null;
-  artworkUrl: string | null;
-  playCount: number;
-}
-
-interface QueueStateDto {
-  tracks: TrackDto[];
-  currentIndex: number | null;
-  repeatMode: string;
-  shuffleEnabled: boolean;
-}
+import MediaCard from './common/MediaCard.vue';
+import { useAudioStore } from '../stores/audio';
 
 interface QueueTrack {
   index: number;
@@ -30,33 +14,29 @@ interface QueueTrack {
   isCurrentlyPlaying: boolean;
 }
 
-const queue = ref<QueueTrack[]>([]);
-const currentIndex = ref<number | null>(null);
+const audioStore = useAudioStore();
 const loading = ref(true);
 const error = ref<string | null>(null);
+
+const queue = computed<QueueTrack[]>(() => {
+  return audioStore.tracks.map((track, index) => ({
+    index,
+    id: track.id,
+    title: track.title,
+    artist: track.artist,
+    thumbnail: track.artworkUrl,
+    duration: track.durationSecs,
+    isCurrentlyPlaying: index === audioStore.currentIndex,
+  }));
+});
 
 const fetchQueue = async () => {
   try {
     loading.value = true;
     error.value = null;
 
-    const queueState = await invoke<QueueStateDto>('get_queue_state');
-    currentIndex.value = queueState.currentIndex;
-
-    queue.value = queueState.tracks.map((track, index) => {
-      const isPlaying = index === queueState.currentIndex;
-      console.log(`Track ${index}: ${track.title}, isPlaying: ${isPlaying}`);
-
-      return {
-        index,
-        id: track.id,
-        title: track.title,
-        artist: track.artist,
-        thumbnail: track.artworkUrl,
-        duration: track.durationSecs,
-        isCurrentlyPlaying: isPlaying,
-      };
-    });
+    const queueState = await invoke('get_queue_state');
+    audioStore.updateQueueState(queueState);
   } catch (e) {
     error.value = `Failed to load queue: ${e}`;
     console.error('Error loading queue:', e);
@@ -130,17 +110,16 @@ defineExpose({ fetchQueue });
           { [$style.currentlyPlaying]: track.isCurrentlyPlaying },
         ]"
       >
-        <MediaCardCompact
+        <MediaCard
           type="track"
           :title="track.title"
           :artist="track.artist || 'Unknown Artist'"
           :thumbnail="track.thumbnail || undefined"
+          :duration="track.duration || undefined"
+          :show-actions="false"
           @click="playAtIndex(track.index)"
           @play="playAtIndex(track.index)"
         />
-        <div v-if="track.isCurrentlyPlaying" :class="$style.playingIndicator">
-          ▶
-        </div>
       </div>
     </div>
   </div>
@@ -231,9 +210,9 @@ defineExpose({ fetchQueue });
 
 .queueList {
   flex: 1;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: $spacing-md;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
   overflow-y: auto;
   @include custom-scrollbar(
     var(--color-border-light),
@@ -249,22 +228,21 @@ defineExpose({ fetchQueue });
 }
 
 .currentlyPlaying {
-  background: linear-gradient(
-    135deg,
-    rgba(102, 126, 234, 0.15) 0%,
-    rgba(118, 75, 162, 0.15) 100%
-  );
-  border: 2px solid var(--color-accent-primary);
-  box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+  position: relative;
 
-  &::after {
+  &::before {
     content: '';
     position: absolute;
-    top: -2px;
-    left: -2px;
-    right: -2px;
-    bottom: -2px;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     border-radius: $radius-md;
+    background: linear-gradient(
+      135deg,
+      rgba(102, 126, 234, 0.1) 0%,
+      rgba(118, 75, 162, 0.1) 100%
+    );
     border: 2px solid var(--color-accent-primary);
     pointer-events: none;
     animation: pulse 2s ease-in-out infinite;
@@ -275,39 +253,11 @@ defineExpose({ fetchQueue });
   0%,
   100% {
     opacity: 1;
+    box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
   }
   50% {
-    opacity: 0.5;
-  }
-}
-
-.playingIndicator {
-  position: absolute;
-  top: $spacing-sm;
-  left: $spacing-sm;
-  background: linear-gradient(
-    135deg,
-    var(--color-accent-primary) 0%,
-    var(--color-accent-purple) 100%
-  );
-  color: white;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  @include flex-center;
-  font-size: $font-size-sm;
-  z-index: 10;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
-  animation: playingPulse 1.5s ease-in-out infinite;
-}
-
-@keyframes playingPulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.1);
+    opacity: 0.7;
+    box-shadow: 0 0 10px rgba(102, 126, 234, 0.2);
   }
 }
 </style>
