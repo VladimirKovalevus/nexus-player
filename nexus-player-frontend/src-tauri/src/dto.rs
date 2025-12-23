@@ -1,3 +1,4 @@
+use nexus_player_backend::audio::types::TrackState;
 use serde::{Deserialize, Serialize};
 
 pub use nexus_player_backend::library::types::{ArtworkId, PlaylistId, TrackId};
@@ -13,6 +14,7 @@ pub struct TrackDto {
     pub duration_secs: Option<f64>,
     pub artwork_url: Option<String>,
     pub play_count: u64,
+    pub state: TrackStateDto,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,7 +71,7 @@ pub struct CreatePlaylistRequest {
     pub description: Option<String>,
 }
 
-use nexus_player_backend::audio::types as audio;
+use nexus_player_backend::audio::types::{self as audio};
 use nexus_player_backend::library::models;
 
 impl From<models::Track> for TrackDto {
@@ -85,6 +87,7 @@ impl From<models::Track> for TrackDto {
                 .and_then(|info| info.duration_secs),
             artwork_url: None,
             play_count: track.play_count,
+            state: TrackStateDto::Saved,
         }
     }
 }
@@ -99,6 +102,7 @@ impl From<audio::Track> for TrackDto {
             duration_secs: track.duration.map(|d| d.as_secs_f64()),
             artwork_url: track.artwork_url,
             play_count: 0,
+            state: track.state.into(),
         }
     }
 }
@@ -113,6 +117,7 @@ impl From<&audio::Track> for TrackDto {
             duration_secs: track.duration.map(|d| d.as_secs_f64()),
             artwork_url: track.artwork_url.clone(),
             play_count: 0,
+            state: track.state.clone().into(),
         }
     }
 }
@@ -182,12 +187,31 @@ pub struct TrackSourceDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
+pub enum TrackStateDto {
+    Saved,
+    Streaming,
+    Cached,
+}
+impl From<TrackState> for TrackStateDto {
+    fn from(value: TrackState) -> Self {
+        match value {
+            TrackState::Saved => TrackStateDto::Saved,
+            TrackState::Streaming => TrackStateDto::Streaming,
+            TrackState::Cached => TrackStateDto::Cached,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StreamingTrackDto {
     pub title: String,
     pub artist: String,
     pub duration_secs: Option<f64>,
     pub thumbnail: Option<String>,
     pub source: TrackSourceDto,
+    pub state: TrackStateDto,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -242,6 +266,7 @@ impl From<streaming::SearchResult> for SearchResultDto {
                     duration_secs: track.duration.map(|d| d.as_secs_f64()),
                     thumbnail: track.thumbnail,
                     source: TrackSourceDto { url, system },
+                    state: TrackStateDto::Streaming,
                 })
             }
             streaming::SearchResult::Playlist(playlist) => {
@@ -292,6 +317,7 @@ impl From<streaming::TrackInfo> for StreamingTrackDto {
             duration_secs: track.duration.map(|d| d.as_secs_f64()),
             thumbnail: track.thumbnail,
             source: TrackSourceDto { url, system },
+            state: TrackStateDto::Streaming,
         }
     }
 }
@@ -314,7 +340,7 @@ impl From<SearchResultDto> for streaming::SearchResult {
                 streaming::SearchResult::Playlist(streaming::PlaylistInfo {
                     id: playlist.id,
                     url: playlist.url,
-                    service: streaming::StreamingService::YouTube,
+                    service: streaming::StreamingService::Bandcamp,
                     title: playlist.title,
                     creator: playlist.creator,
                     tracks: playlist
@@ -340,7 +366,7 @@ impl From<SearchResultDto> for streaming::SearchResult {
             SearchResultDto::Album(album) => streaming::SearchResult::Album(streaming::AlbumInfo {
                 id: album.id,
                 url: album.url,
-                service: streaming::StreamingService::YouTube,
+                service: streaming::StreamingService::Bandcamp,
                 title: album.title,
                 artist: album.artist,
                 tracks: album

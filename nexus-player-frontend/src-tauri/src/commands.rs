@@ -362,7 +362,6 @@ pub async fn handle_streaming_track(
 ) -> Result<Option<i64>> {
     use nexus_player_backend::library::types::DownloadStrategy;
 
-    tracing::info!("search_result {:?}", search_result);
     let download_strategy = match strategy.as_str() {
         "stream" => DownloadStrategy::Stream,
         "cache" => DownloadStrategy::Cache,
@@ -386,6 +385,18 @@ pub async fn handle_streaming_track(
                     state.update_queue(|q| {
                         tracing::info!("add playlist{:?}", playlist);
                         q.load_from_playlist(playlist.into(), None);
+                    });
+                }
+                SearchResult::Album(album) => {
+                    tracing::info!("ALBUM {:?}", album);
+                    let expanded = state.streaming().expand_album(album).await;
+
+                    tracing::info!("expanded {:?}", expanded);
+                    state.update_queue(|q| {
+                        q.clear();
+                        if let Ok(tracks) = expanded {
+                            q.add_tracks(tracks.iter().map(|t| t.into()).collect())
+                        }
                     });
                 }
                 _ => todo!(),
