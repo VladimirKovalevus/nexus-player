@@ -160,7 +160,7 @@ impl AudioDecoder {
                     track_id: Some(self.track_id),
                 },
             )
-            .map_err(|e| AudioError::DecodingError(format!("Ошибка перемотки: {}", e)))?;
+            .map_err(|e| AudioError::InProgress)?;
 
         self.decoder.reset();
         info!("Перемотка выполнена на позицию: {:?}", seeked_to.actual_ts);
@@ -188,8 +188,14 @@ impl AudioDecoder {
                         break packet;
                     }
                 }
-                Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    return Ok(None);
+                Err(Error::IoError(e)) => {
+                    if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                        return Ok(None);
+                    }
+                    if e.kind() == std::io::ErrorKind::WouldBlock {
+                        self.decoder.reset();
+                        return Err(AudioError::InProgress);
+                    }
                 }
                 Err(Error::ResetRequired) => {
                     warn!("Decoder требует сброса");

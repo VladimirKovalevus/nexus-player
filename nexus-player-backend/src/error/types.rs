@@ -22,6 +22,9 @@ pub enum AudioError {
     #[error("Аудио поток недоступен")]
     StreamUnavailable,
 
+    #[error("Данные ещё не доступны")]
+    InProgress,
+
     #[error("Ошибка чтения аудио файла: {0}")]
     IoError(#[from] std::io::Error),
 }

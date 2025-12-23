@@ -174,6 +174,10 @@ impl PlaybackEngine {
                                         *is_playing.lock().unwrap() = false;
                                         return;
                                     }
+                                    Err(AudioError::InProgress) => {
+                                        data[output_pos..].fill(0.0);
+                                        return;
+                                    }
                                     Err(e) => {
                                         warn!("Ошибка декодирования: {}", e);
                                         data[output_pos..].fill(0.0);
@@ -240,7 +244,7 @@ impl PlaybackEngine {
         *self.decoder.lock().unwrap() = None;
         *self.current_position.lock().unwrap() = Duration::ZERO;
         *self.samples_played.lock().unwrap() = 0;
-        self.sample_buffer.lock();
+        self.sample_buffer.lock().unwrap();
         *self.buffer_position.lock().unwrap() = 0;
     }
 
