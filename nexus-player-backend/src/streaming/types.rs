@@ -23,9 +23,7 @@ impl ContentType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum StreamingService {
     YouTube,
-
     SoundCloud,
-
     Bandcamp,
 }
 
@@ -243,6 +241,7 @@ impl From<TrackInfo> for Track {
             artwork_url: row.thumbnail,
             format: None,
             source: row.source,
+            state: crate::audio::types::TrackState::Streaming,
         }
     }
 }
@@ -258,6 +257,7 @@ impl From<&TrackInfo> for Track {
             artwork_url: row.thumbnail.clone(),
             format: None,
             source: row.source.clone(),
+            state: crate::audio::types::TrackState::Streaming,
         }
     }
 }

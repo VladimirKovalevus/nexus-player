@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use bandcamp::Album;
 use std::sync::Arc;
 
 use crate::audio::types::MediaSource;
@@ -162,7 +163,6 @@ impl StreamProvider for BandcampProvider {
         let mut search_results = Vec::new();
 
         for item in results.into_iter().take(limit) {
-            tracing::info!("Bandcamp Item: {:?}", item);
             match item {
                 bandcamp::SearchResultItem::Album(album) => {
                     if content_type.is_none() || content_type == Some(ContentType::Album) {
@@ -196,29 +196,26 @@ impl StreamProvider for BandcampProvider {
         Ok(search_results)
     }
 
-    async fn expand_collection(&self, source: &TrackSource) -> StreamResult<Vec<TrackSource>> {
-        let url = match source {
-            TrackSource::Http(url) => url.as_str(),
-            TrackSource::External { id, .. } => id.as_str(),
-            _ => {
-                return Err(StreamError::InvalidSource(
-                    "Invalid source type".to_string(),
-                ))
+    async fn expand_collection(&self, collection: SearchResult) -> StreamResult<Vec<TrackInfo>> {
+        match collection {
+            SearchResult::Track(t) => Ok(vec![t]),
+            SearchResult::Album(a) => {
+                let url = &a.url;
+                let album = bandcamp::album_from_url(url).await.map_err(|e| {
+                    StreamError::MetadataError(format!("Bandcamp API error: {:?}", e))
+                })?;
+                tracing::info!("IA EXPANDED{:?}", album);
+
+                let track_sources: Vec<TrackInfo> = album
+                    .tracks
+                    .into_iter()
+                    .filter_map(|track| Self::convert_track_to_track_info(track, url))
+                    .collect();
+
+                Ok(track_sources)
             }
-        };
-
-        let album = bandcamp::album_from_url(url)
-            .await
-            .map_err(|e| StreamError::MetadataError(format!("Bandcamp API error: {:?}", e)))?;
-
-        let track_sources: Vec<TrackSource> = album
-            .tracks
-            .into_iter()
-            .filter_map(|track| Self::convert_track_to_track_info(track, url))
-            .map(|info| info.source)
-            .collect();
-
-        Ok(track_sources)
+            _ => todo!(),
+        }
     }
 
     async fn is_available(&self) -> bool {

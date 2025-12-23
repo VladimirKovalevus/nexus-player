@@ -3,7 +3,7 @@ use crate::library::TrackSource;
 use crate::streaming::types::ResolvedContent;
 
 use super::error::StreamResult;
-use super::types::{ContentType, SearchResult, StreamMetadata};
+use super::types::{ContentType, SearchResult, StreamMetadata, TrackInfo};
 
 use async_trait::async_trait;
 
@@ -30,10 +30,8 @@ pub trait StreamProvider: Send + Sync {
         Err(StreamError::NotSupported)
     }
 
-    async fn expand_collection(&self, _source: &TrackSource) -> StreamResult<Vec<TrackSource>> {
-        use super::error::StreamError;
-        Err(StreamError::NotSupported)
-    }
+    async fn expand_collection(&self, _collection: SearchResult)
+        -> StreamResult<Vec<TrackInfo>>;
     async fn is_available(&self) -> bool {
         true
     }

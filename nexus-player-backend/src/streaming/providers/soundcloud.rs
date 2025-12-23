@@ -146,37 +146,38 @@ impl StreamProvider for SoundCloudProvider {
         Ok(search_results)
     }
 
-    async fn expand_collection(&self, source: &TrackSource) -> StreamResult<Vec<TrackSource>> {
-        let url = match source {
-            TrackSource::Http(url) => url.as_str(),
-            TrackSource::External { id, .. } => id.as_str(),
-            _ => {
-                return Err(StreamError::InvalidSource(
-                    "Invalid source type".to_string(),
-                ))
-            }
-        };
-
-        let client = self.get_client().await?;
-        let playlist = client
-            .get_playlist(ResourceId::Url(url.to_string()))
-            .await
-            .map_err(|e| StreamError::MetadataError(format!("SoundCloud API error: {}", e)))?;
-
-        let track_sources: Vec<TrackSource> = playlist
-            .album_playlist
-            .tracks
-            .into_iter()
-            .map(|track| TrackSource::External {
-                system: "soundcloud".to_string(),
-                id: match track {
-                    TrackType::Basic(t) => t.track.uri,
-                    TrackType::Mini(t) => t.id.to_string(),
-                },
-            })
-            .collect();
-
-        Ok(track_sources)
+    async fn expand_collection(&self, collection: SearchResult) -> StreamResult<Vec<TrackInfo>> {
+        todo!()
+        // let url = match source {
+        //     TrackSource::Http(url) => url.as_str(),
+        //     TrackSource::External { id, .. } => id.as_str(),
+        //     _ => {
+        //         return Err(StreamError::InvalidSource(
+        //             "Invalid source type".to_string(),
+        //         ))
+        //     }
+        // };
+        //
+        // let client = self.get_client().await?;
+        // let playlist = client
+        //     .get_playlist(ResourceId::Url(url.to_string()))
+        //     .await
+        //     .map_err(|e| StreamError::MetadataError(format!("SoundCloud API error: {}", e)))?;
+        //
+        // let track_sources: Vec<TrackSource> = playlist
+        //     .album_playlist
+        //     .tracks
+        //     .into_iter()
+        //     .map(|track| TrackSource::External {
+        //         system: "soundcloud".to_string(),
+        //         id: match track {
+        //             TrackType::Basic(t) => t.track.uri,
+        //             TrackType::Mini(t) => t.id.to_string(),
+        //         },
+        //     })
+        //     .collect();
+        //
+        // Ok(track_sources)
     }
 
     async fn is_available(&self) -> bool {

@@ -371,34 +371,27 @@ impl StreamProvider for YtDlpProvider {
         Ok(results)
     }
 
-    async fn expand_collection(&self, source: &TrackSource) -> StreamResult<Vec<TrackSource>> {
-        let url = match source {
-            TrackSource::Http(url) => url.as_str(),
-            TrackSource::External { id, .. } => id.as_str(),
-            _ => {
-                return Err(StreamError::InvalidSource(
-                    "Invalid source type".to_string(),
-                ))
-            }
-        };
-
-        let meta = self.fetch_json(url, true).await?;
-
-        let entries = meta.entries.ok_or_else(|| {
-            StreamError::MetadataError("Not a collection (playlist/album)".to_string())
-        })?;
-
-        let track_sources: Vec<TrackSource> = entries
-            .into_iter()
-            .filter_map(|entry| {
-                entry
-                    .webpage_url
-                    .or(entry.url)
-                    .map(|url| TrackSource::Http(url))
-            })
-            .collect();
-
-        Ok(track_sources)
+    async fn expand_collection(&self, collection: SearchResult) -> StreamResult<Vec<TrackInfo>> {
+        todo!();
+        // let url = "";
+        //
+        // let meta = self.fetch_json(url, true).await?;
+        //
+        // let entries = meta.entries.ok_or_else(|| {
+        //     StreamError::MetadataError("Not a collection (playlist/album)".to_string())
+        // })?;
+        //
+        // let track_sources: Vec<TrackSource> = entries
+        //     .into_iter()
+        //     .filter_map(|entry| {
+        //         entry
+        //             .webpage_url
+        //             .or(entry.url)
+        //             .map(|url| TrackSource::Http(url))
+        //     })
+        //     .collect();
+        //
+        // Ok(track_sources)
     }
 
     async fn is_available(&self) -> bool {

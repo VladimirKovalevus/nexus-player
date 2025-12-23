@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::audio::types::{MediaSource, TrackSource};
 use crate::streaming::external::StreamingMediaSource;
+use crate::streaming::types::{AlbumInfo, TrackInfo};
 
 use super::cache::CacheManager;
 use super::error::{StreamError, StreamResult};
@@ -63,6 +64,17 @@ impl StreamingService {
 
     pub fn list_providers(&self) -> Vec<String> {
         self.providers.keys().cloned().collect()
+    }
+    pub async fn expand_album(&self, search: AlbumInfo) -> StreamResult<Vec<TrackInfo>> {
+        let provider_name = search.service.name().to_lowercase();
+        if let Some(provider) = self.providers.get(&provider_name) {
+            tracing::info!("provider {:?}", provider.is_available().await);
+            provider
+                .expand_collection(SearchResult::Album(search))
+                .await
+        } else {
+            Ok(vec![])
+        }
     }
 
     pub async fn resolve(
