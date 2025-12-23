@@ -43,14 +43,51 @@
       </div>
     </div>
 
-    <div v-if="showActions" :class="$style.actions">
-      <button :class="$style.actionButton" @click.stop="handleMore">⋯</button>
+    <div v-if="showActions" :class="$style.actions" ref="dropdownRef">
+      <button :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
+
+      <div v-if="dropdownOpen" :class="$style.dropdown">
+        <div v-if="!showPlaylistSubmenu">
+          <button
+            v-for="option in menuOptions"
+            :key="option.label"
+            :class="$style.dropdownItem"
+            @click="option.action"
+          >
+            <span :class="$style.itemIcon">{{ option.icon }}</span>
+            <span :class="$style.itemLabel">{{ option.label }}</span>
+            <span v-if="option.hasSubmenu" :class="$style.itemArrow">›</span>
+          </button>
+        </div>
+
+        <div v-else :class="$style.submenu">
+          <button :class="$style.dropdownItem" @click="showPlaylistSubmenu = false">
+            <span :class="$style.itemIcon">‹</span>
+            <span :class="$style.itemLabel">Назад</span>
+          </button>
+          <div :class="$style.divider"></div>
+          <button
+            v-for="playlist in playlists"
+            :key="playlist.id"
+            :class="$style.dropdownItem"
+            @click="handleAddToPlaylist(playlist.id)"
+          >
+            <span :class="$style.itemIcon">📋</span>
+            <span :class="$style.itemLabel">{{ playlist.title }}</span>
+          </button>
+          <div v-if="playlists.length === 0" :class="$style.emptyPlaylist">
+            Нет плейлистов
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
+import { onClickOutside } from '@vueuse/core';
 
 interface Props {
   type: 'track' | 'playlist' | 'album';
@@ -61,6 +98,11 @@ interface Props {
   trackCount?: number; // for playlists and albums
   year?: number; // for albums
   showActions?: boolean; // show more actions button
+  context?: 'library' | 'queue'; // where the card is shown
+  trackId?: number; // track ID for actions
+  queueIndex?: number; // index in queue for removal
+  isLocal?: boolean; // is track local or external
+  isInLibrary?: boolean; // is track already in library
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -69,13 +111,69 @@ const props = withDefaults(defineProps<Props>(), {
   trackCount: undefined,
   year: undefined,
   showActions: true,
+  context: 'library',
+  trackId: undefined,
+  queueIndex: undefined,
+  isLocal: true,
+  isInLibrary: true,
 });
 
 const emit = defineEmits<{
   click: [];
   play: [];
-  more: [];
+  refresh: [];
 }>();
+
+const dropdownOpen = ref(false);
+const dropdownRef = ref<HTMLElement | null>(null);
+const playlists = ref<Array<{ id: number; title: string }>>([]);
+const showPlaylistSubmenu = ref(false);
+
+interface MenuOption {
+  label: string;
+  icon: string;
+  action: () => void | Promise<void>;
+  hasSubmenu?: boolean;
+}
+
+const menuOptions = computed<MenuOption[]>(() => {
+  const options: MenuOption[] = [];
+
+  if (props.type !== 'track') return options;
+
+  options.push({
+    label: 'Добавить в плейлист',
+    icon: '📋',
+    action: handleShowPlaylistSubmenu,
+    hasSubmenu: true,
+  });
+
+  if (props.context === 'queue') {
+    options.push({
+      label: 'Удалить из очереди',
+      icon: '🗑️',
+      action: handleRemoveFromQueue,
+    });
+  }
+
+  if (!props.isLocal) {
+    options.push({
+      label: 'Скачать',
+      icon: '⬇️',
+      action: handleDownload,
+    });
+  }
+
+  if (props.context === 'queue' && !props.isInLibrary) {
+    options.push({
+      label: 'Добавить в библиотеку',
+      icon: '➕',
+      action: handleAddToLibrary,
+    });
+  }
+
+  return options;
+});
 
 const placeholderIcon = computed(() => {
   switch (props.type) {
@@ -96,6 +194,10 @@ const formatDuration = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+onClickOutside(dropdownRef, () => {
+  closeDropdown();
+});
+
 const handleClick = () => {
   emit('click');
 };
@@ -104,8 +206,67 @@ const handlePlay = () => {
   emit('play');
 };
 
-const handleMore = () => {
-  emit('more');
+const toggleDropdown = async () => {
+  dropdownOpen.value = !dropdownOpen.value;
+  showPlaylistSubmenu.value = false;
+
+  if (dropdownOpen.value && playlists.value.length === 0) {
+    await fetchPlaylists();
+  }
+};
+
+const closeDropdown = () => {
+  dropdownOpen.value = false;
+  showPlaylistSubmenu.value = false;
+};
+
+const fetchPlaylists = async () => {
+  try {
+    const allPlaylists = await invoke<Array<{ id: number; title: string }>>('get_all_playlists');
+    playlists.value = allPlaylists;
+  } catch (e) {
+    console.error('Failed to fetch playlists:', e);
+  }
+};
+
+const handleShowPlaylistSubmenu = () => {
+  showPlaylistSubmenu.value = true;
+};
+
+const handleAddToPlaylist = async (playlistId: number) => {
+  if (!props.trackId) return;
+
+  try {
+    await invoke('add_track_to_playlist', {
+      playlistId,
+      trackId: props.trackId,
+    });
+    closeDropdown();
+  } catch (e) {
+    console.error('Failed to add track to playlist:', e);
+  }
+};
+
+const handleRemoveFromQueue = async () => {
+  if (props.queueIndex === undefined) return;
+
+  try {
+    await invoke('remove_from_queue', { index: props.queueIndex });
+    emit('refresh');
+    closeDropdown();
+  } catch (e) {
+    console.error('Failed to remove from queue:', e);
+  }
+};
+
+const handleDownload = async () => {
+  console.log('Download track:', props.trackId);
+  closeDropdown();
+};
+
+const handleAddToLibrary = async () => {
+  console.log('Add to library:', props.trackId);
+  closeDropdown();
 };
 </script>
 
@@ -258,6 +419,7 @@ const handleMore = () => {
 .actions {
   display: flex;
   align-items: center;
+  position: relative;
 }
 
 .actionButton {
@@ -275,6 +437,82 @@ const handleMore = () => {
   &:hover {
     background-color: var(--color-bg-primary);
     color: var(--color-text-primary);
+  }
+}
+
+// Dropdown Menu
+.dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: $spacing-xs;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: $radius-md;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.dropdownItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  padding: $spacing-sm $spacing-md;
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  font-size: $font-size-sm;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: var(--color-bg-hover);
+  }
+}
+
+.itemIcon {
+  font-size: $font-size-base;
+  flex-shrink: 0;
+}
+
+.itemLabel {
+  flex: 1;
+}
+
+.itemArrow {
+  font-size: $font-size-lg;
+  color: var(--color-text-muted);
+}
+
+.divider {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: $spacing-xs 0;
+}
+
+.submenu {
+  animation: slideIn 0.15s ease-out;
+}
+
+.emptyPlaylist {
+  padding: $spacing-lg;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: $font-size-sm;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 </style>

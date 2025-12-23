@@ -9,6 +9,7 @@ export interface TrackDto {
   durationSecs: number | null;
   artworkUrl: string | null;
   playCount: number;
+  state: string;
 }
 
 export interface AudioState {

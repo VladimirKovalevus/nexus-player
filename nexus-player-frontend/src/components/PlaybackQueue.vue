@@ -36,6 +36,7 @@ const fetchQueue = async () => {
     error.value = null;
 
     const queueState = await invoke('get_queue_state');
+    console.log(queueState,"STATE")
     audioStore.updateQueueState(queueState);
   } catch (e) {
     error.value = `Failed to load queue: ${e}`;
