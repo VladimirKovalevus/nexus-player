@@ -56,31 +56,19 @@ impl BandcampProvider {
         track: bandcamp::AlbumTrack,
         album_url: &str,
     ) -> Option<TrackInfo> {
-        let base_url = if let Some(pos) = album_url.rfind("/album/") {
-            &album_url[..pos]
-        } else if let Some(pos) = album_url.rfind("/track/") {
-            &album_url[..pos]
-        } else {
-            return None;
-        };
-
-        let track_slug = track
-            .title
-            .to_lowercase()
-            .chars()
-            .filter(|c| c.is_alphanumeric() || c.is_whitespace())
-            .map(|c| if c.is_whitespace() { '-' } else { c })
-            .collect::<String>()
-            .split('-')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("-");
-
-        let track_url = format!("{}/track/{}", base_url, track_slug);
-
         let duration = track
             .duration
             .map(|secs| std::time::Duration::from_secs_f32(secs));
+
+        let urls = track
+            .streaming_url
+            .into_iter()
+            .take(1)
+            .collect::<Vec<(String, String)>>();
+        if urls.len() == 0 {
+            return None;
+        };
+        let track_url = &urls[0].1;
 
         Some(TrackInfo {
             source: TrackSource::External {
@@ -104,8 +92,8 @@ impl StreamProvider for BandcampProvider {
 
     async fn resolve(&self, source: &TrackSource) -> StreamResult<String> {
         match source {
-            TrackSource::Http(_) => self.ytdlp.resolve(source).await,
-            TrackSource::External { id: _, system: _ } => self.ytdlp.resolve(source).await,
+            TrackSource::Http(url) => Ok(url.clone()),
+            TrackSource::External { id: id, system: _ } => Ok(id.clone()),
             _ => Err(StreamError::NotSupported),
         }
     }
