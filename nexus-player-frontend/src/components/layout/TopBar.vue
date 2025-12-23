@@ -24,9 +24,9 @@
         <div :class="$style.filterRow">
           <label>Provider:</label>
           <select v-model="selectedProvider" :class="$style.filterSelect">
+            <option value="bandcamp">Bandcamp</option>
             <option value="youtube">YouTube</option>
             <option value="soundcloud">SoundCloud</option>
-            <option value="bandcamp">Bandcamp</option>
             <option value="ytdlp">YT-DLP (All)</option>
           </select>
         </div>
@@ -169,7 +169,7 @@ type SearchResult =
   | StreamingChannel;
 
 const searchQuery = ref('');
-const selectedProvider = ref('youtube');
+const selectedProvider = ref('bandcamp');
 const selectedContentType = ref<string | null>(null);
 const limit = ref(10);
 

@@ -48,7 +48,7 @@ type SearchResult =
   | StreamingChannel;
 
 const query = ref('');
-const selectedProvider = ref('youtube');
+const selectedProvider = ref('bandcamp');
 const selectedContentType = ref<string | null>(null);
 const limit = ref(10);
 
@@ -57,9 +57,9 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 
 const providers = [
+  { value: 'bandcamp', label: 'Bandcamp' },
   { value: 'youtube', label: 'YouTube' },
   { value: 'soundcloud', label: 'SoundCloud' },
-  { value: 'bandcamp', label: 'Bandcamp' },
   { value: 'ytdlp', label: 'YT-DLP (All)' },
 ];
 
@@ -148,7 +148,7 @@ const handleResultClick = async (result: SearchResult) => {
           <select
             id="provider-select"
             v-model="selectedProvider"
-            class="filter-select"
+            class="provider-select"
           >
             <option
               v-for="provider in providers"
@@ -165,7 +165,7 @@ const handleResultClick = async (result: SearchResult) => {
           <select
             id="content-type-select"
             v-model="selectedContentType"
-            class="filter-select"
+            class="provider-select"
           >
             <option
               v-for="type in contentTypes"
@@ -179,7 +179,7 @@ const handleResultClick = async (result: SearchResult) => {
 
         <div class="filter-group">
           <label for="limit-select">Limit:</label>
-          <select id="limit-select" v-model="limit" class="filter-select">
+          <select id="limit-select" v-model="limit" class="provider-select">
             <option :value="5">5</option>
             <option :value="10">10</option>
             <option :value="20">20</option>
@@ -333,7 +333,7 @@ h3 {
   color: #666;
 }
 
-.filter-select {
+.provider-select {
   padding: 8px 12px;
   border: 2px solid #ddd;
   border-radius: 6px;
@@ -343,7 +343,7 @@ h3 {
   transition: border-color 0.2s;
 }
 
-.filter-select:focus {
+.provider-select:focus {
   border-color: #4caf50;
 }
 
