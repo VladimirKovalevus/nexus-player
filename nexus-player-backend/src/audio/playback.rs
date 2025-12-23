@@ -257,7 +257,7 @@ impl PlaybackEngine {
     pub fn seek(&mut self, position: Duration) -> Result<(), AudioError> {
         let mut decoder_guard = self.decoder.lock().unwrap();
         if let Some(ref mut dec) = *decoder_guard {
-            dec.seek(position.as_secs_f64())?;
+            dec.seek(position.as_secs_f64());
             *self.current_position.lock().unwrap() = position;
 
             let sr = *self.sample_rate.lock().unwrap();

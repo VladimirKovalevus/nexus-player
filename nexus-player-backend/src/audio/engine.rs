@@ -2,6 +2,7 @@ use super::playback::PlaybackEngine;
 use super::types::{AudioCommand, AudioEvent, AudioState, PlaybackState, Track};
 use crate::audio::types::{AudioSource, MediaSource};
 use crate::error::AudioError;
+use anyhow::Error;
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, Sender};
 use std::sync::Arc;
@@ -246,7 +247,11 @@ impl AudioEngine {
                     match playback.seek(position) {
                         Ok(_) => {
                             state.write().unwrap().position = position;
-
+                            let _ = event_tx.send(AudioEvent::PositionUpdated { position });
+                        }
+                        Err(AudioError::InProgress) => {
+                            warn!("Ошибка INPROGRESS:");
+                            state.write().unwrap().position = position;
                             let _ = event_tx.send(AudioEvent::PositionUpdated { position });
                         }
                         Err(e) => {

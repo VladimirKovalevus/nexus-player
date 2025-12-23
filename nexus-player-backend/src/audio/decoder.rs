@@ -161,7 +161,6 @@ impl AudioDecoder {
                 },
             )
             .map_err(|e| AudioError::InProgress)?;
-
         self.decoder.reset();
         info!("Перемотка выполнена на позицию: {:?}", seeked_to.actual_ts);
 

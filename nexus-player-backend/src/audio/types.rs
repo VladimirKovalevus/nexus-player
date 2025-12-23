@@ -122,10 +122,16 @@ pub struct Track {
     pub album: Option<String>,
     pub duration: Option<Duration>,
     pub artwork_url: Option<String>,
-
     pub format: Option<AudioFormat>,
-
     pub source: TrackSource,
+    pub state: TrackState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TrackState {
+    Saved,
+    Streaming,
+    Cached,
 }
 
 #[derive(Debug, Clone)]
@@ -206,6 +212,7 @@ impl From<crate::library::models::Track> for Track {
                     })
             }),
             source: track.source,
+            state: TrackState::Saved,
         }
     }
 }
