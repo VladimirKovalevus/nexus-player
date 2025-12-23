@@ -257,8 +257,8 @@ impl AudioEngine {
 
                 Ok(AudioCommand::SetVolume(volume)) => {
                     info!("Установка громкости: {}", volume);
-                    // TODO: Реализовать управление громкостью в PlaybackEngine
                     state.write().unwrap().volume = volume;
+                    playback.set_volume(volume);
                     let _ = event_tx.send(AudioEvent::VolumeChanged { volume });
                 }
 

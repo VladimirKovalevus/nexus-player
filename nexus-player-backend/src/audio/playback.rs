@@ -22,6 +22,7 @@ pub struct PlaybackEngine {
     samples_played: Arc<Mutex<u64>>,
     sample_buffer: Arc<Mutex<Vec<f32>>>,
     buffer_position: Arc<Mutex<usize>>,
+    volume: Arc<Mutex<f32>>,
 }
 
 impl PlaybackEngine {
@@ -55,6 +56,7 @@ impl PlaybackEngine {
             samples_played: Arc::new(Mutex::new(0)),
             sample_buffer: Arc::new(Mutex::new(Vec::new())),
             buffer_position: Arc::new(Mutex::new(0)),
+            volume: Arc::new(Mutex::new(1.0)),
         })
     }
 
@@ -135,6 +137,7 @@ impl PlaybackEngine {
         let sample_rate_arc = Arc::clone(&self.sample_rate);
         let sample_buffer = Arc::clone(&self.sample_buffer);
         let buffer_position = Arc::clone(&self.buffer_position);
+        let volume = Arc::clone(&self.volume);
 
         let mut config = self.config.clone();
         config.sample_rate = cpal::SampleRate(sample_rate);
@@ -197,8 +200,11 @@ impl PlaybackEngine {
                         let needed = data.len() - output_pos;
                         let to_copy = available.min(needed);
 
+                        let volume = *volume.lock().unwrap();
                         data[output_pos..output_pos + to_copy]
-                            .copy_from_slice(&buffer[*buf_pos..*buf_pos + to_copy]);
+                            .iter_mut()
+                            .zip(&buffer[*buf_pos..*buf_pos + to_copy])
+                            .for_each(|(out, sample)| *out = sample * volume);
 
                         *buf_pos += to_copy;
                         output_pos += to_copy;
@@ -274,5 +280,14 @@ impl PlaybackEngine {
 
     pub fn is_playing(&self) -> bool {
         *self.is_playing.lock().unwrap()
+    }
+
+    pub fn set_volume(&mut self, volume: f32) {
+        let clamped = volume.clamp(0.0, 1.0);
+        *self.volume.lock().unwrap() = clamped;
+    }
+
+    pub fn volume(&self) -> f32 {
+        *self.volume.lock().unwrap()
     }
 }

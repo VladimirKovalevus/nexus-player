@@ -160,6 +160,16 @@ const toggleShuffleMode = async () => {
   }
 };
 
+const setVolume = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const volume = parseFloat(target.value);
+  try {
+    await invoke('set_volume', { volume });
+  } catch (e) {
+    console.error('Failed to set volume:', e);
+  }
+};
+
 const formatTime = (seconds: number): string => {
   if (!seconds || !isFinite(seconds)) return '0:00';
   const mins = Math.floor(seconds / 60);
@@ -261,6 +271,19 @@ onUnmounted(() => {
           @touchend="onSeekEnd"
         />
         <span class="time">{{ formatTime(audioStore.duration) }}</span>
+      </div>
+
+      <div class="volume-control">
+        <span class="volume-icon">🔊</span>
+        <input
+          type="range"
+          class="volume-slider"
+          :value="audioStore.volume"
+          min="0"
+          max="1"
+          step="0.01"
+          @input="setVolume"
+        />
       </div>
 
       <button
@@ -471,6 +494,60 @@ onUnmounted(() => {
 }
 
 .seek-bar::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  background: var(--color-accent-hover);
+}
+
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 120px;
+}
+
+.volume-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.volume-slider {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--color-bg-secondary);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--color-accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.volume-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: var(--color-accent-hover);
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--color-accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.volume-slider::-moz-range-thumb:hover {
   transform: scale(1.2);
   background: var(--color-accent-hover);
 }
