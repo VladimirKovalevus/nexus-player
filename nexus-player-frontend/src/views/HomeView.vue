@@ -1,5 +1,11 @@
 <template>
   <div :class="$style.home">
+    <PlaylistCreateModal
+      :is-open="isPlaylistModalOpen"
+      @close="handleModalClose"
+      @created="handlePlaylistCreated"
+    />
+
     <section :class="$style.section">
       <div :class="$style.sectionHeader">
         <h2 :class="$style.sectionTitle">Плейлисты</h2>
@@ -78,6 +84,7 @@ import { ref, onMounted, inject } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import MediaCard from '@/components/common/MediaCard.vue';
 import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
+import PlaylistCreateModal from '@/components/PlaylistCreateModal.vue';
 
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
 
@@ -122,6 +129,7 @@ const playlists = ref<Playlist[]>([]);
 const tracks = ref<Track[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
+const isPlaylistModalOpen = ref(false);
 
 // Fetch data from backend
 const fetchPlaylists = async () => {
@@ -174,8 +182,15 @@ onMounted(() => {
 
 // Handlers for playlists
 const handleAddPlaylist = () => {
-  console.log('Add playlist clicked');
-  // TODO: Open dialog or navigate to create playlist page
+  isPlaylistModalOpen.value = true;
+};
+
+const handlePlaylistCreated = async () => {
+  await fetchPlaylists();
+};
+
+const handleModalClose = () => {
+  isPlaylistModalOpen.value = false;
 };
 
 const showAllPlaylists = () => {
