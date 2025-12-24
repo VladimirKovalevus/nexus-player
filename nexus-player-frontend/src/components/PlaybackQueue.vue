@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import MediaCard from './common/MediaCard.vue';
 import { useAudioStore } from '../stores/audio';
+import { TrackDto } from '@/types/types';
 
 interface QueueTrack {
   index: number;
@@ -18,13 +19,13 @@ const audioStore = useAudioStore();
 const loading = ref(true);
 const error = ref<string | null>(null);
 
-const queue = computed<QueueTrack[]>(() => {
+const queue = computed(() => {
   return audioStore.tracks.map((track, index) => ({
     index,
     id: track.id,
     title: track.title,
     artist: track.artist,
-    thumbnail: track.artworkUrl,
+    artworkUrl: track.artworkUrl,
     duration: track.durationSecs,
     isCurrentlyPlaying: index === audioStore.currentIndex,
   }));
@@ -36,7 +37,6 @@ const fetchQueue = async () => {
     error.value = null;
 
     const queueState = await invoke('get_queue_state');
-    console.log(queueState,"STATE")
     audioStore.updateQueueState(queueState);
   } catch (e) {
     error.value = `Failed to load queue: ${e}`;
@@ -113,11 +113,8 @@ defineExpose({ fetchQueue });
       >
         <MediaCard
           type="track"
-          :title="track.title"
-          :artist="track.artist || 'Unknown Artist'"
-          :thumbnail="track.thumbnail || undefined"
-          :duration="track.duration || undefined"
-          :show-actions="false"
+          :track="track"
+          showAction
           @click="playAtIndex(track.index)"
           @play="playAtIndex(track.index)"
         />

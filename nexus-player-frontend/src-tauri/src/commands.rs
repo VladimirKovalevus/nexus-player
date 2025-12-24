@@ -134,7 +134,6 @@ pub async fn delete_playlist(state: State<'_, Arc<AppState>>, playlist_id: i64) 
         .delete_playlist(PlaylistId(playlist_id))
         .await
         .map_err(|e| e.to_string())?;
-
     Ok(())
 }
 
@@ -388,9 +387,7 @@ pub async fn handle_streaming_track(
                     });
                 }
                 SearchResult::Album(album) => {
-                    tracing::info!("ALBUM {:?}", album);
                     let expanded = state.streaming().expand_album(album).await;
-
                     tracing::info!("expanded {:?}", expanded);
                     state.update_queue(|q| {
                         q.clear();

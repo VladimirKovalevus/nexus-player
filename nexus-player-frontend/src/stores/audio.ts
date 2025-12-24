@@ -1,36 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-
-export interface TrackDto {
-  id: number;
-  title: string;
-  artist: string | null;
-  album: string | null;
-  durationSecs: number | null;
-  artworkUrl: string | null;
-  playCount: number;
-  state: string;
-}
-
-export interface AudioState {
-  state: 'playing' | 'paused' | 'stopped' | 'buffering';
-  positionSecs: number;
-  durationSecs: number;
-  volume: number;
-  currentTrack: TrackDto | null;
-}
-
-export interface QueueState {
-  tracks: TrackDto[];
-  currentIndex: number | null;
-  repeatMode: 'off' | 'all' | 'one';
-  shuffleEnabled: boolean;
-}
-
-export interface AudioEvent {
-  type: string;
-  payload?: any;
-}
+import type { TrackDto, AudioState, QueueState, AudioEvent } from '@/types/types';
 
 export const useAudioStore = defineStore('audio', () => {
   const audioState = ref<AudioState>({

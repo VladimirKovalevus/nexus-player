@@ -2,9 +2,9 @@
   <div :class="[$style.mediaCard, $style[`type-${type}`]]" @click="handleClick">
     <div :class="$style.thumbnail">
       <img
-        v-if="thumbnail"
-        :src="thumbnail"
-        :alt="title"
+        v-if="entity.thumbnail"
+        :src="entity.thumbnail"
+        :alt="entity.title"
         :class="$style.image"
       />
       <div v-else :class="$style.placeholder">
@@ -17,33 +17,33 @@
     </div>
 
     <div :class="$style.info">
-      <div :class="$style.title" :title="title">{{ title }}</div>
+      <div :class="$style.title" :title="entity.title">{{ entity.title }}</div>
       <div :class="$style.meta">
-        <span :class="$style.artist">{{ artist }}</span>
+        <span :class="$style.artist">{{ entity.artist }}</span>
 
-        <template v-if="type === 'track' && duration !== undefined">
+        <template v-if="type === 'track' && entity.duration !== undefined">
           <span :class="$style.separator">•</span>
-          <span :class="$style.duration">{{ formatDuration(duration) }}</span>
+          <span :class="$style.duration">{{ formatDuration(entity?.duration||0) }}</span>
         </template>
 
         <template
           v-if="
-            (type === 'playlist' || type === 'album') &&
-            trackCount !== undefined
+            (type === 'playlist' ) &&
+            entity.trackCount !== undefined
           "
         >
           <span :class="$style.separator">•</span>
-          <span :class="$style.trackCount">{{ trackCount }} tracks</span>
+          <span :class="$style.trackCount">{{ entity.trackCount }} tracks</span>
         </template>
 
-        <template v-if="type === 'album' && year">
+        <template v-if=" entity.year">
           <span :class="$style.separator">•</span>
-          <span :class="$style.year">{{ year }}</span>
+          <span :class="$style.year">{{ entity.year }}</span>
         </template>
       </div>
     </div>
 
-    <div v-if="showActions" :class="$style.actions" ref="dropdownRef">
+    <div v-if="true" :class="$style.actions" ref="dropdownRef">
       <button :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
 
       <div v-if="dropdownOpen" :class="$style.dropdown">
@@ -88,35 +88,18 @@
 import { computed, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { onClickOutside } from '@vueuse/core';
+import type { TrackDto, PlaylistDto } from '@/types/types';
+import { useAudioStore } from '@/stores/audio';
+const store = useAudioStore()
 
 interface Props {
-  type: 'track' | 'playlist' | 'album';
-  title: string;
-  artist: string;
-  thumbnail?: string;
-  duration?: number; // in seconds, for tracks
-  trackCount?: number; // for playlists and albums
-  year?: number; // for albums
-  showActions?: boolean; // show more actions button
-  context?: 'library' | 'queue'; // where the card is shown
-  trackId?: number; // track ID for actions
-  queueIndex?: number; // index in queue for removal
-  isLocal?: boolean; // is track local or external
-  isInLibrary?: boolean; // is track already in library
+  type: 'track' | 'playlist';
+  track?: TrackDto;
+  playlist?: PlaylistDto;
+  showAction:Boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  thumbnail: undefined,
-  duration: undefined,
-  trackCount: undefined,
-  year: undefined,
-  showActions: true,
-  context: 'library',
-  trackId: undefined,
-  queueIndex: undefined,
-  isLocal: true,
-  isInLibrary: true,
-});
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
   click: [];
@@ -128,6 +111,42 @@ const dropdownOpen = ref(false);
 const dropdownRef = ref<HTMLElement | null>(null);
 const playlists = ref<Array<{ id: number; title: string }>>([]);
 const showPlaylistSubmenu = ref(false);
+
+const entity = computed(() => {
+
+  console.log(props.track,"TRACK")
+  if (props.type === 'track' && props.track) {
+    return {
+      id: props.track.id,
+      title: props.track.title,
+      artist: props.track.artist || 'Unknown Artist',
+      thumbnail: props.track.artworkUrl,
+      duration: props.track.durationSecs,
+      trackCount: undefined,
+      year: undefined,
+    };
+  } else if (props.type === 'playlist' && props.playlist) {
+    return {
+      id: props.playlist.id,
+      title: props.playlist.title,
+      artist: props.playlist.creator || 'Unknown Creator',
+      thumbnail: undefined,
+      duration: undefined,
+      trackCount: props.playlist.track_count,
+      year: undefined,
+    };
+  }
+
+  return {
+    id: 0,
+    title: 'Unknown',
+    artist: 'Unknown',
+    thumbnail: undefined,
+    duration: undefined,
+    trackCount: undefined,
+    year: undefined,
+  };
+});
 
 interface MenuOption {
   label: string;
@@ -181,8 +200,6 @@ const placeholderIcon = computed(() => {
       return '🎵';
     case 'playlist':
       return '📂';
-    case 'album':
-      return '💿';
     default:
       return '🎵';
   }
@@ -207,6 +224,8 @@ const handlePlay = () => {
 };
 
 const toggleDropdown = async () => {
+console.log(entity,"ENTITY")
+console.log(store.queueState,"QUQUE")
   dropdownOpen.value = !dropdownOpen.value;
   showPlaylistSubmenu.value = false;
 
@@ -234,12 +253,12 @@ const handleShowPlaylistSubmenu = () => {
 };
 
 const handleAddToPlaylist = async (playlistId: number) => {
-  if (!props.trackId) return;
+  if (props.type !== 'track') return;
 
   try {
     await invoke('add_track_to_playlist', {
       playlistId,
-      trackId: props.trackId,
+      trackId: entity.value.id,
     });
     closeDropdown();
   } catch (e) {
@@ -260,12 +279,12 @@ const handleRemoveFromQueue = async () => {
 };
 
 const handleDownload = async () => {
-  console.log('Download track:', props.trackId);
+  console.log('Download track:', entity.value.id);
   closeDropdown();
 };
 
 const handleAddToLibrary = async () => {
-  console.log('Add to library:', props.trackId);
+  console.log('Add to library:', entity.value.id);
   closeDropdown();
 };
 </script>
@@ -298,7 +317,6 @@ const handleAddToLibrary = async () => {
   }
 }
 
-// Type-specific borders
 .type-track {
   border-left: 3px solid #4caf50;
 }
@@ -311,7 +329,6 @@ const handleAddToLibrary = async () => {
   border-left: 3px solid #ff9800;
 }
 
-// Thumbnail
 .thumbnail {
   position: relative;
   width: 56px;
@@ -343,7 +360,6 @@ const handleAddToLibrary = async () => {
   font-size: $font-size-2xl;
 }
 
-// Play Overlay
 .playOverlay {
   position: absolute;
   top: 0;
@@ -374,7 +390,6 @@ const handleAddToLibrary = async () => {
   }
 }
 
-// Info Section
 .info {
   flex: 1;
   min-width: 0;
@@ -415,7 +430,6 @@ const handleAddToLibrary = async () => {
   color: var(--color-text-muted);
 }
 
-// Actions
 .actions {
   display: flex;
   align-items: center;
@@ -440,7 +454,6 @@ const handleAddToLibrary = async () => {
   }
 }
 
-// Dropdown Menu
 .dropdown {
   position: absolute;
   top: 100%;

@@ -122,51 +122,7 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { onClickOutside } from '@vueuse/core';
-
-interface StreamingTrack {
-  type: 'track';
-  title: string;
-  artist: string;
-  durationSecs?: number;
-  thumbnail?: string;
-  url: string;
-}
-
-interface StreamingPlaylist {
-  type: 'playlist';
-  id: string;
-  title: string;
-  creator: string;
-  trackCount: number;
-  thumbnail?: string;
-  url: string;
-}
-
-interface StreamingAlbum {
-  type: 'album';
-  id: string;
-  title: string;
-  artist: string;
-  trackCount: number;
-  year?: number;
-  thumbnail?: string;
-  url: string;
-}
-
-interface StreamingChannel {
-  type: 'channel';
-  id: string;
-  name: string;
-  subscriberCount?: number;
-  thumbnail?: string;
-  url: string;
-}
-
-type SearchResult =
-  | StreamingTrack
-  | StreamingPlaylist
-  | StreamingAlbum
-  | StreamingChannel;
+import type { SearchResult } from '@/types/types';
 
 const searchQuery = ref('');
 const selectedProvider = ref('bandcamp');

@@ -35,8 +35,8 @@
           type="playlist"
           :title="playlist.title"
           :artist="playlist.creator"
-          :thumbnail="playlist.thumbnail"
-          :track-count="playlist.trackCount"
+          :thumbnail="playlist?.thumbnail"
+          :track-count="playlist?.trackCount"
           @click="handlePlaylistClick(playlist)"
           @play="handlePlaylistPlay(playlist)"
         />
@@ -66,10 +66,8 @@
           v-for="track in tracks"
           :key="track.id"
           type="track"
-          :title="track.title"
-          :artist="track.artist"
-          :thumbnail="track.thumbnail"
-          :duration="track.duration"
+          show-action
+          :track="track"
           @click="handleTrackClick(track)"
           @play="handleTrackPlay(track)"
           @more="handleTrackMore(track)"
@@ -85,65 +83,22 @@ import { invoke } from '@tauri-apps/api/core';
 import MediaCard from '@/components/common/MediaCard.vue';
 import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
 import PlaylistCreateModal from '@/components/PlaylistCreateModal.vue';
+import type { PlaylistDto, TrackDto } from '@/types/types';
 
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
 
-interface Playlist {
-  id: number;
-  title: string;
-  creator: string;
-  trackCount: number;
-  thumbnail?: string;
-}
-
-interface Track {
-  id: number;
-  title: string;
-  artist: string;
-  duration: number;
-  thumbnail?: string;
-}
-
-interface TrackDto {
-  id: number;
-  title: string;
-  artist: string | null;
-  album: string | null;
-  duration_secs: number | null;
-  artwork_url: string | null;
-  play_count: number;
-}
-
-interface PlaylistDto {
-  id: number;
-  title: string;
-  description: string | null;
-  creator: string | null;
-  track_count: number;
-  created_at: number;
-  updated_at: number;
-}
-
-// State
-const playlists = ref<Playlist[]>([]);
-const tracks = ref<Track[]>([]);
+const playlists = ref<PlaylistDto[]>([]);
+const tracks = ref<TrackDto[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const isPlaylistModalOpen = ref(false);
 
-// Fetch data from backend
+
 const fetchPlaylists = async () => {
   try {
     const playlistDtos = await invoke<PlaylistDto[]>('get_all_playlists');
-
-    playlists.value = playlistDtos.map((dto) => ({
-      id: dto.id,
-      title: dto.title,
-      creator: dto.creator || 'Unknown',
-      trackCount: dto.track_count,
-      thumbnail: undefined,
-    }));
-  } catch (e) {
+    playlists.value = playlistDtos; 
+    } catch (e) {
     console.error('Failed to fetch playlists:', e);
     error.value = `Failed to load playlists: ${e}`;
   }
@@ -152,14 +107,7 @@ const fetchPlaylists = async () => {
 const fetchTracks = async () => {
   try {
     const trackDtos = await invoke<TrackDto[]>('get_all_tracks');
-
-    tracks.value = trackDtos.map((dto) => ({
-      id: dto.id,
-      title: dto.title,
-      artist: dto.artist || 'Unknown Artist',
-      duration: dto.duration_secs || 0,
-      thumbnail: dto.artwork_url || undefined,
-    }));
+    tracks.value = trackDtos;
   } catch (e) {
     console.error('Failed to fetch tracks:', e);
     error.value = `Failed to load tracks: ${e}`;
@@ -175,12 +123,12 @@ const loadData = async () => {
   loading.value = false;
 };
 
-// Load data on mount
+
 onMounted(() => {
   loadData();
 });
 
-// Handlers for playlists
+
 const handleAddPlaylist = () => {
   isPlaylistModalOpen.value = true;
 };
@@ -195,15 +143,15 @@ const handleModalClose = () => {
 
 const showAllPlaylists = () => {
   console.log('Show all playlists clicked');
-  // TODO: Navigate to playlists page
+  
 };
 
-const handlePlaylistClick = (playlist: Playlist) => {
+const handlePlaylistClick = (playlist: PlaylistDto) => {
   console.log('Playlist clicked:', playlist);
-  // TODO: Navigate to playlist detail page
+  
 };
 
-const handlePlaylistPlay = async (playlist: Playlist) => {
+const handlePlaylistPlay = async (playlist: PlaylistDto) => {
   console.log('Play playlist clicked:', playlist);
   try {
     await invoke('load_playlist_to_queue', { playlistId: playlist.id });
@@ -214,7 +162,7 @@ const handlePlaylistPlay = async (playlist: Playlist) => {
   }
 };
 
-// Handlers for tracks
+
 const handleAddTrack = async () => {
   try {
     const filePath = await invoke<string | null>('select_audio_file');
@@ -227,7 +175,7 @@ const handleAddTrack = async () => {
   }
 };
 
-const handleTrackClick = async (track: Track) => {
+const handleTrackClick = async (track: TrackDto) => {
   console.log('Track clicked:', track);
   try {
     await invoke('add_to_queue', { trackId: track.id });
@@ -237,7 +185,7 @@ const handleTrackClick = async (track: Track) => {
   }
 };
 
-const handleTrackPlay = async (track: Track) => {
+const handleTrackPlay = async (track: TrackDto) => {
   console.log('Play track clicked:', track);
   try {
     await invoke('clear_queue');
@@ -249,9 +197,9 @@ const handleTrackPlay = async (track: Track) => {
   }
 };
 
-const handleTrackMore = (track: Track) => {
+const handleTrackMore = (track: TrackDto) => {
   console.log('Track more clicked:', track);
-  // TODO: Show context menu
+  
 };
 </script>
 
@@ -320,7 +268,7 @@ const handleTrackMore = (track: Track) => {
   gap: $spacing-sm;
 }
 
-// Empty State
+
 .emptyState {
   display: flex;
   flex-direction: column;
