@@ -65,7 +65,8 @@ impl BandcampProvider {
             .into_iter()
             .take(1)
             .collect::<Vec<(String, String)>>();
-        if urls.len() == 0 {
+
+        if urls.is_empty() {
             return None;
         };
         let track_url = &urls[0].1;
@@ -76,10 +77,10 @@ impl BandcampProvider {
                 id: track_url.clone(),
             },
             title: track.title,
-            artist: "Unknown Artist".to_string(),
+            artist: track.band_name,
             duration,
-            thumbnail: None,
-            description: None,
+            thumbnail: track.image.get_url(),
+            description: track.label,
         })
     }
 }
@@ -192,12 +193,17 @@ impl StreamProvider for BandcampProvider {
                 let album = bandcamp::album_from_url(url).await.map_err(|e| {
                     StreamError::MetadataError(format!("Bandcamp API error: {:?}", e))
                 })?;
-                tracing::info!("IA EXPANDED{:?}", album);
-
+                let img_url = album.image.get_url();
                 let track_sources: Vec<TrackInfo> = album
                     .tracks
                     .into_iter()
                     .filter_map(|track| Self::convert_track_to_track_info(track, url))
+                    .map(|mut track| {
+                        if track.thumbnail.is_none() {
+                            track.thumbnail = img_url.clone();
+                        }
+                        track
+                    })
                     .collect();
 
                 Ok(track_sources)

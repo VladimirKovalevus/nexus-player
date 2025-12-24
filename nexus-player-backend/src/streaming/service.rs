@@ -68,7 +68,6 @@ impl StreamingService {
     pub async fn expand_album(&self, search: AlbumInfo) -> StreamResult<Vec<TrackInfo>> {
         let provider_name = search.service.name().to_lowercase();
         if let Some(provider) = self.providers.get(&provider_name) {
-            tracing::info!("provider {:?}", provider.is_available().await);
             provider
                 .expand_collection(SearchResult::Album(search))
                 .await
