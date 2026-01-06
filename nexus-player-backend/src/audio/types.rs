@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
+use streaming::multi_downloader::source::HlsSource;
 use symphonia::core::io::MediaSource as SymphoniaSource;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +24,8 @@ pub enum AudioCommand {
     Play(Track),
 
     PlaySource(Box<dyn MediaSource>),
+
+    PlayHLS(HlsSource),
 
     Pause,
 

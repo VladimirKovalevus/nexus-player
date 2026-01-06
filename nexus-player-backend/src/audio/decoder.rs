@@ -1,7 +1,10 @@
+use crate::audio::hls_decoder::HlsAudioDecoder;
 use crate::audio::types::MediaSource;
 use crate::error::AudioError;
+use lofty::probe;
 use std::io::{Read, Seek};
 use std::path::Path;
+use streaming::multi_downloader::source::HlsSource;
 use symphonia::core::audio::AudioBufferRef;
 use symphonia::core::codecs::{Decoder, DecoderOptions};
 use symphonia::core::errors::Error;
@@ -236,5 +239,55 @@ impl AudioDecoder {
         sample_buf.copy_interleaved_ref(buffer);
 
         Ok(sample_buf.samples().to_vec())
+    }
+}
+
+pub enum DecoderType {
+    Standard(AudioDecoder),
+    Hls(HlsAudioDecoder),
+}
+
+impl DecoderType {
+    pub fn from_standard(decoder: AudioDecoder) -> Self {
+        Self::Standard(decoder)
+    }
+
+    pub fn from_hls(decoder: HlsAudioDecoder) -> Self {
+        Self::Hls(decoder)
+    }
+
+    pub fn decode_next_block(&mut self) -> Result<Option<Vec<f32>>, AudioError> {
+        match self {
+            Self::Standard(d) => d.decode_next_block(),
+            Self::Hls(d) => d.decode_next_block(),
+        }
+    }
+
+    pub fn seek(&mut self, time_secs: f64) -> Result<u64, AudioError> {
+        match self {
+            Self::Standard(d) => d.seek(time_secs),
+            Self::Hls(d) => d.seek(time_secs),
+        }
+    }
+
+    pub fn duration(&self) -> Option<f64> {
+        match self {
+            Self::Standard(d) => d.duration(),
+            Self::Hls(d) => d.duration(),
+        }
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        match self {
+            Self::Standard(d) => d.sample_rate(),
+            Self::Hls(d) => d.sample_rate(),
+        }
+    }
+
+    pub fn channels(&self) -> usize {
+        match self {
+            Self::Standard(d) => d.channels(),
+            Self::Hls(d) => d.channels(),
+        }
     }
 }

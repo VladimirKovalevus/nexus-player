@@ -4,8 +4,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::audio::types::{MediaSource, TrackSource};
-use crate::streaming::external::StreamingMediaSource;
+use crate::streaming::external::{StreamingMediaSource, StreamingSourceWrapper};
 use crate::streaming::types::{AlbumInfo, TrackInfo};
+use streaming::multi_downloader::source::Source;
 
 use super::cache::CacheManager;
 use super::error::{StreamError, StreamResult};
@@ -80,15 +81,16 @@ impl StreamingService {
         &self,
         source: TrackSource,
         track_id: u64,
-    ) -> StreamResult<Box<dyn MediaSource>> {
+    ) -> StreamResult<StreamingSourceWrapper> {
         match source {
             TrackSource::Local(path) => {
                 let file = File::open(path)?;
-                Ok(Box::new(file))
+                Ok(StreamingSourceWrapper::Streaming(Box::new(file)))
             }
             TrackSource::Http(_) => {
                 if let Some(ytdlp_provider) = self.providers.get("ytdlp") {
-                    ytdlp_provider.get_stream(&source).await
+                    let media_source = ytdlp_provider.get_stream(&source).await?;
+                    Ok(StreamingSourceWrapper::Streaming(media_source))
                 } else {
                     Err(StreamError::NoProviderFound)
                 }
@@ -97,12 +99,12 @@ impl StreamingService {
                 if let Some(provider) = self.providers.get(&system) {
                     let source = TrackSource::External { system, id };
                     if let Some(stream) = self.download_manager.get_track(track_id).await {
-                        Ok(Box::new(StreamingMediaSource(stream)))
+                        Ok(StreamingSourceWrapper::from_source(stream))
                     } else {
                         match provider.resolve(&source).await {
                             Ok(url) => {
                                 match self.download_manager.add_track(&url, track_id).await {
-                                    Ok(s) => Ok(Box::new(StreamingMediaSource(s))),
+                                    Ok(s) => Ok(StreamingSourceWrapper::from_source(s)),
                                     Err(e) => Err(StreamError::Other(e.to_string())),
                                 }
                             }
@@ -122,6 +124,6 @@ impl StreamingService {
             .await;
     }
     pub async fn debug(&self) {
-        let _ = self.download_manager.debug_to_file().await;
+        // let _ = self.download_manager.debug_to_file().await;
     }
 }

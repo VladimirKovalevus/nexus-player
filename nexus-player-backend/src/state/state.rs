@@ -6,6 +6,7 @@ use crate::library::models::{Metadata, Playlist as LibraryPlaylist, Track as Lib
 use crate::library::{LibraryService, PlaylistId, TrackId};
 use crate::playlist::playback_queue::{PlaybackQueue, RepeatMode};
 use crate::playlist::playlist::Playlist;
+use crate::streaming::external::StreamingSourceWrapper;
 use crate::streaming::StreamingService;
 use anyhow::{Context, Result};
 use arc_swap::ArcSwap;
@@ -101,8 +102,15 @@ impl AppState {
                 .resolve(track.source, track.id as u64)
                 .await
             {
-                Ok(audio) => {
-                    self.audio_engine().play_source(audio);
+                Ok(wrapper) => {
+                    match wrapper {
+                        StreamingSourceWrapper::Streaming(source) => {
+                            self.audio_engine().play_source(source);
+                        }
+                        StreamingSourceWrapper::Hls(hls) => {
+                            self.audio_engine().play_hls(hls);
+                        }
+                    }
 
                     let current_id = track.id as u64;
                     let q = self.queue();

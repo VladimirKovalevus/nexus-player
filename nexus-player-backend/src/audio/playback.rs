@@ -1,4 +1,5 @@
-use super::decoder::AudioDecoder;
+use super::decoder::{AudioDecoder, DecoderType};
+use super::hls_decoder::HlsAudioDecoder;
 use crate::audio::types::{AudioSource, MediaSource, SampleRate, TrackSource};
 use crate::error::AudioError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -8,10 +9,11 @@ use std::result;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
+use streaming::multi_downloader::source::HlsSource;
 use tracing::{info, warn};
 
 pub struct PlaybackEngine {
-    decoder: Arc<Mutex<Option<AudioDecoder>>>,
+    decoder: Arc<Mutex<Option<DecoderType>>>,
     stream: Option<Stream>,
     device: Device,
     config: StreamConfig,
@@ -89,7 +91,35 @@ impl PlaybackEngine {
         );
 
         self.duration = duration;
-        *self.decoder.lock().unwrap() = Some(decoder);
+        *self.decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
+        *self.is_playing.lock().unwrap() = true;
+        *self.current_position.lock().unwrap() = Duration::ZERO;
+        *self.sample_rate.lock().unwrap() = sample_rate;
+        *self.samples_played.lock().unwrap() = 0;
+
+        self.sample_buffer.lock().unwrap().clear();
+        *self.buffer_position.lock().unwrap() = 0;
+
+        self.create_stream(sample_rate, channels)?;
+
+        Ok(())
+    }
+
+    pub fn play_hls(&mut self, hls_source: HlsSource) -> Result<(), AudioError> {
+        info!("Загрузка HLS потока");
+
+        let decoder = HlsAudioDecoder::new(hls_source)?;
+        let duration = decoder.duration().map(Duration::from_secs_f64);
+        let sample_rate = decoder.sample_rate();
+        let channels = decoder.channels();
+
+        info!(
+            "HLS: sample_rate={}, channels={}, duration={:?}",
+            sample_rate, channels, duration
+        );
+
+        self.duration = duration;
+        *self.decoder.lock().unwrap() = Some(DecoderType::from_hls(decoder));
         *self.is_playing.lock().unwrap() = true;
         *self.current_position.lock().unwrap() = Duration::ZERO;
         *self.sample_rate.lock().unwrap() = sample_rate;
@@ -116,7 +146,7 @@ impl PlaybackEngine {
         );
 
         self.duration = duration;
-        *self.decoder.lock().unwrap() = Some(decoder);
+        *self.decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
         *self.is_playing.lock().unwrap() = true;
         *self.current_position.lock().unwrap() = Duration::ZERO;
         *self.sample_rate.lock().unwrap() = sample_rate;

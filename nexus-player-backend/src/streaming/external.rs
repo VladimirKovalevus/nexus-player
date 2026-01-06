@@ -1,7 +1,25 @@
 use std::io::{Read, Seek, SeekFrom};
-use streaming::multi_downloader::source::StreamingSourceV2;
+use streaming::multi_downloader::source::{HlsSource, StreamingSourceV2};
 
 pub struct StreamingMediaSource(pub StreamingSourceV2);
+
+pub enum StreamingSourceWrapper {
+    Hls(HlsSource),
+    Streaming(Box<dyn crate::audio::types::MediaSource>),
+}
+
+impl StreamingSourceWrapper {
+    pub fn from_source(source: streaming::multi_downloader::source::Source) -> Self {
+        match source {
+            streaming::multi_downloader::source::Source::Hls(hls) => {
+                StreamingSourceWrapper::Hls(hls)
+            }
+            streaming::multi_downloader::source::Source::Streaming(s) => {
+                StreamingSourceWrapper::Streaming(Box::new(StreamingMediaSource(s)))
+            }
+        }
+    }
+}
 
 impl Read for StreamingMediaSource {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {

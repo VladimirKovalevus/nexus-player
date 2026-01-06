@@ -8,6 +8,7 @@ use crossbeam::channel::{Receiver, Sender};
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
+use streaming::multi_downloader::source::HlsSource;
 use tracing::{info, warn};
 
 const COMMAND_BUFFER_SIZE: usize = 32;
@@ -46,6 +47,10 @@ impl AudioEngine {
     pub fn play_source(&self, audio: Box<dyn MediaSource>) {
         info!("Команда: воспроизвести трек ");
         let _ = self.command_tx.send(AudioCommand::PlaySource(audio));
+    }
+    pub fn play_hls(&self, hls: HlsSource) {
+        info!("Команда: воспроизвести трек ");
+        let _ = self.command_tx.send(AudioCommand::PlayHLS(hls));
     }
 
     pub fn pause(&self) {
@@ -144,9 +149,37 @@ impl AudioEngine {
 
             // Обработка команд
             match command_rx.recv_timeout(Duration::from_millis(10)) {
+                Ok(AudioCommand::PlayHLS(hls_source)) => {
+                    let result = playback.play_hls(hls_source);
+                    match result {
+                        Ok(_) => {
+                            let duration = playback.duration().unwrap_or(Duration::ZERO);
+
+                            {
+                                let mut s = state.write().unwrap();
+                                s.playback_state = PlaybackState::Playing;
+                                s.position = Duration::ZERO;
+                                s.duration = duration;
+                            }
+
+                            if duration > Duration::ZERO {
+                                let _ = event_tx.send(AudioEvent::DurationChanged { duration });
+                            }
+                            last_position_update = std::time::Instant::now();
+
+                            let _ = event_tx.send(AudioEvent::PlaybackStarted);
+                            info!("HLS воспроизведение началось, длительность: {:?}", duration);
+                        }
+                        Err(e) => {
+                            warn!("Ошибка HLS воспроизведения: {}", e);
+                            let _ = event_tx.send(AudioEvent::Error {
+                                message: format!("Ошибка HLS воспроизведения: {}", e),
+                            });
+                        }
+                    }
+                }
                 Ok(AudioCommand::Play(track)) => {
                     let result = playback.play(&track.source);
-
                     match result {
                         Ok(_) => {
                             // Получаем длительность
