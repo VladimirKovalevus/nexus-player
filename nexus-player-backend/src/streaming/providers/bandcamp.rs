@@ -70,7 +70,6 @@ impl BandcampProvider {
             return None;
         };
         let track_url = &urls[0].1;
-
         Some(TrackInfo {
             source: TrackSource::External {
                 system: "bandcamp".to_string(),
@@ -94,7 +93,7 @@ impl StreamProvider for BandcampProvider {
     async fn resolve(&self, source: &TrackSource) -> StreamResult<String> {
         match source {
             TrackSource::Http(url) => Ok(url.clone()),
-            TrackSource::External { id: id, system: _ } => Ok(id.clone()),
+            TrackSource::External { id: id, system: _ } => self.ytdlp.resolve(source).await,
             _ => Err(StreamError::NotSupported),
         }
     }

@@ -4453,8 +4453,6 @@ dependencies = [
 [[package]]
 name = "rsoundcloud"
 version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "669a3b81c6c2745ec98f56ca717a90df7f5b63a34455c0570e3ef39f6b5d9f84"
 dependencies = [
  "async-stream",
  "async-trait",
