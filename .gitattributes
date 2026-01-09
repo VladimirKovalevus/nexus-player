@@ -1,0 +1,36 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Source code
+*.rs text eol=lf
+*.toml text eol=lf
+*.vue text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
+*.md text eol=lf
+
+# Configuration files
+*.yml text eol=lf
+*.yaml text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Scripts
+*.sh text eol=lf
+
+# Exclude files from linguist statistics
+node_modules/** linguist-vendored
+target/** linguist-generated
+dist/** linguist-generated
+*.lock linguist-generated
+package-lock.json linguist-generated
+Cargo.lock linguist-generated
+
+# Mark main languages for GitHub linguist
+*.rs linguist-language=Rust
+*.vue linguist-language=Vue
+*.ts linguist-language=TypeScript
