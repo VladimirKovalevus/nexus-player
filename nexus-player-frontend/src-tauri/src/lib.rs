@@ -50,6 +50,7 @@ pub fn run() {
             commands::get_playlist_with_tracks,
             commands::create_playlist,
             commands::delete_playlist,
+            commands::create_playlist_with_tracks,
             commands::add_track_to_playlist,
             commands::remove_track_from_playlist,
             commands::add_to_queue,
@@ -73,6 +74,7 @@ pub fn run() {
             commands::select_audio_files,
             commands::search_streaming,
             commands::handle_streaming_track,
+            commands::save_track_to_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

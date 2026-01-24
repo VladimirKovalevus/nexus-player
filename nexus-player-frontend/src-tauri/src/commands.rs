@@ -1,11 +1,14 @@
-use crate::dto::*;
+use crate::dto::{
+    AudioStateDto, CreatePlaylistRequest, CreatePlaylistWithTracksRequest, PlaylistDto,
+    PlaylistWithTracksDto, QueueStateDto, SearchResultDto, TrackDto,
+};
 use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
 use nexus_player_backend::library::types::{
     AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackSource,
 };
 use nexus_player_backend::state::state::AppState;
 use nexus_player_backend::streaming::types::{ContentType, ResolvedContent, SearchResult};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::State;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
@@ -135,6 +138,21 @@ pub async fn delete_playlist(state: State<'_, Arc<AppState>>, playlist_id: i64) 
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn create_playlist_with_tracks(
+    state: State<'_, Arc<AppState>>,
+    request: CreatePlaylistWithTracksRequest,
+) -> Result<i64> {
+    let audio_tracks: Vec<_> = request.tracks.iter().map(|t| t.to_audio_track()).collect();
+
+    let playlist_id = state
+        .create_playlist_with_tracks(request.title, request.description, audio_tracks)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(playlist_id.0)
 }
 
 #[tauri::command]
@@ -403,4 +421,22 @@ pub async fn handle_streaming_track(
         DownloadStrategy::Stream => Err("Stream strategy not yet implemented".into()),
         DownloadStrategy::Progressive => Err("Progressive strategy not yet implemented".into()),
     }
+}
+
+#[tauri::command]
+pub async fn save_track_to_file(
+    state: State<'_, Arc<AppState>>,
+    track_id: i64,
+) -> Result<()> {
+    let downloads_dir = Path::new("/home/syndafloden/.cache/downloads");
+    std::fs::create_dir_all(downloads_dir).map_err(|e| e.to_string())?;
+
+    let file_path = state
+        .streaming()
+        .save_track_to_file(track_id as u64, downloads_dir)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    tracing::info!("Track saved to {:?}", file_path);
+    Ok(())
 }

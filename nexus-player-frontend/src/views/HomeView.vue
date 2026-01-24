@@ -39,6 +39,7 @@
           :track-count="playlist?.trackCount"
           @click="handlePlaylistClick(playlist)"
           @play="handlePlaylistPlay(playlist)"
+          @delete="handlePlaylistDelete(playlist)"
         />
       </div>
     </section>
@@ -159,6 +160,15 @@ const handlePlaylistPlay = async (playlist: PlaylistDto) => {
     refreshQueue();
   } catch (e) {
     console.error('Failed to play playlist:', e);
+  }
+};
+
+const handlePlaylistDelete = async (playlist: PlaylistDto) => {
+  try {
+    await invoke('delete_playlist', { playlistId: playlist.id });
+    await fetchPlaylists();
+  } catch (e) {
+    console.error('Failed to delete playlist:', e);
   }
 };
 

@@ -3,10 +3,10 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder,
+    QueryOrder, QuerySelect, QueryTrait,
 };
 
-use crate::library::entities_v2::track;
+use crate::library::entities_v2::{playlist_track, track};
 use crate::library::models::Track;
 use crate::library::repository_v2::TrackRepositoryV2;
 use crate::library::types::TrackId;
@@ -130,6 +130,14 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
 
     async fn list_all(&self) -> Result<Vec<Track>> {
         let entities = track::Entity::find()
+            .filter(
+                track::Column::Id.not_in_subquery(
+                    playlist_track::Entity::find()
+                        .select_only()
+                        .column(playlist_track::Column::TrackId)
+                        .into_query(),
+                ),
+            )
             .order_by_desc(track::Column::AddedAt)
             .all(&self.db)
             .await

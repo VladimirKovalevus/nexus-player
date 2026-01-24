@@ -112,7 +112,6 @@
     <div :class="$style.user">
       <button :class="$style.userButton">
         <span :class="$style.userAvatar">👤</span>
-        <span :class="$style.userName">CoNo_Oavka</span>
       </button>
     </div>
   </header>

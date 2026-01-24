@@ -16,6 +16,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const seeking = ref(false);
 const seekPosition = ref(0);
+const isLoading = ref(false);
 let updateInterval: number | null = null;
 let unlistenFn: (() => void) | null = null;
 
@@ -47,35 +48,43 @@ const fetchQueueState = async () => {
 };
 
 const togglePlayPause = async () => {
+  isLoading.value = true;
   try {
     if (audioStore.isPlaying) {
       await invoke('pause');
     } else if (audioStore.isPaused) {
       await invoke('resume');
-    } else if (audioStore.isStopped) {
+      }
+    if (audioStore.isStopped) {
+
       await invoke('play_at_index', { index: 0 });
     }
-    await fetchAudioState();
   } catch (e) {
     console.error('Failed to toggle play/pause:', e);
+  } finally {
+    isLoading.value = false;
   }
 };
 
 const playNext = async () => {
+  isLoading.value = true;
   try {
     await invoke('play_next');
-    await fetchAudioState();
   } catch (e) {
     console.error('Failed to play next:', e);
+  } finally {
+    isLoading.value = false;
   }
 };
 
 const playPrevious = async () => {
+  isLoading.value = true;
   try {
     await invoke('play_previous');
-    await fetchAudioState();
   } catch (e) {
     console.error('Failed to play previous:', e);
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -231,25 +240,41 @@ onUnmounted(() => {
         @click="toggleShuffleMode"
         :class="{ active: audioStore.shuffleEnabled }"
         title="Shuffle"
+        :disabled="isLoading"
       >
         🔀
       </button>
-      <button class="control-btn" @click="playPrevious" title="Previous">
+      <button
+        class="control-btn"
+        @click="playPrevious"
+        title="Previous"
+        :disabled="isLoading"
+      >
         ⏮
       </button>
       <button
         class="control-btn play-btn"
         @click="togglePlayPause"
         title="Play/Pause"
+        :disabled="isLoading"
       >
-        {{ audioStore.isPlaying ? '⏸' : '▶' }}
+        <span v-if="isLoading" class="loader">● ● ●</span>
+        <span v-else>{{ audioStore.isPlaying ? '⏸' : '▶' }}</span>
       </button>
-      <button class="control-btn" @click="playNext" title="Next">⏭</button>
+      <button
+        class="control-btn"
+        @click="playNext"
+        title="Next"
+        :disabled="isLoading"
+      >
+        ⏭
+      </button>
       <button
         class="control-btn small-btn"
         @click="cycleRepeatMode"
         :class="{ active: audioStore.repeatMode !== 'off' }"
         :title="`Repeat: ${audioStore.repeatMode}`"
+        :disabled="isLoading"
       >
         {{ audioStore.repeatIcon }}
       </button>
@@ -269,6 +294,7 @@ onUnmounted(() => {
           @input="onSeekChange"
           @mouseup="onSeekEnd"
           @touchend="onSeekEnd"
+          :disabled="isLoading"
         />
         <span class="time">{{ formatTime(audioStore.duration) }}</span>
       </div>
@@ -401,6 +427,17 @@ onUnmounted(() => {
 .control-btn.active {
   background-color: var(--color-accent-primary);
   color: white;
+}
+
+.loader {
+  display: inline-block;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
 }
 
 .bottom-section {

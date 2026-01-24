@@ -26,27 +26,55 @@ pub trait TrackRepositoryV2: Send + Sync {
 }
 
 #[async_trait]
+
 pub trait PlaylistRepositoryV2: Send + Sync {
+
     async fn create(&self, playlist: Playlist) -> Result<PlaylistId>;
+
+
 
     async fn get(&self, id: PlaylistId) -> Result<Option<Playlist>>;
 
+
+
     async fn get_with_tracks(&self, id: PlaylistId) -> Result<Option<PlaylistWithTracks>>;
+
+
+
+    async fn find_by_title(&self, title: &str) -> Result<Option<Playlist>>;
+
+
 
     async fn update(&self, playlist: Playlist) -> Result<()>;
 
+
+
     async fn delete(&self, id: PlaylistId) -> Result<()>;
+
+
 
     async fn list_all(&self) -> Result<Vec<Playlist>>;
 
+
+
     async fn add_track(
+
         &self,
+
         playlist_id: PlaylistId,
+
         track_id: TrackId,
+
         position: u32,
+
     ) -> Result<()>;
+
+
 
     async fn remove_track(&self, playlist_id: PlaylistId, track_id: TrackId) -> Result<()>;
 
+
+
     async fn reorder_tracks(&self, playlist_id: PlaylistId, track_ids: Vec<TrackId>) -> Result<()>;
+
 }

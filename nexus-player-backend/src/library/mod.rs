@@ -1,4 +1,3 @@
-mod db;
 mod db_v2;
 
 pub mod convert;
@@ -16,7 +15,6 @@ pub use types::{ArtworkId, AudioInfo, CacheStatus, CodecFormat, PlaylistId, Trac
 pub use repository::{PlaylistRepository, TrackRepository};
 pub use repository_v2::{PlaylistRepositoryV2, TrackRepositoryV2};
 
-pub use db::{SqlitePlaylistRepository, SqliteTrackRepository};
 pub use db_v2::{SeaOrmPlaylistRepository, SeaOrmTrackRepository};
 
 pub use service::LibraryService;

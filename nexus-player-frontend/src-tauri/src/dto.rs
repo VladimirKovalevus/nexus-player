@@ -15,6 +15,7 @@ pub struct TrackDto {
     pub artwork_url: Option<String>,
     pub play_count: u64,
     pub state: TrackStateDto,
+    pub source: Option<TrackSourceDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,6 +72,49 @@ pub struct CreatePlaylistRequest {
     pub description: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePlaylistWithTracksRequest {
+    pub title: String,
+    pub description: Option<String>,
+    pub tracks: Vec<TrackDto>,
+}
+
+impl TrackDto {
+    pub fn to_audio_track(&self) -> nexus_player_backend::audio::types::Track {
+        use nexus_player_backend::audio::types::{Track, TrackSource, TrackState};
+
+        let source = match &self.source {
+            Some(src) => TrackSource::External {
+                id: src.url.clone(),
+                system: src.system.clone(),
+            },
+            None => TrackSource::External {
+                id: String::new(),
+                system: "unknown".to_string(),
+            },
+        };
+
+        let state = match &self.state {
+            TrackStateDto::Saved => TrackState::Saved,
+            TrackStateDto::Streaming => TrackState::Streaming,
+            TrackStateDto::Cached => TrackState::Cached,
+        };
+
+        Track {
+            id: self.id as usize,
+            title: self.title.clone(),
+            artist: self.artist.clone(),
+            album: self.album.clone(),
+            duration: self.duration_secs.map(std::time::Duration::from_secs_f64),
+            artwork_url: self.artwork_url.clone(),
+            format: None,
+            source,
+            state,
+        }
+    }
+}
+
 use nexus_player_backend::audio::types::{self as audio};
 use nexus_player_backend::library::models;
 
@@ -88,6 +132,7 @@ impl From<models::Track> for TrackDto {
             artwork_url: None,
             play_count: track.play_count,
             state: TrackStateDto::Saved,
+            source: Some(track.source.into()),
         }
     }
 }
@@ -103,6 +148,7 @@ impl From<audio::Track> for TrackDto {
             artwork_url: track.artwork_url,
             play_count: 0,
             state: track.state.into(),
+            source: Some(track.source.into()),
         }
     }
 }
@@ -118,6 +164,7 @@ impl From<&audio::Track> for TrackDto {
             artwork_url: track.artwork_url.clone(),
             play_count: 0,
             state: track.state.clone().into(),
+            source: Some(track.source.clone().into()),
         }
     }
 }
@@ -212,6 +259,25 @@ pub struct StreamingTrackDto {
     pub thumbnail: Option<String>,
     pub source: TrackSourceDto,
     pub state: TrackStateDto,
+}
+
+impl From<nexus_player_backend::audio::types::TrackSource> for TrackSourceDto {
+    fn from(track_source: nexus_player_backend::audio::types::TrackSource) -> Self {
+        match track_source {
+            nexus_player_backend::audio::types::TrackSource::External { id, system } => {
+                Self {
+                    url: id,
+                    system,
+                }
+            }
+            _ => {
+                Self {
+                    url: track_source.as_str(),
+                    system: "unknown".to_string(),
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

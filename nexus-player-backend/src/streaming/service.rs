@@ -82,15 +82,16 @@ impl StreamingService {
         source: TrackSource,
         track_id: u64,
     ) -> StreamResult<StreamingSourceWrapper> {
+        println!("Source {:?}", source);
         match source {
             TrackSource::Local(path) => {
                 let file = File::open(path)?;
-                Ok(StreamingSourceWrapper::Streaming(Box::new(file)))
+                Ok(StreamingSourceWrapper::Local(Box::new(file)))
             }
             TrackSource::Http(_) => {
                 if let Some(ytdlp_provider) = self.providers.get("ytdlp") {
                     let media_source = ytdlp_provider.get_stream(&source).await?;
-                    Ok(StreamingSourceWrapper::Streaming(media_source))
+                    Ok(StreamingSourceWrapper::Local(media_source))
                 } else {
                     Err(StreamError::NoProviderFound)
                 }
@@ -125,5 +126,31 @@ impl StreamingService {
     }
     pub async fn debug(&self) {
         // let _ = self.download_manager.debug_to_file().await;
+    }
+
+    pub async fn save_track_to_file(
+        &self,
+        track_id: u64,
+        dir: &std::path::Path,
+    ) -> StreamResult<std::path::PathBuf> {
+        if let Some((source, url)) = self.download_manager.get_track_with_url(track_id).await {
+            let sanitized_filename: String = url
+                .chars()
+                .map(|c| match c {
+                    '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+                    _ => c,
+                })
+                .collect();
+
+            let file_path = dir.join(format!("{}.mp3", sanitized_filename));
+
+            source
+                .save_to_file(&file_path)
+                .map_err(|e| StreamError::Other(e.to_string()))?;
+
+            Ok(file_path)
+        } else {
+            Err(StreamError::Other("Track not found in download manager".to_string()))
+        }
     }
 }

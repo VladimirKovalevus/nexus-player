@@ -103,15 +103,6 @@ impl AppState {
                 .await
             {
                 Ok(wrapper) => {
-                    match wrapper {
-                        StreamingSourceWrapper::Streaming(source) => {
-                            self.audio_engine().play_source(source);
-                        }
-                        StreamingSourceWrapper::Hls(hls) => {
-                            self.audio_engine().play_hls(hls);
-                        }
-                    }
-
                     let current_id = track.id as u64;
                     let q = self.queue();
                     let next_track = q.peek_next();
@@ -127,6 +118,23 @@ impl AppState {
                         }
                     } else {
                         self.streaming().set_context(current_id, None).await;
+                    }
+
+                    if let Err(e) = wrapper.prepare().await {
+                        tracing::warn!("Prepare failed: {}", e);
+                        return;
+                    }
+
+                    match wrapper {
+                        StreamingSourceWrapper::Streaming(source) => {
+                            self.audio_engine().play_source(Box::new(source));
+                        }
+                        StreamingSourceWrapper::Hls(hls) => {
+                            self.audio_engine().play_hls(hls);
+                        }
+                        StreamingSourceWrapper::Local(source) => {
+                            self.audio_engine().play_source(source);
+                        }
                     }
                 }
                 Err(e) => {
@@ -361,6 +369,25 @@ impl AppState {
         self.library.delete_playlist(playlist_id).await?;
         tracing::info!("Плейлист {} удален", playlist_id.0);
         Ok(())
+    }
+
+    pub async fn create_playlist_with_tracks(
+        &self,
+        title: String,
+        description: Option<String>,
+        tracks: Vec<AudioTrack>,
+    ) -> Result<PlaylistId> {
+        let mut playlist = Playlist::new(title);
+        playlist.description = description;
+        playlist.add_tracks(tracks);
+
+        let result = self.library.create_playlist_with_tracks(playlist).await?;
+        tracing::info!(
+            "Плейлист {} создан с {} треками",
+            result.playlist.id.0,
+            result.tracks.len()
+        );
+        Ok(result.playlist.id)
     }
 
     pub fn set_repeat_mode(&self, mode: RepeatMode) {

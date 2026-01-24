@@ -14,6 +14,7 @@ use super::{
     SeaOrmTrackRepository, TrackId, TrackRepositoryV2,
 };
 use crate::db;
+use chrono::Utc;
 
 /// Service for managing music library (tracks and playlists)
 pub struct LibraryService {
@@ -36,6 +37,22 @@ impl LibraryService {
         let playlist_repo: Arc<dyn PlaylistRepositoryV2> =
             Arc::new(SeaOrmPlaylistRepository::new(db.clone()));
 
+        if playlist_repo.find_by_title("Liked Songs").await?.is_none() {
+            let now = Utc::now();
+            let liked_songs_playlist = models::Playlist {
+                id: PlaylistId(0),
+                metadata: models::Metadata {
+                    title: "Liked Songs".to_string(),
+                    description: Some("Your favorite tracks".to_string()),
+                    artwork: None,
+                },
+                creator: None,
+                created_at: now,
+                updated_at: now,
+            };
+            playlist_repo.create(liked_songs_playlist).await?;
+        }
+
         Ok(Self {
             pool,
             db,
@@ -50,7 +67,17 @@ impl LibraryService {
 
     /// Add a new track to the library
     pub async fn add_track(&self, track: models::Track) -> Result<TrackId> {
-        self.track_repo.insert(track).await
+        let track_id = self.track_repo.insert(track).await?;
+        if let Some(master_playlist) = self
+            .playlist_repo
+            .find_by_title("Liked Songs")
+            .await
+            .context("Failed to find master playlist")?
+        {
+            self.add_track_to_playlist(master_playlist.id, track_id)
+                .await?;
+        }
+        Ok(track_id)
     }
 
     /// Get track by ID

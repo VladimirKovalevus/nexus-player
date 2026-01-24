@@ -21,6 +21,20 @@
       <div v-if="type !== 'track'" :class="$style.typeBadge">
         {{ typeBadgeText }}
       </div>
+
+      <button
+        v-if="type === 'playlist'"
+        :class="$style.menuButton"
+        @click.stop="toggleMenu"
+      >
+        <span :class="$style.dots">⋮</span>
+      </button>
+
+      <div v-if="menuOpen" :class="$style.dropdownMenu" @click.stop>
+        <button :class="$style.menuItem" @click.stop="handleDelete">
+          Delete
+        </button>
+      </div>
     </div>
 
     <div :class="$style.info">
@@ -31,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 interface Props {
   type: 'track' | 'playlist' | 'album';
@@ -49,7 +63,19 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   click: [];
   play: [];
+  delete: [];
 }>();
+
+const menuOpen = ref(false);
+
+const toggleMenu = () => {
+  menuOpen.value = !menuOpen.value;
+};
+
+const handleDelete = () => {
+  menuOpen.value = false;
+  emit('delete');
+};
 
 const placeholderIcon = computed(() => {
   switch (props.type) {
@@ -190,6 +216,68 @@ const handlePlay = () => {
   text-transform: uppercase;
   border-radius: $radius-sm;
   backdrop-filter: blur(4px);
+}
+
+// Menu Button
+.menuButton {
+  position: absolute;
+  top: $spacing-sm;
+  left: $spacing-sm;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  @include flex-center;
+  font-size: $font-size-lg;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity $transition-fast, background-color $transition-fast;
+  backdrop-filter: blur(4px);
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.9);
+  }
+}
+
+.mediaCardCompact:hover .menuButton {
+  opacity: 1;
+}
+
+.dots {
+  font-weight: bold;
+  line-height: 1;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: calc(#{$spacing-sm} + 32px);
+  left: $spacing-sm;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: $radius-md;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  min-width: 100px;
+  overflow: hidden;
+}
+
+.menuItem {
+  display: block;
+  width: 100%;
+  padding: $spacing-sm $spacing-md;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: $font-size-sm;
+  color: #e74c3c;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: var(--color-bg-secondary);
+  }
 }
 
 // Info Section

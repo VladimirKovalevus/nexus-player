@@ -10,6 +10,7 @@ const emit = defineEmits<{
 const playlists = ref<any[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
+const openMenuId = ref<number | null>(null);
 
 // Fetch all playlists on component mount
 onMounted(async () => {
@@ -53,6 +54,29 @@ const formatDate = (timestamp: number): string => {
   return new Date(timestamp * 1000).toLocaleDateString();
 };
 
+// Toggle menu for a playlist
+const toggleMenu = (playlistId: number, event: Event) => {
+  event.stopPropagation();
+  openMenuId.value = openMenuId.value === playlistId ? null : playlistId;
+};
+
+// Close menu when clicking outside
+const closeMenu = () => {
+  openMenuId.value = null;
+};
+
+// Delete playlist
+const deletePlaylist = async (playlistId: number, event: Event) => {
+  event.stopPropagation();
+  try {
+    await invoke('delete_playlist', { playlistId });
+    openMenuId.value = null;
+    await reloadPlaylists();
+  } catch (e) {
+    console.error('Error deleting playlist:', e);
+  }
+};
+
 // Expose reload method to parent
 defineExpose({ reloadPlaylists });
 </script>
@@ -65,7 +89,7 @@ defineExpose({ reloadPlaylists });
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else-if="playlists.length === 0" class="empty">No playlists yet. Create one!</div>
 
-    <div v-else class="playlists">
+    <div v-else class="playlists" @click="closeMenu">
       <div
         v-for="playlist in playlists"
         :key="playlist.id"
@@ -80,6 +104,16 @@ defineExpose({ reloadPlaylists });
           </div>
           <div class="playlist-date">
             Created: {{ formatDate(playlist.createdAt) }}
+          </div>
+        </div>
+        <div class="playlist-actions">
+          <button class="menu-button" @click="toggleMenu(playlist.id, $event)">
+            <span class="dots">⋮</span>
+          </button>
+          <div v-if="openMenuId === playlist.id" class="dropdown-menu">
+            <button class="menu-item delete" @click="deletePlaylist(playlist.id, $event)">
+              Delete
+            </button>
           </div>
         </div>
       </div>
@@ -124,6 +158,9 @@ h2 {
   border: 1px solid #e0e0e0;
   transition: all 0.2s;
   cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
 .playlist-item:hover {
@@ -157,6 +194,67 @@ h2 {
   margin-top: 0.5rem;
 }
 
+.playlist-actions {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.menu-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  color: #666;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.menu-button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.dots {
+  font-weight: bold;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #333;
+}
+
+.menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+.menu-item.delete {
+  color: #e74c3c;
+}
+
+.menu-item.delete:hover {
+  background-color: #ffe6e6;
+}
+
 @media (prefers-color-scheme: dark) {
   h2 {
     color: #f6f6f6;
@@ -182,6 +280,35 @@ h2 {
 
   .playlist-date {
     color: #777;
+  }
+
+  .menu-button {
+    color: #aaa;
+  }
+
+  .menu-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .dropdown-menu {
+    background: #2a2a2a;
+    border-color: #444;
+  }
+
+  .menu-item {
+    color: #f6f6f6;
+  }
+
+  .menu-item:hover {
+    background-color: #333;
+  }
+
+  .menu-item.delete {
+    color: #ff6b6b;
+  }
+
+  .menu-item.delete:hover {
+    background-color: #3d2020;
   }
 }
 </style>

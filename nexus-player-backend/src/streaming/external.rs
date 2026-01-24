@@ -5,7 +5,8 @@ pub struct StreamingMediaSource(pub StreamingSourceV2);
 
 pub enum StreamingSourceWrapper {
     Hls(HlsSource),
-    Streaming(Box<dyn crate::audio::types::MediaSource>),
+    Streaming(StreamingMediaSource),
+    Local(Box<dyn crate::audio::types::MediaSource>),
 }
 
 impl StreamingSourceWrapper {
@@ -15,8 +16,16 @@ impl StreamingSourceWrapper {
                 StreamingSourceWrapper::Hls(hls)
             }
             streaming::multi_downloader::source::Source::Streaming(s) => {
-                StreamingSourceWrapper::Streaming(Box::new(StreamingMediaSource(s)))
+                StreamingSourceWrapper::Streaming(StreamingMediaSource(s))
             }
+        }
+    }
+
+    pub async fn prepare(&self) -> Result<(), streaming::error::StreamingError> {
+        match self {
+            StreamingSourceWrapper::Hls(hls) => hls.prepare().await,
+            StreamingSourceWrapper::Streaming(s) => s.0.prepare().await,
+            StreamingSourceWrapper::Local(_) => Ok(()),
         }
     }
 }

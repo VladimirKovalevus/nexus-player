@@ -95,6 +95,22 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
         }))
     }
 
+    async fn find_by_title(&self, title: &str) -> Result<Option<Playlist>> {
+        let entity = playlist::Entity::find()
+            .filter(playlist::Column::Title.eq(title))
+            .one(&self.db)
+            .await
+            .context("Failed to fetch playlist by title")?;
+
+        match entity {
+            Some(entity) => {
+                let domain_playlist = entity.try_into()?;
+                Ok(Some(domain_playlist))
+            }
+            None => Ok(None),
+        }
+    }
+
     async fn update(&self, domain_playlist: Playlist) -> Result<()> {
         let mut entity_model: playlist::Model = domain_playlist.into();
         entity_model.updated_at = Utc::now().timestamp();

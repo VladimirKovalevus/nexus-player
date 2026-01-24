@@ -1,5 +1,6 @@
 <template>
-  <div :class="[$style.mediaCard, $style[`type-${type}`]]" @click="handleClick">
+  <div :class="[$style.mediaCard, $style[`type-${type}`], { [$style.dropdownActive]: dropdownOpen }]">
+    <div :class="$style.content" @click="handleClick">
     <div :class="$style.thumbnail">
       <img
         v-if="entity.thumbnail"
@@ -42,11 +43,12 @@
         </template>
       </div>
     </div>
+    </div>
 
     <div v-if="true" :class="$style.actions" ref="dropdownRef">
       <button :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
 
-      <div v-if="dropdownOpen" :class="$style.dropdown">
+      <div v-if="dropdownOpen" :class="$style.dropdown" @click.stop>
         <div v-if="!showPlaylistSubmenu">
           <button
             v-for="option in menuOptions"
@@ -114,7 +116,6 @@ const showPlaylistSubmenu = ref(false);
 
 const entity = computed(() => {
 
-  console.log(props.track,"TRACK")
   if (props.type === 'track' && props.track) {
     return {
       id: props.track.id,
@@ -182,6 +183,12 @@ const menuOptions = computed<MenuOption[]>(() => {
       action: handleDownload,
     });
   }
+
+  options.push({
+    label: 'Сохранить в файл',
+    icon: '💾',
+    action: handleSaveToFile,
+  });
 
   if (props.context === 'queue' && !props.isInLibrary) {
     options.push({
@@ -283,6 +290,16 @@ const handleDownload = async () => {
   closeDropdown();
 };
 
+const handleSaveToFile = async () => {
+  try {
+    await invoke('save_track_to_file', { trackId: entity.value.id });
+    console.log('Track saved to file:', entity.value.id);
+  } catch (e) {
+    console.error('Failed to save track to file:', e);
+  }
+  closeDropdown();
+};
+
 const handleAddToLibrary = async () => {
   console.log('Add to library:', entity.value.id);
   closeDropdown();
@@ -299,22 +316,28 @@ const handleAddToLibrary = async () => {
   padding: $spacing-md;
   background-color: var(--color-bg-secondary);
   border-radius: $radius-md;
-  cursor: pointer;
   transition: all $transition-fast;
   position: relative;
 
   &:hover {
     background-color: var(--color-bg-hover);
-    transform: translateY(-2px);
 
     .playOverlay {
       opacity: 1;
     }
   }
 
-  &:active {
-    transform: translateY(0);
+  &.dropdownActive {
+    z-index: 1000;
   }
+}
+
+.content {
+  display: flex;
+  gap: $spacing-md;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
 }
 
 .type-track {

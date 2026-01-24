@@ -2,8 +2,8 @@
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import MediaCard from './common/MediaCard.vue';
+import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import { useAudioStore } from '../stores/audio';
-import { TrackDto } from '@/types/types';
 
 interface QueueTrack {
   index: number;
@@ -18,6 +18,8 @@ interface QueueTrack {
 const audioStore = useAudioStore();
 const loading = ref(true);
 const error = ref<string | null>(null);
+const isModalOpen = ref(false);
+const isSavingPlaylist = ref(false);
 
 const queue = computed(() => {
   return audioStore.tracks.map((track, index) => ({
@@ -73,6 +75,43 @@ const clearQueue = async () => {
   }
 };
 
+const openCreatePlaylistModal = () => {
+  if (queue.value.length > 0) {
+    isModalOpen.value = true;
+  }
+};
+
+const handleCreatePlaylist = async (name: string) => {
+  if (isSavingPlaylist.value) return;
+
+  isSavingPlaylist.value = true;
+  error.value = null;
+  try {
+    const tracks = audioStore.tracks;
+
+    if (tracks.length === 0) {
+      isModalOpen.value = false;
+      return;
+    }
+
+    await invoke<number>('create_playlist_with_tracks', {
+      request: {
+        title: name,
+        description: `Сформирован из очереди ${new Date().toLocaleDateString()}`,
+        tracks: tracks,
+      },
+    });
+
+    isModalOpen.value = false;
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    error.value = `Ошибка: ${errorMessage}`;
+    console.error('Failed to create playlist:', e);
+  } finally {
+    isSavingPlaylist.value = false;
+  }
+};
+
 onMounted(() => {
   fetchQueue();
 });
@@ -84,14 +123,16 @@ defineExpose({ fetchQueue });
   <div :class="$style.playbackQueue">
     <div :class="$style.queueHeader">
       <h2 :class="$style.title">В очереди</h2>
-      <button
-        v-if="queue.length > 0"
-        @click="clearQueue"
-        :class="$style.clearButton"
-        title="Clear Queue"
-      >
-        Очистить
-      </button>
+
+      <div :class="$style.actionsMenu" v-if="queue.length > 0">
+        <button :class="$style.menuToggle">⋮</button>
+        <div :class="$style.menuContent">
+          <button @click="openCreatePlaylistModal">Сформировать плейлист</button>
+          <button @click="clearQueue" :class="$style.clearAction">
+            Очистить
+          </button>
+        </div>
+      </div>
     </div>
 
     <div v-if="loading" :class="$style.loading">Загрузка...</div>
@@ -120,6 +161,13 @@ defineExpose({ fetchQueue });
         />
       </div>
     </div>
+
+    <PlaylistCreateSimpleModal
+      :is-open="isModalOpen"
+      :is-loading="isSavingPlaylist"
+      @close="isModalOpen = false"
+      @save="handleCreatePlaylist"
+    />
   </div>
 </template>
 
@@ -149,6 +197,74 @@ defineExpose({ fetchQueue });
   font-weight: $font-weight-semibold;
   color: var(--color-text-primary);
   margin: 0;
+}
+
+.actionsMenu {
+  position: relative;
+
+  .menuToggle {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: $radius-md;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 1.5rem;
+    line-height: 1;
+    width: 36px;
+    height: 36px;
+    transition: all $transition-fast;
+
+    &:hover {
+      background-color: var(--color-bg-hover);
+      border-color: var(--color-border-light);
+    }
+  }
+
+  .menuContent {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: $spacing-xs;
+    background-color: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: $radius-md;
+    box-shadow: $shadow-lg;
+    z-index: 10;
+    width: 200px;
+    padding: $spacing-xs;
+
+    button {
+      display: block;
+      width: 100%;
+      padding: $spacing-sm $spacing-md;
+      background: none;
+      border: none;
+      text-align: left;
+      font-size: $font-size-sm;
+      color: var(--color-text-primary);
+      cursor: pointer;
+      border-radius: $radius-sm;
+      transition: background-color $transition-fast;
+
+      &:hover {
+        background-color: var(--color-bg-hover);
+      }
+    }
+
+    .clearAction {
+      color: #e74c3c;
+      &:hover {
+        background-color: rgba(231, 76, 60, 0.1);
+      }
+    }
+  }
+
+  &:hover .menuContent,
+  .menuToggle:focus + .menuContent,
+  .menuContent:hover {
+    display: block;
+  }
 }
 
 .clearButton {
