@@ -1,5 +1,6 @@
 use crate::audio::types::Track;
 use crate::playlist::playlist::Playlist;
+use crate::playlist::cursor::PlayerCursor;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
@@ -16,8 +17,26 @@ impl Default for RepeatMode {
     }
 }
 
+pub struct CursorQueue {
+    pub history: Vec<Track>,
+    pub current_track: Option<Track>,
+    pub cursor: Option<PlayerCursor>,
+    pub manual_queue: std::collections::VecDeque<Track>,
+}
+
+impl CursorQueue {
+    pub fn new() -> Self {
+        Self {
+            history: Vec::new(),
+            current_track: None,
+            cursor: None,
+            manual_queue: std::collections::VecDeque::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub struct PlaybackQueue {
+pub struct PlaybackQueueOld {
     tracks: Vec<Track>,
     current_index: Option<usize>,
     repeat_mode: RepeatMode,
@@ -25,7 +44,9 @@ pub struct PlaybackQueue {
     shuffle_order: Vec<usize>,
 }
 
-impl PlaybackQueue {
+pub type PlaybackQueue = PlaybackQueueOld;
+
+impl PlaybackQueueOld {
     pub fn new() -> Self {
         Self {
             tracks: Vec::new(),
@@ -308,13 +329,19 @@ impl PlaybackQueue {
     }
 }
 
-impl Default for PlaybackQueue {
+impl Default for PlaybackQueueOld {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl From<Playlist> for PlaybackQueue {
+impl From<Playlist> for PlaybackQueueOld {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<Playlist> for PlaybackQueueOld {
     fn from(playlist: Playlist) -> Self {
         let mut queue = Self::new();
         queue.tracks = playlist.tracks().to_vec();
