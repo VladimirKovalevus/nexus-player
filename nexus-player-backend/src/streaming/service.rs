@@ -13,8 +13,9 @@ use super::cache::CacheManager;
 use super::error::{StreamError, StreamResult};
 use super::provider::StreamProvider;
 use super::providers::{BandcampProvider, SoundCloudProvider, YtDlpProvider};
-use super::types::{ContentType, SearchResult};
+use super::types::{ContentType, SearchResult, StreamingService as StreamingServiceEnum, PlaylistInfo};
 use streaming::state::manager::DownloadManager;
+use std::str::FromStr;
 
 pub struct StreamingService {
     providers: HashMap<String, Arc<dyn StreamProvider>>,
@@ -65,6 +66,7 @@ impl StreamingService {
         content_type: Option<ContentType>,
         query: &str,
         limit: usize,
+        offset: usize,
     ) -> StreamResult<Vec<SearchResult>> {
         // Check if provider is enabled
         {
@@ -89,7 +91,7 @@ impl StreamingService {
             .get(provider_name)
             .ok_or_else(|| StreamError::NoProviderFound)?;
 
-        provider.search_typed(query, content_type, limit, 0).await
+        provider.search_typed(query, content_type, limit, offset).await
     }
 
     pub fn get_provider(&self, name: &str) -> Option<Arc<dyn StreamProvider>> {
@@ -108,6 +110,49 @@ impl StreamingService {
         } else {
             Ok(vec![])
         }
+    }
+
+    pub async fn expand_collection(
+        &self,
+        provider_name: &str,
+        content_type: ContentType,
+        id: &str,
+    ) -> StreamResult<Vec<TrackInfo>> {
+        let provider = self
+            .providers
+            .get(provider_name)
+            .ok_or_else(|| StreamError::NoProviderFound)?;
+
+        // We can create a dummy SearchResult or change expand_collection signature.
+        // For now, let's use a dummy SearchResult since that's what the trait expects.
+        let collection = match content_type {
+            ContentType::Playlist => SearchResult::Playlist(PlaylistInfo {
+                id: id.to_string(),
+                url: id.to_string(),
+                service: StreamingServiceEnum::from_str(provider_name).unwrap_or(StreamingServiceEnum::YouTube),
+                title: "".to_string(),
+                creator: "".to_string(),
+                tracks: vec![],
+                track_count: 0,
+                thumbnail: None,
+                description: None,
+            }),
+            ContentType::Album => SearchResult::Album(AlbumInfo {
+                id: id.to_string(),
+                url: id.to_string(),
+                service: StreamingServiceEnum::from_str(provider_name).unwrap_or(StreamingServiceEnum::YouTube),
+                title: "".to_string(),
+                artist: "".to_string(),
+                tracks: vec![],
+                track_count: 0,
+                year: None,
+                thumbnail: None,
+                description: None,
+            }),
+            _ => return Err(StreamError::NotSupported),
+        };
+
+        provider.expand_collection(collection).await
     }
 
     pub async fn resolve(

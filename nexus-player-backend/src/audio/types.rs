@@ -192,6 +192,15 @@ impl TrackSource {
             Self::Cached { cache_path, .. } => cache_path.display().to_string(),
         }
     }
+
+    pub fn system(&self) -> &str {
+        match self {
+            Self::Local(_) => "local",
+            Self::Http(_) => "http",
+            Self::External { system, .. } => system,
+            Self::Cached { .. } => "cache",
+        }
+    }
 }
 
 impl From<crate::library::models::Track> for Track {

@@ -98,9 +98,23 @@ impl CursorQueue {
     }
 
     pub fn set_cursor(&mut self, cursor: PlayerCursor) {
+        tracing::info!("Setting cursor in queue");
         self.cursor = Some(cursor);
-        // If we don't have a current track, we might want to trigger next() immediately 
-        // but we leave it to the state manager.
+    }
+
+    pub async fn prefetch(&mut self, limit: usize) -> Result<usize> {
+        let mut count = 0;
+        if let Some(cursor) = &mut self.cursor {
+            while count < limit {
+                if let Some(track) = cursor.next_track().await? {
+                    self.manual_queue.push_back(track);
+                    count += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+        Ok(count)
     }
 
     pub fn clear(&mut self) {
@@ -124,16 +138,18 @@ impl CursorQueue {
             tracks.push(current.clone());
             Some(idx)
         } else {
-            if !self.history.is_empty() {
-                // If history exists but no current track, point to end? 
-                // Or None? Let's say None implies stopped.
-                None
-            } else {
-                None
-            }
+            None
         };
 
         tracks.extend(self.manual_queue.iter().cloned());
+
+        tracing::debug!(
+            "Queue snapshot created: {} tracks (history: {}, current: {}, manual: {})",
+            tracks.len(),
+            self.history.len(),
+            if self.current_track.is_some() { 1 } else { 0 },
+            self.manual_queue.len()
+        );
 
         (tracks, current_index)
     }

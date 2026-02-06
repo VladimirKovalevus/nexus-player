@@ -68,7 +68,7 @@ impl CursorResolver for AppCursorResolver {
             }
 
             ContainerContext::SearchQuery { system, query } => {
-                let results = self.streaming.search(&system, Some(ContentType::Track), &query, 50).await?;
+                let results = self.streaming.search(&system, Some(ContentType::Track), &query, 50, 0).await?;
                 
                 let items = results.into_iter().map(|res| {
                     match res {

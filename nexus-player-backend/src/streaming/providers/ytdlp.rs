@@ -372,26 +372,24 @@ impl StreamProvider for YtDlpProvider {
     }
 
     async fn expand_collection(&self, collection: SearchResult) -> StreamResult<Vec<TrackInfo>> {
-        todo!();
-        // let url = "";
-        //
-        // let meta = self.fetch_json(url, true).await?;
-        //
-        // let entries = meta.entries.ok_or_else(|| {
-        //     StreamError::MetadataError("Not a collection (playlist/album)".to_string())
-        // })?;
-        //
-        // let track_sources: Vec<TrackSource> = entries
-        //     .into_iter()
-        //     .filter_map(|entry| {
-        //         entry
-        //             .webpage_url
-        //             .or(entry.url)
-        //             .map(|url| TrackSource::Http(url))
-        //     })
-        //     .collect();
-        //
-        // Ok(track_sources)
+        let url = match &collection {
+            SearchResult::Playlist(info) => &info.url,
+            SearchResult::Album(info) => &info.url,
+            _ => return Err(StreamError::NotSupported),
+        };
+
+        let meta = self.fetch_json(url, true).await?;
+
+        let entries = meta.entries.ok_or_else(|| {
+            StreamError::MetadataError("Not a collection (playlist/album)".to_string())
+        })?;
+
+        let tracks: Vec<TrackInfo> = entries
+            .into_iter()
+            .filter_map(|entry| self.metadata_to_track_info(entry))
+            .collect();
+
+        Ok(tracks)
     }
 
     async fn is_available(&self) -> bool {

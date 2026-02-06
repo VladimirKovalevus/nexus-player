@@ -111,21 +111,10 @@ impl ProviderCursor {
             return Ok(());
         }
 
-        // Use search or a specialized resolve method if available. 
-        // For now, we simulate resolving a playlist/album.
-        let results = self.streaming.search(&self.system, Some(self.content_type), &self.id, 100).await?;
+        let tracks = self.streaming.expand_collection(&self.system, self.content_type, &self.id).await?;
         
-        let items = results.into_iter().filter_map(|res| match res {
-            SearchResult::Track(info) => Some(CursorItem::Track(info.into())),
-            SearchResult::Playlist(info) => Some(CursorItem::Container(ContainerContext::ExternalPlaylist { 
-                system: self.system.clone(), 
-                id: info.url 
-            })),
-            SearchResult::Album(info) => Some(CursorItem::Container(ContainerContext::ExternalAlbum { 
-                system: self.system.clone(), 
-                id: info.url 
-            })),
-            _ => None,
+        let items = tracks.into_iter().map(|info| {
+            CursorItem::Track(info.into())
         }).collect();
 
         self.items = Some(items);
@@ -165,25 +154,68 @@ pub struct StreamingSearchCursor {
     query: String,
     items: Vec<CursorItem>,
     index: usize,
+    offset: usize,
+    limit: usize,
+    has_more: bool,
 }
 
 impl StreamingSearchCursor {
     pub fn new(streaming: Arc<StreamingService>, system: String, query: String, initial_items: Vec<CursorItem>) -> Self {
+        let count = initial_items.len();
         Self {
             streaming,
             system,
             query,
             items: initial_items,
             index: 0,
+            offset: count,
+            limit: 50,
+            has_more: count > 0,
         }
+    }
+
+    async fn fetch_next_page(&mut self) -> Result<()> {
+        if !self.has_more {
+            return Ok(());
+        }
+
+        tracing::info!("Fetching next page for search: {} (offset: {})", self.query, self.offset);
+        
+        let results = self.streaming.search(&self.system, Some(ContentType::Track), &self.query, self.limit, self.offset).await?;
+        
+        if results.is_empty() {
+            self.has_more = false;
+            return Ok(());
+        }
+
+        let new_items: Vec<CursorItem> = results.into_iter().filter_map(|res| match res {
+            SearchResult::Track(info) => Some(CursorItem::Track(info.into())),
+            SearchResult::Playlist(info) => Some(CursorItem::Container(ContainerContext::ExternalPlaylist { 
+                system: self.system.clone(), 
+                id: info.url 
+            })),
+            SearchResult::Album(info) => Some(CursorItem::Container(ContainerContext::ExternalAlbum { 
+                system: self.system.clone(), 
+                id: info.url 
+            })),
+            _ => None,
+        }).collect();
+
+        self.offset += new_items.len();
+        self.items.extend(new_items);
+        
+        Ok(())
     }
 }
 
 #[async_trait]
 impl CursorSource for StreamingSearchCursor {
     async fn next_batch(&mut self, limit: usize) -> Result<Vec<CursorItem>> {
+        if self.index >= self.items.len() && self.has_more {
+            self.fetch_next_page().await?;
+        }
+
         if self.index >= self.items.len() {
-            // In the future: implement pagination here using self.streaming.search
             return Ok(Vec::new());
         }
 
@@ -195,7 +227,6 @@ impl CursorSource for StreamingSearchCursor {
     }
 
     fn has_more(&self) -> bool {
-        // For now simplified, later check pagination
-        self.index < self.items.len()
+        self.has_more || self.index < self.items.len()
     }
 }

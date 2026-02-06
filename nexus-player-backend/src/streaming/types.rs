@@ -37,6 +37,19 @@ impl std::fmt::Display for StreamingService {
     }
 }
 
+impl std::str::FromStr for StreamingService {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "youtube" | "ytdlp" => Ok(Self::YouTube),
+            "soundcloud" => Ok(Self::SoundCloud),
+            "bandcamp" => Ok(Self::Bandcamp),
+            _ => Err(()),
+        }
+    }
+}
+
 impl StreamingService {
     pub fn name(&self) -> &'static str {
         match self {

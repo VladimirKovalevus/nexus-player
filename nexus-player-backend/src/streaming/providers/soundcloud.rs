@@ -301,7 +301,36 @@ impl StreamProvider for SoundCloudProvider {
     }
 
     async fn expand_collection(&self, collection: SearchResult) -> StreamResult<Vec<TrackInfo>> {
-        todo!()
+        let url = match &collection {
+            SearchResult::Playlist(info) => &info.url,
+            SearchResult::Album(info) => &info.url,
+            _ => return Err(StreamError::NotSupported),
+        };
+
+        let client = self.get_client().await?;
+        let tracks = client
+            .get_playlist_tracks(ResourceId::Url(url.clone()))
+            .await
+            .map_err(|e| StreamError::MetadataError(format!("SoundCloud API error: {}", e)))?;
+
+        let track_infos = tracks
+            .into_iter()
+            .map(|t| TrackInfo {
+                source: TrackSource::External {
+                    system: "soundcloud".to_string(),
+                    id: t.track.permalink_url,
+                },
+                title: t.track.title,
+                artist: t.user.username,
+                duration: Some(std::time::Duration::from_millis(
+                    t.track.duration as u64,
+                )),
+                thumbnail: t.track.artwork_url,
+                description: t.track.description,
+            })
+            .collect();
+
+        Ok(track_infos)
     }
 
     async fn is_available(&self) -> bool {

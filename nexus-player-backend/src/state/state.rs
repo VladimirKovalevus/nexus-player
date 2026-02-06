@@ -25,7 +25,7 @@ pub struct AppState {
     // NEW: Resolver for creating cursors
     pub cursor_resolver: Arc<AppCursorResolver>,
 
-    library: LibraryService,
+    library: Arc<LibraryService>,
 
     streaming: Arc<StreamingService>, // Made Arc to share with resolver
 
@@ -35,14 +35,7 @@ pub struct AppState {
 impl AppState {
     pub async fn new(db_path: &Path) -> anyhow::Result<Self> {
         let library = LibraryService::new(db_path).await?;
-        let library_arc = Arc::new(library); // Create an Arc wrapper for shared use
-
-        // We need to clone it back to keep ownership in struct (or change struct to hold Arc)
-        // For now, let's keep LibraryService as owned in struct, but we need Arc for resolver.
-        // Actually, LibraryService methods are async & use internal pool, but struct itself might be heavy?
-        // Let's assume LibraryService is cheap to clone or we wrap it.
-        // Looking at previous code, LibraryService has SqlitePool inside, so it's cheap to clone.
-        let library_clone = library_arc.as_ref().clone(); 
+        let library = Arc::new(library);
         
         let config_path = db_path.parent().unwrap().join("config.json");
         let config_manager = ConfigManager::new(config_path)
@@ -59,16 +52,16 @@ impl AppState {
             config.providers.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create streaming service: {}", e))?;
-        let streaming_arc = Arc::new(streaming);
+        let streaming = Arc::new(streaming);
 
-        let cursor_resolver = Arc::new(AppCursorResolver::new(library_arc, streaming_arc.clone()));
+        let cursor_resolver = Arc::new(AppCursorResolver::new(library.clone(), streaming.clone()));
 
         Ok(Self {
             audio_engine,
             queue: Arc::new(Mutex::new(CursorQueue::new())),
             cursor_resolver,
-            library: library_clone,
-            streaming: streaming_arc,
+            library,
+            streaming,
             config_manager,
         })
     }
@@ -200,16 +193,28 @@ impl AppState {
     }
 
     pub async fn load_context_to_queue(&self, context: ContainerContext) -> Result<()> {
+        tracing::info!("Loading context to queue: {:?}", context);
         // Create a new cursor from the context
         let cursor = PlayerCursor::from_context(context, self.cursor_resolver.clone()).await?;
         
         // Update queue
-        let mut queue = self.queue.lock().await;
-        queue.clear();
-        queue.set_cursor(cursor);
+        {
+            let mut queue = self.queue.lock().await;
+            queue.clear();
+            queue.set_cursor(cursor);
+            
+            // Pre-fill the current track
+            if let Ok(Some(first)) = queue.next().await {
+                tracing::info!("First track loaded: {}", first.id);
+            }
+            
+            // Prefetch next 50 tracks to make them visible in UI
+            let prefetched = queue.prefetch(50).await?;
+            tracing::info!("Prefetched {} tracks from cursor", prefetched);
+        }
         
-        // Optionally start playing immediately? 
-        // For now, the frontend usually calls play_next() after loading.
+        tracing::info!("Queue updated and pre-filled");
+        
         Ok(())
     }
 
@@ -217,6 +222,34 @@ impl AppState {
     pub async fn load_playlist_to_queue(&self, playlist_id: PlaylistId) -> Result<()> {
         let context = ContainerContext::LocalPlaylist(playlist_id.0);
         self.load_context_to_queue(context).await
+    }
+
+    pub async fn load_search_to_queue(&self, system: String, query: String, selected_track_id: usize) -> Result<()> {
+        tracing::info!("Loading search context: {} from {}", query, system);
+        let context = ContainerContext::SearchQuery { system, query };
+        let cursor = PlayerCursor::from_context(context, self.cursor_resolver.clone()).await?;
+        
+        let mut queue = self.queue.lock().await;
+        queue.clear();
+        queue.set_cursor(cursor);
+        
+        // Fast-forward to the selected track
+        let mut found = false;
+        while let Ok(Some(track)) = queue.next().await {
+            if track.id == selected_track_id {
+                found = true;
+                break;
+            }
+        }
+
+        if !found {
+            tracing::warn!("Selected track {} not found in search results initial batch", selected_track_id);
+        }
+        
+        // Prefetch next 50 tracks
+        queue.prefetch(50).await?;
+        
+        Ok(())
     }
     
     // --- Audio Control Proxies ---
@@ -293,6 +326,43 @@ impl AppState {
     // --- Legacy / Missing Methods Stub ---
     // These might need to be re-implemented in CursorQueue or removed if not used by new frontend
     
+    pub async fn remove_from_queue(&self, index: usize) -> Option<AudioTrack> {
+        let mut queue = self.queue.lock().await;
+        let removed = queue.remove_track(index);
+        if removed.is_some() {
+            tracing::info!("Removed track at index {}", index);
+        }
+        removed
+    }
+
+    pub async fn set_repeat_mode(&self, mode: RepeatMode) {
+        let mut queue = self.queue.lock().await;
+        queue.repeat_mode = mode;
+        tracing::info!("Repeat mode set to {:?}", mode);
+    }
+
+    pub async fn get_repeat_mode(&self) -> RepeatMode {
+        let queue = self.queue.lock().await;
+        queue.repeat_mode
+    }
+
+    pub async fn toggle_shuffle(&self) {
+        let mut queue = self.queue.lock().await;
+        queue.shuffle_enabled = !queue.shuffle_enabled;
+        tracing::info!("Shuffle toggled to {}", queue.shuffle_enabled);
+    }
+
+    pub async fn is_shuffle_enabled(&self) -> bool {
+        let queue = self.queue.lock().await;
+        queue.shuffle_enabled
+    }
+
+    pub async fn get_current_track_index(&self) -> Option<usize> {
+        let queue = self.queue.lock().await;
+        let (_, index) = queue.snapshot();
+        index
+    }
+
     pub async fn play_at_index(&self, index: usize) {
         // This is hard with CursorQueue because "index" is ambiguous (history? manual? cursor offset?)
         // For now, we only support jumping within manual_queue or history as presented in snapshot.

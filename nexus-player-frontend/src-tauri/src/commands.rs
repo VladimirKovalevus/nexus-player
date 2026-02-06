@@ -367,7 +367,7 @@ pub async fn search_streaming(
 
     let results = state
         .streaming()
-        .search(&provider, content_type_enum, &query, limit.unwrap_or(10))
+        .search(&provider, content_type_enum, &query, limit.unwrap_or(10), 0)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -379,6 +379,7 @@ pub async fn handle_streaming_track(
     state: State<'_, Arc<AppState>>,
     search_result: SearchResultDto,
     strategy: String,
+    query: Option<String>,
 ) -> Result<Option<i64>> {
     use nexus_player_backend::library::types::DownloadStrategy;
 
@@ -396,9 +397,17 @@ pub async fn handle_streaming_track(
 
             match backend_search_result {
                 SearchResult::Track(track) => {
-                    let mut queue = state.lock_queue().await;
-                    queue.add_track(track.into());
-                    tracing::info!("Track added to queue");
+                    if let Some(q) = query {
+                        let audio_track: nexus_player_backend::audio::types::Track = track.into();
+                        let target_id = audio_track.id;
+                        let system = audio_track.source.system().to_string();
+
+                        state.load_search_to_queue(system, q, target_id).await.map_err(|e| e.to_string())?;
+                    } else {
+                        let mut queue = state.lock_queue().await;
+                        queue.add_track(track.into());
+                        tracing::info!("Track added to queue");
+                    }
                 }
                 SearchResult::Playlist(playlist) => {
                     state.load_context_to_queue(ContainerContext::ExternalPlaylist { 
