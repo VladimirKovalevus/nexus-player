@@ -2,6 +2,7 @@ use crate::audio;
 use crate::audio::engine::AudioEngine;
 use crate::audio::types::Track;
 use crate::audio::types::Track as AudioTrack;
+use crate::config::{AppConfig, ConfigManager};
 use crate::library::models::{Metadata, Playlist as LibraryPlaylist, Track as LibraryTrack};
 use crate::library::{LibraryService, PlaylistId, TrackId};
 use crate::playlist::playback_queue::{PlaybackQueue, RepeatMode};
@@ -22,24 +23,54 @@ pub struct AppState {
     library: LibraryService,
 
     streaming: StreamingService,
+
+    config_manager: ConfigManager,
 }
 
 impl AppState {
     pub async fn new(db_path: &Path) -> anyhow::Result<Self> {
         let library = LibraryService::new(db_path).await?;
+        
+        let config_path = db_path.parent().unwrap().join("config.json");
+        let config_manager = ConfigManager::new(config_path)
+            .map_err(|e| anyhow::anyhow!("Failed to load configuration: {}", e))?;
+
+        let config = config_manager.get();
 
         let audio_engine = AudioEngine::new()?;
+        // TODO: Apply audio config if applicable
 
         let cache_dir = db_path.parent().unwrap().join("cache");
-        let streaming = StreamingService::new(cache_dir, 1024)
-            .map_err(|e| anyhow::anyhow!("Failed to create streaming service: {}", e))?;
+        let streaming = StreamingService::new(
+            cache_dir,
+            config.network.chunk_size as u64,
+            config.providers.clone(),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to create streaming service: {}", e))?;
+
+        // Apply provider configuration
+        // Note: StreamingService might need methods to enable/disable providers dynamically
+        // or we pass the config to it. For now, we assume it initializes all,
+        // but we can filter search results based on config later or pass it here.
 
         Ok(Self {
             audio_engine,
             queue: ArcSwap::new(Arc::new(PlaybackQueue::new())),
             library,
             streaming,
+            config_manager,
         })
+    }
+
+    pub fn config(&self) -> AppConfig {
+        self.config_manager.get()
+    }
+
+    pub fn update_config(&self, config: AppConfig) -> anyhow::Result<()> {
+        self.config_manager.update(config.clone())?;
+        self.streaming.update_config(config.providers);
+        // Apply changes if necessary (e.g. re-init streaming if chunk size changed, or update flags)
+        Ok(())
     }
 
     pub fn audio_engine(&self) -> &AudioEngine {

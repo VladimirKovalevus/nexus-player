@@ -83,3 +83,31 @@ export type SearchResult =
   | StreamingPlaylist
   | StreamingAlbum
   | StreamingChannel;
+
+export interface ProviderSettings {
+  enabled: boolean;
+  credentials?: string | null;
+}
+
+export interface ProviderConfig {
+  youtube: ProviderSettings;
+  soundcloud: ProviderSettings;
+  bandcamp: ProviderSettings;
+  vk: ProviderSettings;
+}
+
+export interface AudioConfig {
+  // Empty for now as per backend
+}
+
+export interface NetworkConfig {
+  timeout_seconds: number;
+  chunk_size: number;
+  buffer_size: number;
+}
+
+export interface AppConfig {
+  providers: ProviderConfig;
+  audio: AudioConfig;
+  network: NetworkConfig;
+}

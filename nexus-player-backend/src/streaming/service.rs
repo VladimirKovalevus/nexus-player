@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::audio::types::{MediaSource, TrackSource};
+use crate::config::ProviderConfig;
 use crate::streaming::external::{StreamingMediaSource, StreamingSourceWrapper};
 use crate::streaming::types::{AlbumInfo, TrackInfo};
 use streaming::multi_downloader::source::Source;
@@ -18,10 +19,15 @@ use streaming::state::manager::DownloadManager;
 pub struct StreamingService {
     providers: HashMap<String, Arc<dyn StreamProvider>>,
     download_manager: DownloadManager,
+    config: RwLock<ProviderConfig>,
 }
 
 impl StreamingService {
-    pub fn new(cache_dir: PathBuf, cache_size_mb: u64) -> StreamResult<Self> {
+    pub fn new(
+        cache_dir: PathBuf,
+        cache_size_mb: u64,
+        config: ProviderConfig,
+    ) -> StreamResult<Self> {
         let cache = Arc::new(CacheManager::new(cache_dir, cache_size_mb)?);
 
         let ytdlp = Arc::new(YtDlpProvider::new(cache)) as Arc<dyn StreamProvider>;
@@ -29,19 +35,28 @@ impl StreamingService {
         let bandcamp = Arc::new(BandcampProvider::new(ytdlp.clone())) as Arc<dyn StreamProvider>;
         let soundcloud =
             Arc::new(SoundCloudProvider::new(ytdlp.clone())) as Arc<dyn StreamProvider>;
+        // let vk = Arc::new(VkProvider::new(ytdlp.clone())) as Arc<dyn StreamProvider>;
 
         let mut providers = HashMap::new();
         providers.insert("ytdlp".to_string(), ytdlp.clone());
         providers.insert("youtube".to_string(), ytdlp);
         providers.insert("bandcamp".to_string(), bandcamp);
         providers.insert("soundcloud".to_string(), soundcloud);
+        // providers.insert("vk".to_string(), vk);
 
         let manager = DownloadManager::new();
 
         Ok(Self {
             providers,
             download_manager: manager,
+            config: RwLock::new(config),
         })
+    }
+
+    pub fn update_config(&self, config: ProviderConfig) {
+        if let Ok(mut c) = self.config.write() {
+            *c = config;
+        }
     }
 
     pub async fn search(
@@ -51,6 +66,24 @@ impl StreamingService {
         query: &str,
         limit: usize,
     ) -> StreamResult<Vec<SearchResult>> {
+        // Check if provider is enabled
+        {
+            let config = self.config.read().unwrap();
+            let enabled = match provider_name {
+                "youtube" | "ytdlp" => config.youtube.enabled,
+                "soundcloud" => config.soundcloud.enabled,
+                "bandcamp" => config.bandcamp.enabled,
+                "vk" => config.vk.enabled,
+                _ => true,
+            };
+            if !enabled {
+                return Err(StreamError::Other(format!(
+                    "Provider {} is disabled",
+                    provider_name
+                )));
+            }
+        }
+
         let provider = self
             .providers
             .get(provider_name)
@@ -150,7 +183,9 @@ impl StreamingService {
 
             Ok(file_path)
         } else {
-            Err(StreamError::Other("Track not found in download manager".to_string()))
+            Err(StreamError::Other(
+                "Track not found in download manager".to_string(),
+            ))
         }
     }
 }

@@ -423,6 +423,18 @@ pub async fn handle_streaming_track(
     }
 }
 
+use nexus_player_backend::config::AppConfig;
+
+#[tauri::command]
+pub fn get_app_config(state: State<'_, Arc<AppState>>) -> Result<AppConfig> {
+    Ok(state.config())
+}
+
+#[tauri::command]
+pub fn update_app_config(state: State<'_, Arc<AppState>>, config: AppConfig) -> Result<()> {
+    state.update_config(config).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn save_track_to_file(
     state: State<'_, Arc<AppState>>,

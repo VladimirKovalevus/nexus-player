@@ -11,7 +11,8 @@ use crate::library::TrackSource;
 use crate::streaming::error::{StreamError, StreamResult};
 use crate::streaming::provider::StreamProvider;
 use crate::streaming::types::{
-    ContentType, ResolvedContent, SearchResult, StreamMetadata, StreamingService, TrackInfo,
+    AlbumInfo, ContentType, PlaylistInfo, ResolvedContent, SearchResult, StreamMetadata,
+    StreamingService, TrackInfo,
 };
 
 pub struct SoundCloudProvider {
@@ -109,75 +110,198 @@ impl StreamProvider for SoundCloudProvider {
             return Ok(Vec::new());
         }
 
-        if content_type.is_some() && content_type != Some(ContentType::Track) {
-            return Ok(Vec::new());
-        }
+        let collection_params =
+            rsoundcloud::CollectionParams::new(Some(limit as u32), Some(_offset as u32));
 
-        let mut params = rsoundcloud::CollectionParams::default();
-        params.limit = Some(limit as u32);
-
+        let query = query.to_string();
         let client = self.get_client().await?;
-        let results = client
-            .search_tracks(query.to_string(), params)
-            .await
-            .map_err(|e| StreamError::MetadataError(format!("SoundCloud search error: {}", e)))?;
 
-        let search_results: Vec<SearchResult> = results
-            .into_iter()
-            .map(|track| {
-                let track_url = track.track.permalink_url.clone();
+        let content_type = content_type.unwrap_or(ContentType::Track);
 
-                SearchResult::Track(TrackInfo {
-                    source: TrackSource::External {
-                        system: "soundcloud".to_string(),
-                        id: track_url,
-                    },
-                    title: track.track.title,
-                    artist: track.user.username,
-                    duration: Some(std::time::Duration::from_millis(
-                        track.track.duration as u64,
-                    )),
-                    thumbnail: track.track.artwork_url,
-                    description: track.track.description,
-                })
-            })
-            .collect();
+        match content_type {
+            ContentType::Track => {
+                let results = client
+                    .search_tracks(query, collection_params)
+                    .await
+                    .map_err(|e| {
+                        StreamError::MetadataError(format!("SoundCloud search error: {}", e))
+                    })?;
 
-        Ok(search_results)
+                let search_results: Vec<SearchResult> = results
+                    .into_iter()
+                    .map(|item| {
+                        SearchResult::Track(TrackInfo {
+                            source: TrackSource::External {
+                                system: "soundcloud".to_string(),
+                                id: item.track.permalink_url.clone(),
+                            },
+                            title: item.track.title,
+                            artist: item.user.username,
+                            duration: Some(std::time::Duration::from_millis(
+                                item.track.duration as u64,
+                            )),
+                            thumbnail: item.track.artwork_url,
+                            description: item.track.description,
+                        })
+                    })
+                    .collect();
+                Ok(search_results)
+            }
+            ContentType::Playlist => {
+                let results = client
+                    .search_playlists(query, collection_params)
+                    .await
+                    .map_err(|e| {
+                        StreamError::MetadataError(format!("SoundCloud search error: {}", e))
+                    })?;
+
+                let mut search_results = Vec::new();
+                for item in results {
+                    let mut tracks: Vec<TrackInfo> = item
+                        .album_playlist
+                        .tracks
+                        .into_iter()
+                        .filter_map(|tt| match tt {
+                            TrackType::Basic(t) => Some(TrackInfo {
+                                source: TrackSource::External {
+                                    system: "soundcloud".to_string(),
+                                    id: t.track.permalink_url,
+                                },
+                                title: t.track.title,
+                                artist: t.user.username,
+                                duration: Some(std::time::Duration::from_millis(
+                                    t.track.duration as u64,
+                                )),
+                                thumbnail: t.track.artwork_url,
+                                description: t.track.description,
+                            }),
+                            TrackType::Mini(_) => None,
+                        })
+                        .collect();
+
+                    if (item.album_playlist.track_count as usize) > tracks.len() {
+                        if let Ok(fetched_tracks) = client
+                            .get_playlist_tracks(ResourceId::Url(
+                                item.album_playlist.permalink_url.clone(),
+                            ))
+                            .await
+                        {
+                            tracks = fetched_tracks
+                                .into_iter()
+                                .map(|t| TrackInfo {
+                                    source: TrackSource::External {
+                                        system: "soundcloud".to_string(),
+                                        id: t.track.permalink_url,
+                                    },
+                                    title: t.track.title,
+                                    artist: t.user.username,
+                                    duration: Some(std::time::Duration::from_millis(
+                                        t.track.duration as u64,
+                                    )),
+                                    thumbnail: t.track.artwork_url,
+                                    description: t.track.description,
+                                })
+                                .collect();
+                        }
+                    }
+
+                    tracing::info!("SoundCloud Playlist tracks: {:?}", tracks);
+
+                    search_results.push(SearchResult::Playlist(PlaylistInfo {
+                        id: item.album_playlist.permalink_url.clone(),
+                        url: item.album_playlist.permalink_url,
+                        service: StreamingService::SoundCloud,
+                        title: item.album_playlist.title,
+                        creator: item.user.user.username,
+                        tracks,
+                        track_count: item.album_playlist.track_count as usize,
+                        thumbnail: item.album_playlist.artwork_url,
+                        description: item.album_playlist.description,
+                    }));
+                }
+                Ok(search_results)
+            }
+            ContentType::Album => {
+                let results = client
+                    .search_albums(query, collection_params)
+                    .await
+                    .map_err(|e| {
+                        StreamError::MetadataError(format!("SoundCloud search error: {}", e))
+                    })?;
+
+                let mut search_results = Vec::new();
+                for item in results {
+                    let mut tracks: Vec<TrackInfo> = item
+                        .album_playlist
+                        .tracks
+                        .into_iter()
+                        .filter_map(|tt| match tt {
+                            TrackType::Basic(t) => Some(TrackInfo {
+                                source: TrackSource::External {
+                                    system: "soundcloud".to_string(),
+                                    id: t.track.permalink_url,
+                                },
+                                title: t.track.title,
+                                artist: t.user.username,
+                                duration: Some(std::time::Duration::from_millis(
+                                    t.track.duration as u64,
+                                )),
+                                thumbnail: t.track.artwork_url,
+                                description: t.track.description,
+                            }),
+                            TrackType::Mini(_) => None,
+                        })
+                        .collect();
+
+                    if (item.album_playlist.track_count as usize) > tracks.len() {
+                        if let Ok(fetched_tracks) = client
+                            .get_playlist_tracks(ResourceId::Url(
+                                item.album_playlist.permalink_url.clone(),
+                            ))
+                            .await
+                        {
+                            tracks = fetched_tracks
+                                .into_iter()
+                                .map(|t| TrackInfo {
+                                    source: TrackSource::External {
+                                        system: "soundcloud".to_string(),
+                                        id: t.track.permalink_url,
+                                    },
+                                    title: t.track.title,
+                                    artist: t.user.username,
+                                    duration: Some(std::time::Duration::from_millis(
+                                        t.track.duration as u64,
+                                    )),
+                                    thumbnail: t.track.artwork_url,
+                                    description: t.track.description,
+                                })
+                                .collect();
+                        }
+                    }
+
+                    tracing::info!("SoundCloud Album tracks: {:?}", tracks);
+
+                    search_results.push(SearchResult::Album(AlbumInfo {
+                        id: item.album_playlist.permalink_url.clone(),
+                        tracks,
+                        url: item.album_playlist.permalink_url,
+                        service: StreamingService::SoundCloud,
+                        title: item.album_playlist.title,
+                        artist: item.user.user.username,
+                        track_count: item.album_playlist.track_count as usize,
+                        year: None,
+                        thumbnail: item.album_playlist.artwork_url,
+                        description: item.album_playlist.description,
+                    }));
+                }
+                Ok(search_results)
+            }
+            ContentType::Channel => Ok(Vec::new()),
+        }
     }
 
     async fn expand_collection(&self, collection: SearchResult) -> StreamResult<Vec<TrackInfo>> {
         todo!()
-        // let url = match source {
-        //     TrackSource::Http(url) => url.as_str(),
-        //     TrackSource::External { id, .. } => id.as_str(),
-        //     _ => {
-        //         return Err(StreamError::InvalidSource(
-        //             "Invalid source type".to_string(),
-        //         ))
-        //     }
-        // };
-        //
-        // let client = self.get_client().await?;
-        // let playlist = client
-        //     .get_playlist(ResourceId::Url(url.to_string()))
-        //     .await
-        //     .map_err(|e| StreamError::MetadataError(format!("SoundCloud API error: {}", e)))?;
-        //
-        // let track_sources: Vec<TrackSource> = playlist
-        //     .album_playlist
-        //     .tracks
-        //     .into_iter()
-        //     .map(|track| TrackSource::External {
-        //         system: "soundcloud".to_string(),
-        //         id: match track {
-        //             TrackType::Basic(t) => t.track.uri,
-        //             TrackType::Mini(t) => t.id.to_string(),
-        //         },
-        //     })
-        //     .collect();
-        //
-        // Ok(track_sources)
     }
 
     async fn is_available(&self) -> bool {

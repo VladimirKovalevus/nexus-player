@@ -75,6 +75,8 @@ pub fn run() {
             commands::search_streaming,
             commands::handle_streaming_track,
             commands::save_track_to_file,
+            commands::get_app_config,
+            commands::update_app_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
