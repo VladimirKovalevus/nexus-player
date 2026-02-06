@@ -67,14 +67,18 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
     }
 
     async fn get(&self, id: TrackId) -> Result<Option<Track>> {
-        let entity = track::Entity::find_by_id(id.0)
+        let result = track::Entity::find_by_id(id.0)
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
             .one(&self.db)
             .await
-            .context("Failed to fetch track")?;
+            .context("Failed to fetch track with artwork")?;
 
-        match entity {
-            Some(entity) => {
-                let domain_track = entity.try_into()?;
+        match result {
+            Some((entity, artwork_entity)) => {
+                let mut domain_track: Track = entity.try_into()?;
+                if let Some(art_entity) = artwork_entity {
+                    domain_track.metadata.artwork = Some(art_entity.try_into()?);
+                }
                 Ok(Some(domain_track))
             }
             None => Ok(None),
@@ -129,7 +133,7 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
     }
 
     async fn list_all(&self) -> Result<Vec<Track>> {
-        let entities = track::Entity::find()
+        let results = track::Entity::find()
             .filter(
                 track::Column::Id.not_in_subquery(
                     playlist_track::Entity::find()
@@ -138,36 +142,48 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
                         .into_query(),
                 ),
             )
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
             .order_by_desc(track::Column::AddedAt)
             .all(&self.db)
             .await
-            .context("Failed to list all tracks")?;
+            .context("Failed to list all tracks with artwork")?;
 
-        entities
-            .into_iter()
-            .map(|entity| entity.try_into())
-            .collect::<Result<Vec<_>>>()
+        let mut domain_tracks = Vec::new();
+        for (entity, artwork_entity) in results {
+            let mut domain_track: Track = entity.try_into()?;
+            if let Some(art_entity) = artwork_entity {
+                domain_track.metadata.artwork = Some(art_entity.try_into()?);
+            }
+            domain_tracks.push(domain_track);
+        }
+        Ok(domain_tracks)
     }
 
     async fn search(&self, query: &str) -> Result<Vec<Track>> {
         use sea_orm::Condition;
 
-        let entities = track::Entity::find()
+        let results = track::Entity::find()
             .filter(
                 Condition::any()
                     .add(track::Column::Title.contains(query))
                     .add(track::Column::Artist.contains(query))
                     .add(track::Column::Album.contains(query)),
             )
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
             .order_by_desc(track::Column::AddedAt)
             .all(&self.db)
             .await
-            .context("Failed to search tracks")?;
+            .context("Failed to search tracks with artwork")?;
 
-        entities
-            .into_iter()
-            .map(|entity| entity.try_into())
-            .collect::<Result<Vec<_>>>()
+        let mut domain_tracks = Vec::new();
+        for (entity, artwork_entity) in results {
+            let mut domain_track: Track = entity.try_into()?;
+            if let Some(art_entity) = artwork_entity {
+                domain_track.metadata.artwork = Some(art_entity.try_into()?);
+            }
+            domain_tracks.push(domain_track);
+        }
+        Ok(domain_tracks)
     }
 
     async fn find_by_artist(&self, artist: &str) -> Result<Vec<Track>> {

@@ -194,10 +194,7 @@ impl From<models::Track> for entities_v2::track::Model {
                     system: system.clone(),
                     id: id.clone(),
                 };
-                (
-                    "external".to_string(),
-                    serde_json::to_string(&data).ok(),
-                )
+                ("external".to_string(), serde_json::to_string(&data).ok())
             }
             TrackSource::Cached { .. } => ("cached".to_string(), None),
         };
@@ -223,7 +220,7 @@ impl From<models::Track> for entities_v2::track::Model {
             title: track.metadata.title,
             artist: track.artist,
             description: track.metadata.description,
-            artwork_id: None,
+            artwork_id: track.metadata.artwork.map(|a| a.id.0),
             album: track.album,
             album_artist: track.album_artist,
             year: track.year.map(|y| y as i32),

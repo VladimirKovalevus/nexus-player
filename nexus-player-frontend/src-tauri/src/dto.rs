@@ -25,6 +25,7 @@ pub struct PlaylistDto {
     pub title: String,
     pub description: Option<String>,
     pub creator: Option<String>,
+    pub thumbnail: Option<String>,
     pub track_count: usize,
     pub created_at: i64,
     pub updated_at: i64,
@@ -120,6 +121,11 @@ use nexus_player_backend::library::models;
 
 impl From<models::Track> for TrackDto {
     fn from(track: models::Track) -> Self {
+        let artwork_url = track.metadata.artwork.as_ref().and_then(|art| match &art.source {
+            nexus_player_backend::library::types::ArtworkSource::Url { url } => Some(url.clone()),
+            _ => None,
+        });
+
         Self {
             id: track.id.0,
             title: track.metadata.title,
@@ -129,7 +135,7 @@ impl From<models::Track> for TrackDto {
                 .audio_info
                 .as_ref()
                 .and_then(|info| info.duration_secs),
-            artwork_url: None,
+            artwork_url,
             play_count: track.play_count,
             state: TrackStateDto::Saved,
             source: Some(track.source.into()),
@@ -171,11 +177,17 @@ impl From<&audio::Track> for TrackDto {
 
 impl From<models::Playlist> for PlaylistDto {
     fn from(playlist: models::Playlist) -> Self {
+        let thumbnail = playlist.metadata.artwork.as_ref().and_then(|art| match &art.source {
+            nexus_player_backend::library::types::ArtworkSource::Url { url } => Some(url.clone()),
+            _ => None,
+        });
+
         Self {
             id: playlist.id.0,
             title: playlist.metadata.title,
             description: playlist.metadata.description,
             creator: playlist.creator,
+            thumbnail,
             track_count: 0,
             created_at: playlist.created_at.timestamp(),
             updated_at: playlist.updated_at.timestamp(),
@@ -265,17 +277,12 @@ impl From<nexus_player_backend::audio::types::TrackSource> for TrackSourceDto {
     fn from(track_source: nexus_player_backend::audio::types::TrackSource) -> Self {
         match track_source {
             nexus_player_backend::audio::types::TrackSource::External { id, system } => {
-                Self {
-                    url: id,
-                    system,
-                }
+                Self { url: id, system }
             }
-            _ => {
-                Self {
-                    url: track_source.as_str(),
-                    system: "unknown".to_string(),
-                }
-            }
+            _ => Self {
+                url: track_source.as_str(),
+                system: "unknown".to_string(),
+            },
         }
     }
 }

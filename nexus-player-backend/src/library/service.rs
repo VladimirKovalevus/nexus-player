@@ -66,7 +66,20 @@ impl LibraryService {
     // ========================================================================
 
     /// Add a new track to the library
-    pub async fn add_track(&self, track: models::Track) -> Result<TrackId> {
+    pub async fn add_track(&self, mut track: models::Track) -> Result<TrackId> {
+        // Resolve artwork if present and ID is 0 (dummy from conversion)
+        if let Some(art) = &track.metadata.artwork {
+            if art.id.0 == 0 {
+                if let crate::library::types::ArtworkSource::Url { url } = &art.source {
+                    let real_id = self.ensure_artwork(url, &self.db).await?;
+                    if let Some(mut a) = track.metadata.artwork.take() {
+                        a.id = crate::library::types::ArtworkId(real_id);
+                        track.metadata.artwork = Some(a);
+                    }
+                }
+            }
+        }
+
         let track_id = self.track_repo.insert(track).await?;
         if let Some(master_playlist) = self
             .playlist_repo
@@ -213,17 +226,34 @@ impl LibraryService {
         let txn = self.db.begin().await?;
 
         let mut saved_track_ids = Vec::new();
+        let mut first_artwork = None;
+        let mut fallback_url = None;
 
         for audio_track in runtime_playlist.tracks() {
             let library_track: models::Track = audio_track.clone().into();
             let entity_track: track::Model = library_track.into();
+
+            // Resolve artwork if present
+            let artwork_id = if let Some(url) = &audio_track.artwork_url {
+                let id = self.ensure_artwork(url, &txn).await?;
+                if first_artwork.is_none() {
+                    first_artwork = Some(id);
+                    fallback_url = Some(url.clone());
+                }
+                Some(id)
+            } else {
+                if first_artwork.is_none() {
+                    first_artwork = entity_track.artwork_id;
+                }
+                entity_track.artwork_id
+            };
 
             let active_track = track::ActiveModel {
                 id: ActiveValue::NotSet,
                 title: ActiveValue::Set(entity_track.title),
                 artist: ActiveValue::Set(entity_track.artist),
                 description: ActiveValue::Set(entity_track.description),
-                artwork_id: ActiveValue::Set(entity_track.artwork_id),
+                artwork_id: ActiveValue::Set(artwork_id),
                 album: ActiveValue::Set(entity_track.album),
                 album_artist: ActiveValue::Set(entity_track.album_artist),
                 year: ActiveValue::Set(entity_track.year),
@@ -265,13 +295,20 @@ impl LibraryService {
             updated_at: now,
         };
 
+        // Resolve playlist artwork
+        let playlist_artwork_id = if let Some(url) = &runtime_playlist.artwork {
+            Some(self.ensure_artwork(url, &txn).await?)
+        } else {
+            first_artwork
+        };
+
         let entity_playlist: playlist::Model = playlist_library.into();
         let active_playlist = playlist::ActiveModel {
             id: ActiveValue::NotSet,
             title: ActiveValue::Set(entity_playlist.title),
             description: ActiveValue::Set(entity_playlist.description),
             creator: ActiveValue::Set(entity_playlist.creator),
-            artwork_id: ActiveValue::Set(entity_playlist.artwork_id),
+            artwork_id: ActiveValue::Set(playlist_artwork_id),
             created_at: ActiveValue::Set(entity_playlist.created_at),
             updated_at: ActiveValue::Set(entity_playlist.updated_at),
         };
@@ -309,12 +346,34 @@ impl LibraryService {
 
         txn.commit().await.context("Failed to commit transaction")?;
 
+        let artwork = if let Some(id) = playlist_artwork_id {
+             let url = if let Some(url) = &runtime_playlist.artwork {
+                 Some(url.clone())
+             } else {
+                 fallback_url
+             };
+             
+             if let Some(url) = url {
+                 Some(super::types::Artwork {
+                    id: super::types::ArtworkId(id),
+                    source: super::types::ArtworkSource::Url { url },
+                    width: None,
+                    height: None,
+                    created_at: now,
+                 })
+             } else {
+                 None
+             }
+        } else {
+            None
+        };
+
         let playlist = models::Playlist {
             id: playlist_id,
             metadata: models::Metadata {
                 title: runtime_playlist.title,
                 description: runtime_playlist.description,
-                artwork: None,
+                artwork,
             },
             creator: None,
             created_at: now,
@@ -325,6 +384,42 @@ impl LibraryService {
             playlist,
             tracks: playlist_tracks,
         })
+    }
+
+    async fn ensure_artwork<C>(&self, url: &str, db: &C) -> Result<i64>
+    where
+        C: sea_orm::ConnectionTrait,
+    {
+        use super::entities_v2::artwork;
+        use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
+
+        // Construct source_data JSON
+        let source_data = format!(r#"{{"type":"url","url":"{}"}}"#, url);
+
+        // Check if exists (simple check by source_data string match)
+        let existing = artwork::Entity::find()
+            .filter(artwork::Column::SourceType.eq("url"))
+            .filter(artwork::Column::SourceData.eq(&source_data))
+            .one(db)
+            .await?;
+
+        if let Some(art) = existing {
+            return Ok(art.id);
+        }
+
+        // Create new
+        let now = Utc::now().timestamp();
+        let active_art = artwork::ActiveModel {
+            id: ActiveValue::NotSet,
+            source_type: ActiveValue::Set("url".to_string()),
+            source_data: ActiveValue::Set(Some(source_data)),
+            width: ActiveValue::Set(None),
+            height: ActiveValue::Set(None),
+            created_at: ActiveValue::Set(now),
+        };
+
+        let res = active_art.insert(db).await?;
+        Ok(res.id)
     }
 
     // ========================================================================

@@ -51,14 +51,18 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
     }
 
     async fn get(&self, id: PlaylistId) -> Result<Option<Playlist>> {
-        let entity = playlist::Entity::find_by_id(id.0)
+        let result = playlist::Entity::find_by_id(id.0)
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
             .one(&self.db)
             .await
-            .context("Failed to fetch playlist")?;
+            .context("Failed to fetch playlist with artwork")?;
 
-        match entity {
-            Some(entity) => {
-                let domain_playlist = entity.try_into()?;
+        match result {
+            Some((entity, artwork_entity)) => {
+                let mut domain_playlist: Playlist = entity.try_into()?;
+                if let Some(art_entity) = artwork_entity {
+                    domain_playlist.metadata.artwork = Some(art_entity.try_into()?);
+                }
                 Ok(Some(domain_playlist))
             }
             None => Ok(None),
@@ -66,16 +70,20 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
     }
 
     async fn get_with_tracks(&self, id: PlaylistId) -> Result<Option<PlaylistWithTracks>> {
-        let playlist_entity = playlist::Entity::find_by_id(id.0)
+        let result = playlist::Entity::find_by_id(id.0)
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
             .one(&self.db)
             .await
-            .context("Failed to fetch playlist")?;
+            .context("Failed to fetch playlist with artwork")?;
 
-        let Some(playlist_entity) = playlist_entity else {
+        let Some((playlist_entity, artwork_entity)) = result else {
             return Ok(None);
         };
 
-        let domain_playlist: Playlist = playlist_entity.try_into()?;
+        let mut domain_playlist: Playlist = playlist_entity.try_into()?;
+        if let Some(art_entity) = artwork_entity {
+            domain_playlist.metadata.artwork = Some(art_entity.try_into()?);
+        }
 
         let track_entities = playlist_track::Entity::find()
             .filter(playlist_track::Column::PlaylistId.eq(id.0))
@@ -143,16 +151,22 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
     }
 
     async fn list_all(&self) -> Result<Vec<Playlist>> {
-        let entities = playlist::Entity::find()
+        let results = playlist::Entity::find()
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
             .order_by_desc(playlist::Column::CreatedAt)
             .all(&self.db)
             .await
-            .context("Failed to list playlists")?;
+            .context("Failed to list playlists with artwork")?;
 
-        entities
-            .into_iter()
-            .map(|entity| entity.try_into())
-            .collect::<Result<Vec<_>>>()
+        let mut domain_playlists = Vec::new();
+        for (entity, artwork_entity) in results {
+            let mut domain_playlist: Playlist = entity.try_into()?;
+            if let Some(art_entity) = artwork_entity {
+                domain_playlist.metadata.artwork = Some(art_entity.try_into()?);
+            }
+            domain_playlists.push(domain_playlist);
+        }
+        Ok(domain_playlists)
     }
 
     async fn add_track(

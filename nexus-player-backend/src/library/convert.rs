@@ -22,12 +22,20 @@ impl From<audio::Track> for LibraryTrack {
             _ => CacheStatus::None,
         };
 
+        let artwork = track.artwork_url.map(|url| crate::library::types::Artwork {
+            id: crate::library::types::ArtworkId(0),
+            source: crate::library::types::ArtworkSource::Url { url },
+            width: None,
+            height: None,
+            created_at: Utc::now(),
+        });
+
         LibraryTrack {
             id: TrackId(0),
             metadata: Metadata {
                 title: track.title,
                 description: None,
-                artwork: None,
+                artwork,
             },
             artist: track.artist,
             album: track.album,
