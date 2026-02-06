@@ -90,6 +90,34 @@ impl CursorQueue {
         self.cursor = None;
         self.manual_queue.clear();
     }
+
+    /// Creates a flat list view of the queue for the UI.
+    /// Returns (all_tracks, current_index)
+    pub fn snapshot(&self) -> (Vec<Track>, Option<usize>) {
+        let mut tracks = Vec::with_capacity(
+            self.history.len() + 1 + self.manual_queue.len()
+        );
+
+        tracks.extend(self.history.iter().cloned());
+        
+        let current_index = if let Some(current) = &self.current_track {
+            let idx = tracks.len();
+            tracks.push(current.clone());
+            Some(idx)
+        } else {
+            if !self.history.is_empty() {
+                // If history exists but no current track, point to end? 
+                // Or None? Let's say None implies stopped.
+                None
+            } else {
+                None
+            }
+        };
+
+        tracks.extend(self.manual_queue.iter().cloned());
+
+        (tracks, current_index)
+    }
 }
 
 #[derive(Debug, Clone)]
