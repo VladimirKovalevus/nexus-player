@@ -22,6 +22,8 @@ pub struct CursorQueue {
     pub current_track: Option<Track>,
     pub cursor: Option<PlayerCursor>,
     pub manual_queue: std::collections::VecDeque<Track>,
+    pub repeat_mode: RepeatMode,
+    pub shuffle_enabled: bool,
 }
 
 use anyhow::Result;
@@ -33,6 +35,8 @@ impl CursorQueue {
             current_track: None,
             cursor: None,
             manual_queue: std::collections::VecDeque::new(),
+            repeat_mode: RepeatMode::Off,
+            shuffle_enabled: false,
         }
     }
 
@@ -76,6 +80,21 @@ impl CursorQueue {
 
     pub fn add_track(&mut self, track: Track) {
         self.manual_queue.push_back(track);
+    }
+
+    pub fn remove_track(&mut self, index: usize) -> Option<Track> {
+        // Index is relative to snapshot: [history] + [current] + [manual]
+        let history_len = self.history.len();
+        let current_len = if self.current_track.is_some() { 1 } else { 0 };
+
+        if index < history_len {
+            Some(self.history.remove(index))
+        } else if index < history_len + current_len {
+            self.current_track.take()
+        } else {
+            let manual_idx = index - history_len - current_len;
+            self.manual_queue.remove(manual_idx)
+        }
     }
 
     pub fn set_cursor(&mut self, cursor: PlayerCursor) {
@@ -415,12 +434,6 @@ impl PlaybackQueueOld {
 }
 
 impl Default for PlaybackQueueOld {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl From<Playlist> for PlaybackQueueOld {
     fn default() -> Self {
         Self::new()
     }

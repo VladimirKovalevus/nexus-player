@@ -46,7 +46,7 @@ pub enum FrontendEvent {
 }
 
 pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
-    std::thread::spawn(move || {
+    tauri::async_runtime::spawn(async move {
         tracing::info!("Event loop started");
 
         loop {
@@ -60,9 +60,7 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                     AudioEvent::PlaybackStopped => FrontendEvent::PlaybackStopped,
                     AudioEvent::TrackFinished => {
                         let cl = state.clone();
-                        tauri::async_runtime::block_on(async move {
-                            cl.handle_track_finished(0).await;
-                        });
+                        cl.handle_track_finished(0).await;
                         FrontendEvent::TrackFinished { track_id: 0 }
                     }
                     AudioEvent::PositionUpdated { position } => FrontendEvent::PositionUpdated {
@@ -88,21 +86,28 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
 
             let audio_state: AudioStateDto = state.audio_state().into();
 
-            let queue = state.queue();
-            let tracks: Vec<TrackDto> = queue.tracks().into_iter().map(|t| t.into()).collect();
+            let (tracks, current_index, repeat_mode, shuffle_enabled) = {
+                let queue = state.lock_queue().await;
+                let (tracks, idx) = queue.snapshot();
+                
+                let tracks_dto: Vec<TrackDto> = tracks.into_iter().map(|t| t.into()).collect();
+                
+                let repeat_mode = match queue.repeat_mode {
+                    nexus_player_backend::playlist::playback_queue::RepeatMode::Off => "off",
+                    nexus_player_backend::playlist::playback_queue::RepeatMode::All => "all",
+                    nexus_player_backend::playlist::playback_queue::RepeatMode::One => "one",
+                };
 
-            let repeat_mode = match state.get_repeat_mode() {
-                nexus_player_backend::playlist::playback_queue::RepeatMode::Off => "off",
-                nexus_player_backend::playlist::playback_queue::RepeatMode::All => "all",
-                nexus_player_backend::playlist::playback_queue::RepeatMode::One => "one",
+                (tracks_dto, idx, repeat_mode.to_string(), queue.shuffle_enabled)
             };
 
             let queue_state = QueueStateDto {
                 tracks,
-                current_index: state.get_current_track_index(),
-                repeat_mode: repeat_mode.to_string(),
-                shuffle_enabled: state.is_shuffle_enabled(),
+                current_index,
+                repeat_mode,
+                shuffle_enabled,
             };
+
             if let Err(e) = app_handle.emit(
                 "audio-event",
                 &FrontendEvent::AudioStateUpdated {
@@ -113,7 +118,7 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                 tracing::error!("Failed to emit audio state: {}", e);
             }
 
-            std::thread::sleep(Duration::from_millis(100));
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
     });
 }

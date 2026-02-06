@@ -27,6 +27,16 @@ pub enum StreamingService {
     Bandcamp,
 }
 
+impl std::fmt::Display for StreamingService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::YouTube => write!(f, "youtube"),
+            Self::SoundCloud => write!(f, "soundcloud"),
+            Self::Bandcamp => write!(f, "bandcamp"),
+        }
+    }
+}
+
 impl StreamingService {
     pub fn name(&self) -> &'static str {
         match self {

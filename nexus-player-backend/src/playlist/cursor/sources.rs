@@ -113,19 +113,19 @@ impl ProviderCursor {
 
         // Use search or a specialized resolve method if available. 
         // For now, we simulate resolving a playlist/album.
-        let results = self.streaming.search(&self.system, self.content_type, &self.id, 100).await?;
+        let results = self.streaming.search(&self.system, Some(self.content_type), &self.id, 100).await?;
         
-        let items = results.into_iter().map(|res| match res {
-            SearchResult::Track(info) => CursorItem::Track(info.into()),
-            SearchResult::Playlist(info) => CursorItem::Container(ContainerContext::ExternalPlaylist { 
+        let items = results.into_iter().filter_map(|res| match res {
+            SearchResult::Track(info) => Some(CursorItem::Track(info.into())),
+            SearchResult::Playlist(info) => Some(CursorItem::Container(ContainerContext::ExternalPlaylist { 
                 system: self.system.clone(), 
                 id: info.url 
-            }),
-            SearchResult::Album(info) => CursorItem::Container(ContainerContext::ExternalAlbum { 
+            })),
+            SearchResult::Album(info) => Some(CursorItem::Container(ContainerContext::ExternalAlbum { 
                 system: self.system.clone(), 
                 id: info.url 
-            }),
-            _ => CursorItem::Track(Track::default()), // Should not happen for tracks
+            })),
+            _ => None,
         }).collect();
 
         self.items = Some(items);

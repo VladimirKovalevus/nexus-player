@@ -198,7 +198,7 @@ pub async fn add_to_queue(state: State<'_, Arc<AppState>>, track_id: i64) -> Res
 
 #[tauri::command]
 pub async fn remove_from_queue(state: State<'_, Arc<AppState>>, index: usize) -> Result<bool> {
-    let removed = state.remove_from_queue(index);
+    let removed = state.remove_from_queue(index).await;
     Ok(removed.is_some())
 }
 
@@ -292,13 +292,13 @@ pub async fn set_repeat_mode(state: State<'_, Arc<AppState>>, mode: String) -> R
         _ => return Err("Invalid repeat mode".into()),
     };
 
-    state.set_repeat_mode(repeat_mode);
+    state.set_repeat_mode(repeat_mode).await;
     Ok(())
 }
 
 #[tauri::command]
-pub fn toggle_shuffle(state: State<'_, Arc<AppState>>) -> Result<()> {
-    state.toggle_shuffle();
+pub async fn toggle_shuffle(state: State<'_, Arc<AppState>>) -> Result<()> {
+    state.toggle_shuffle().await;
     Ok(())
 }
 
