@@ -24,6 +24,8 @@ pub struct CursorQueue {
     pub manual_queue: std::collections::VecDeque<Track>,
 }
 
+use anyhow::Result;
+
 impl CursorQueue {
     pub fn new() -> Self {
         Self {
@@ -32,6 +34,61 @@ impl CursorQueue {
             cursor: None,
             manual_queue: std::collections::VecDeque::new(),
         }
+    }
+
+    pub async fn next(&mut self) -> Result<Option<Track>> {
+        // 1. Save current track to history before moving to next
+        if let Some(track) = self.current_track.take() {
+            self.history.push(track);
+        }
+
+        // 2. Try manual queue first
+        if let Some(track) = self.manual_queue.pop_front() {
+            self.current_track = Some(track.clone());
+            return Ok(Some(track));
+        }
+
+        // 3. Fetch from cursor if available
+        if let Some(cursor) = &mut self.cursor {
+            let track = cursor.next_track().await?;
+            self.current_track = track.clone();
+            return Ok(track);
+        }
+
+        Ok(None)
+    }
+
+    pub fn previous(&mut self) -> Option<Track> {
+        let prev = self.history.pop()?;
+
+        // Push current track back to the front of manual queue to allow "going forward" again
+        if let Some(current) = self.current_track.take() {
+            self.manual_queue.push_front(current);
+        }
+
+        self.current_track = Some(prev.clone());
+        Some(prev)
+    }
+
+    pub fn current(&self) -> Option<&Track> {
+        self.current_track.as_ref()
+    }
+
+    pub fn add_track(&mut self, track: Track) {
+        self.manual_queue.push_back(track);
+    }
+
+    pub fn set_cursor(&mut self, cursor: PlayerCursor) {
+        self.cursor = Some(cursor);
+        // If we don't have a current track, we might want to trigger next() immediately 
+        // but we leave it to the state manager.
+    }
+
+    pub fn clear(&mut self) {
+        self.history.clear();
+        self.current_track = None;
+        self.cursor = None;
+        self.manual_queue.clear();
     }
 }
 
