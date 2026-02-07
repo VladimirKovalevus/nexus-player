@@ -179,31 +179,6 @@ impl StreamProvider for SoundCloudProvider {
                         })
                         .collect();
 
-                    if (item.album_playlist.track_count as usize) > tracks.len() {
-                        if let Ok(fetched_tracks) = client
-                            .get_playlist_tracks(ResourceId::Url(
-                                item.album_playlist.permalink_url.clone(),
-                            ))
-                            .await
-                        {
-                            tracks = fetched_tracks
-                                .into_iter()
-                                .map(|t| TrackInfo {
-                                    source: TrackSource::External {
-                                        system: "soundcloud".to_string(),
-                                        id: t.track.permalink_url,
-                                    },
-                                    title: t.track.title,
-                                    artist: t.user.username,
-                                    duration: Some(std::time::Duration::from_millis(
-                                        t.track.duration as u64,
-                                    )),
-                                    thumbnail: t.track.artwork_url,
-                                    description: t.track.description,
-                                })
-                                .collect();
-                        }
-                    }
 
                     tracing::info!("SoundCloud Playlist tracks: {:?}", tracks);
 
@@ -253,31 +228,6 @@ impl StreamProvider for SoundCloudProvider {
                         })
                         .collect();
 
-                    if (item.album_playlist.track_count as usize) > tracks.len() {
-                        if let Ok(fetched_tracks) = client
-                            .get_playlist_tracks(ResourceId::Url(
-                                item.album_playlist.permalink_url.clone(),
-                            ))
-                            .await
-                        {
-                            tracks = fetched_tracks
-                                .into_iter()
-                                .map(|t| TrackInfo {
-                                    source: TrackSource::External {
-                                        system: "soundcloud".to_string(),
-                                        id: t.track.permalink_url,
-                                    },
-                                    title: t.track.title,
-                                    artist: t.user.username,
-                                    duration: Some(std::time::Duration::from_millis(
-                                        t.track.duration as u64,
-                                    )),
-                                    thumbnail: t.track.artwork_url,
-                                    description: t.track.description,
-                                })
-                                .collect();
-                        }
-                    }
 
                     tracing::info!("SoundCloud Album tracks: {:?}", tracks);
 

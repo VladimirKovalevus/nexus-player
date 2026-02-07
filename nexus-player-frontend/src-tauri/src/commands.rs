@@ -389,6 +389,7 @@ pub async fn handle_streaming_track(
         "progressive" => DownloadStrategy::Progressive,
         _ => return Err("Invalid download strategy".into()),
     };
+    tracing::info!("SEARCH RESULT {:?}",search_result);
 
     match download_strategy {
         DownloadStrategy::Cache => {

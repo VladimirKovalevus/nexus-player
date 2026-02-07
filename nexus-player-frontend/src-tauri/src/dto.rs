@@ -297,6 +297,7 @@ pub struct StreamingPlaylistDto {
     pub thumbnail: Option<String>,
     pub tracks: Vec<StreamingTrackDto>,
     pub url: String,
+    pub system: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -310,6 +311,7 @@ pub struct StreamingAlbumDto {
     pub thumbnail: Option<String>,
     pub tracks: Vec<StreamingTrackDto>,
     pub url: String,
+    pub system: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -320,6 +322,7 @@ pub struct StreamingChannelDto {
     pub subscriber_count: Option<u64>,
     pub thumbnail: Option<String>,
     pub url: String,
+    pub system: String,
 }
 
 impl From<streaming::SearchResult> for SearchResultDto {
@@ -351,6 +354,7 @@ impl From<streaming::SearchResult> for SearchResultDto {
                     thumbnail: playlist.thumbnail,
                     tracks: playlist.tracks.into_iter().map(|el| el.into()).collect(),
                     url: playlist.url,
+                    system: playlist.service.to_string(),
                 })
             }
             streaming::SearchResult::Album(album) => SearchResultDto::Album(StreamingAlbumDto {
@@ -362,6 +366,7 @@ impl From<streaming::SearchResult> for SearchResultDto {
                 thumbnail: album.thumbnail,
                 tracks: album.tracks.into_iter().map(|el| el.into()).collect(),
                 url: album.url,
+                system: album.service.to_string(),
             }),
             streaming::SearchResult::Channel(channel) => {
                 SearchResultDto::Channel(StreamingChannelDto {
@@ -370,6 +375,7 @@ impl From<streaming::SearchResult> for SearchResultDto {
                     subscriber_count: channel.subscriber_count,
                     thumbnail: channel.thumbnail,
                     url: channel.url,
+                    system: channel.service.to_string(),
                 })
             }
         }
@@ -410,10 +416,11 @@ impl From<SearchResultDto> for streaming::SearchResult {
                 description: None,
             }),
             SearchResultDto::Playlist(playlist) => {
+                let service = std::str::FromStr::from_str(&playlist.system).unwrap_or(streaming::StreamingService::YouTube);
                 streaming::SearchResult::Playlist(streaming::PlaylistInfo {
                     id: playlist.id,
                     url: playlist.url,
-                    service: streaming::StreamingService::Bandcamp,
+                    service,
                     title: playlist.title,
                     creator: playlist.creator,
                     tracks: playlist
@@ -436,37 +443,41 @@ impl From<SearchResultDto> for streaming::SearchResult {
                     description: None,
                 })
             }
-            SearchResultDto::Album(album) => streaming::SearchResult::Album(streaming::AlbumInfo {
-                id: album.id,
-                url: album.url,
-                service: streaming::StreamingService::Bandcamp,
-                title: album.title,
-                artist: album.artist,
-                tracks: album
-                    .tracks
-                    .into_iter()
-                    .map(|t| streaming::TrackInfo {
-                        source: nexus_player_backend::library::TrackSource::External {
-                            id: t.source.url,
-                            system: t.source.system,
-                        },
-                        title: t.title,
-                        artist: t.artist,
-                        duration: t.duration_secs.map(std::time::Duration::from_secs_f64),
-                        thumbnail: t.thumbnail,
-                        description: None,
-                    })
-                    .collect(),
-                track_count: album.track_count,
-                year: album.year,
-                thumbnail: album.thumbnail,
-                description: None,
-            }),
+            SearchResultDto::Album(album) => {
+                let service = std::str::FromStr::from_str(&album.system).unwrap_or(streaming::StreamingService::YouTube);
+                streaming::SearchResult::Album(streaming::AlbumInfo {
+                    id: album.id,
+                    url: album.url,
+                    service,
+                    title: album.title,
+                    artist: album.artist,
+                    tracks: album
+                        .tracks
+                        .into_iter()
+                        .map(|t| streaming::TrackInfo {
+                            source: nexus_player_backend::library::TrackSource::External {
+                                id: t.source.url,
+                                system: t.source.system,
+                            },
+                            title: t.title,
+                            artist: t.artist,
+                            duration: t.duration_secs.map(std::time::Duration::from_secs_f64),
+                            thumbnail: t.thumbnail,
+                            description: None,
+                        })
+                        .collect(),
+                    track_count: album.track_count,
+                    year: album.year,
+                    thumbnail: album.thumbnail,
+                    description: None,
+                })
+            }
             SearchResultDto::Channel(channel) => {
+                let service = std::str::FromStr::from_str(&channel.system).unwrap_or(streaming::StreamingService::YouTube);
                 streaming::SearchResult::Channel(streaming::ChannelInfo {
                     id: channel.id,
                     url: channel.url,
-                    service: streaming::StreamingService::YouTube,
+                    service,
                     name: channel.name,
                     subscriber_count: channel.subscriber_count,
                     track_count: None,
