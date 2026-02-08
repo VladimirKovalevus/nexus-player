@@ -18,7 +18,7 @@ anyhow = { workspace = true }
 #===============
 #===AUDIO=======
 #===============
-symphonia = { version = "0.5", features = ["all"] }
+symphonia = { path = "../../Symphonia/symphonia", features = ["all", "ogg", "vorbis", "opus"] }
 lofty = "0.21"
 cpal = "0.15"
 arc-swap = "1.7.1"

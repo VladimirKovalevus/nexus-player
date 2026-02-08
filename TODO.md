@@ -2,25 +2,25 @@
 
 ## 🎵 Core Features & Logic
 
-- [ ] **Smart Cover Art Fallback**
-  - [ ] Logic: When creating a track from an external source (playlist/album), if the track has no specific cover, inherit the cover from the parent playlist.
-  - [ ] Implementation Area: `nexus-player-backend/src/library/` (likely `metadata.rs` or `service.rs`).
+- [x] **Smart Cover Art Fallback**
+  - [x] Logic: When creating a track from an external source (playlist/album), if the track has no specific cover, inherit the cover from the parent playlist.
+  - [x] Implementation Area: `nexus-player-backend/src/library/` (likely `metadata.rs` or `service.rs`).
 
-- [ ] **Streaming Prefetch & Buffering**
-  - [ ] **Logic**: Design and implement logic to prefetch the next track in the queue to reduce latency between tracks.
+- [x] **Streaming Prefetch & Buffering**
+  - [x] **Logic**: Design and implement logic to prefetch the next track in the queue to reduce latency between tracks.
   - [ ] **Buffering**: Optimize buffering strategies for smoother playback (avoid stalls on network fluctuations).
-  - [ ] **Implementation Area**: `nexus-player-backend/src/streaming/` and `nexus-player-backend/src/audio/`.
+  - [x] **Implementation Area**: `nexus-player-backend/src/streaming/` and `nexus-player-backend/src/audio/`.
 
 - [ ] **Meta-Playlists (Nested Playlists)**
   - [ ] **Logic**: Allow adding playlists into another playlist.
   - [ ] **Playback**: When playing a meta-playlist, the player should traverse through the contained playlists sequentially.
 
-- [ ] **Cursor-based Playback Queue**
-  - [ ] **Structure**: Implement a `Cursor` struct for `PlaybackQueue` that abstracts the source of tracks.
-  - [ ] **Context Awareness**:
-    - [ ] *Search Results*: Iterate sequentially through search results.
-    - [ ] *Database/Library*: Fetch tracks lazily/paginated from the DB as playback progresses (avoid loading huge lists into memory).
-  - [ ] **Implementation Area**: `nexus-player-backend/src/playlist/playback_queue.rs`.
+- [x] **Cursor-based Playback Queue**
+  - [x] **Structure**: Implement a `Cursor` struct for `PlaybackQueue` that abstracts the source of tracks.
+  - [x] **Context Awareness**:
+    - [x] *Search Results*: Iterate sequentially through search results.
+    - [x] *Database/Library*: Fetch tracks lazily/paginated from the DB as playback progresses (avoid loading huge lists into memory).
+  - [x] **Implementation Area**: `nexus-player-backend/src/playlist/playback_queue.rs`.
 
 - [ ] **Like / Favorite System**
   - [ ] **Database**: Add schema for "Liked" tracks (boolean flag on Track entity or separate `favorites` table).

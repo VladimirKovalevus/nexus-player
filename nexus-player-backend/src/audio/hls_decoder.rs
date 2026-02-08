@@ -1,3 +1,4 @@
+use crate::audio::playback::HlsReaderAdapter;
 use crate::error::AudioError;
 use std::io::Cursor;
 use streaming::multi_downloader::source::HlsSource;
@@ -23,6 +24,9 @@ pub struct HlsAudioDecoder {
     /// Cached FormatReaders for each segment (None if not yet created)
     format_readers: Vec<Option<Box<dyn FormatReader>>>,
 
+    /// Reader for continuous mode (e.g. OGG)
+    continuous_reader: Option<Box<dyn FormatReader>>,
+
     /// Current segment index being played
     current_segment_index: usize,
 
@@ -41,6 +45,8 @@ pub struct HlsAudioDecoder {
     /// Timeline tracking (like VLC approach)
     accumulated_duration: f64,
     total_duration: f64,
+
+    is_continuous: bool,
 }
 
 impl HlsAudioDecoder {
@@ -51,12 +57,54 @@ impl HlsAudioDecoder {
     pub fn new(source: HlsSource) -> Result<Self, AudioError> {
         info!("Создание HLS декодера");
 
-        let (first_segment_data, _first_duration) = source
-            .get_segment(0)
-            .ok_or_else(|| AudioError::DecodingError("No segments available in HlsSource".to_string()))?;
+        let durations = source.durations();
+        let segment_count = durations.len();
+        let total_duration: f64 = durations.iter().sum();
 
-        let (mut format_reader, track_id, sample_rate, channels) =
-            Self::create_format_reader_for_segment(first_segment_data)?;
+        let is_continuous = source.is_continuous();
+
+        let (mut format_reader, track_id, sample_rate, channels) = if is_continuous {
+            // For continuous streams (OGG), wrap the whole HlsSource
+            let adapter = HlsReaderAdapter::new(source.clone());
+            let mss = MediaSourceStream::new(Box::new(adapter), Default::default());
+            let hint = Hint::new();
+            let format_opts = FormatOptions {
+                enable_gapless: true,
+                ..Default::default()
+            };
+            let metadata_opts = MetadataOptions::default();
+
+            let probed = symphonia::default::get_probe()
+                .format(&hint, mss, &format_opts, &metadata_opts)
+                .map_err(|e| {
+                    if let Error::IoError(io_e) = &e {
+                        if io_e.kind() == std::io::ErrorKind::WouldBlock {
+                            return AudioError::InProgress;
+                        }
+                    }
+                    AudioError::DecodingError(format!("Failed to probe continuous stream: {}", e))
+                })?;
+
+            let format_reader = probed.format;
+            let track = format_reader
+                .tracks()
+                .iter()
+                .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
+                .ok_or_else(|| AudioError::DecodingError("No audio track found".to_string()))?;
+
+            let track_id = track.id;
+            let sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
+            let channels = track.codec_params.channels.map(|ch| ch.count()).unwrap_or(2);
+
+            (format_reader, track_id, sample_rate, channels)
+        } else {
+            // For segmented streams, probe first segment
+            let (first_segment_data, _first_duration) = source
+                .get_segment(0)
+                .ok_or_else(|| AudioError::DecodingError("No segments available in HlsSource".to_string()))?;
+
+            Self::create_format_reader_for_segment(first_segment_data)?
+        };
 
         let track = format_reader
             .tracks()
@@ -68,22 +116,23 @@ impl HlsAudioDecoder {
             .make(&track.codec_params, &DecoderOptions::default())
             .map_err(|e| AudioError::DecodingError(format!("Failed to create decoder: {}", e)))?;
 
-        let durations = source.durations();
-        let segment_count = durations.len();
-        let total_duration: f64 = durations.iter().sum();
-
-        let mut format_readers: Vec<Option<Box<dyn FormatReader>>> =
-            (0..segment_count).map(|_| None).collect();
-        format_readers[0] = Some(format_reader);
+        let (format_readers, continuous_reader) = if is_continuous {
+            (vec![], Some(format_reader))
+        } else {
+            let mut readers: Vec<Option<Box<dyn FormatReader>>> = (0..segment_count).map(|_| None).collect();
+            readers[0] = Some(format_reader);
+            (readers, None)
+        };
 
         info!(
-            "HLS декодер создан: segments={}, sample_rate={}, channels={}, duration={:.2}s",
-            segment_count, sample_rate, channels, total_duration
+            "HLS декодер создан (continuous={}): segments={}, sample_rate={}, channels={}, duration={:.2}s",
+            is_continuous, segment_count, sample_rate, channels, total_duration
         );
 
         Ok(Self {
             source,
             format_readers,
+            continuous_reader,
             current_segment_index: 0,
             decoder,
             track_id,
@@ -91,14 +140,19 @@ impl HlsAudioDecoder {
             channels,
             accumulated_duration: 0.0,
             total_duration,
+            is_continuous,
         })
     }
 
     pub fn decode_next_block(&mut self) -> Result<Option<Vec<f32>>, AudioError> {
         loop {
-            let format_reader = self.format_readers[self.current_segment_index]
-                .as_mut()
-                .ok_or_else(|| AudioError::DecodingError("Format reader not available for current segment".to_string()))?;
+            let format_reader = if self.is_continuous {
+                self.continuous_reader.as_mut().unwrap()
+            } else {
+                self.format_readers[self.current_segment_index]
+                    .as_mut()
+                    .ok_or_else(|| AudioError::DecodingError("Format reader not available for current segment".to_string()))?
+            };
 
             match format_reader.next_packet() {
                 Ok(packet) => {
@@ -107,6 +161,14 @@ impl HlsAudioDecoder {
                             Ok(decoded) => {
                                 let samples = Self::convert_to_f32(decoded)?;
                                 return Ok(Some(samples));
+                            }
+                            Err(Error::ResetRequired) => {
+                                debug!("Decoder requires reset, resetting and skipping this packet.");
+                                self.decoder.reset();
+                                return Ok(Some(vec![]));
+                            }
+                            Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                                return Err(AudioError::InProgress);
                             }
                             Err(Error::DecodeError(e)) => {
                                 warn!("Decode error (skipping): {}", e);
@@ -121,9 +183,22 @@ impl HlsAudioDecoder {
                 }
 
                 Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    if self.is_continuous {
+                        return Ok(None); // Real EOF for continuous stream
+                    }
                     if !self.switch_to_next_segment()? {
                         return Ok(None);
                     }
+                    continue;
+                }
+
+                Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    return Err(AudioError::InProgress);
+                }
+
+                Err(Error::ResetRequired) => {
+                    debug!("Format reader requires reset, resetting decoder...");
+                    self.decoder.reset();
                     continue;
                 }
 
@@ -135,7 +210,27 @@ impl HlsAudioDecoder {
     }
 
     pub fn seek(&mut self, time_secs: f64) -> Result<u64, AudioError> {
-        debug!("HLS seek to {:.2}s", time_secs);
+        info!("HLS seek to {:.2}s is_cont: {}", time_secs, self.is_continuous);
+
+        if self.is_continuous {
+            // Explicitly tell source to seek to this time to trigger download if needed
+            self.source.seek((time_secs * 1000.0) as u64)
+                .map_err(|e| AudioError::DecodingError(format!("HLS source seek failed: {}", e)))?;
+
+            let reader = self.continuous_reader.as_mut().unwrap();
+            let ts = Time::from(time_secs);
+            let seeked_to = reader.seek(
+                SeekMode::Coarse,
+                SeekTo::Time {
+                    time: ts,
+                    track_id: Some(self.track_id),
+                }
+            ).map_err(|e| AudioError::DecodingError(format!("Seek failed: {}", e)))?;
+            
+            self.decoder.reset();
+            info!("HLS continuous seek completed to {:.2}s", time_secs);
+            return Ok(seeked_to.actual_ts);
+        }
 
         self.source.seek((time_secs * 1000.0) as u64)
             .map_err(|e| AudioError::DecodingError(format!("HLS seek failed: {}", e)))?;
@@ -208,8 +303,8 @@ impl HlsAudioDecoder {
         let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
 
         let mut hint = Hint::new();
-        hint.with_extension("m4s");
-
+        // Don't hardcode extension, let Symphonia sniff from data
+        
         let format_opts = FormatOptions::default();
         let metadata_opts = MetadataOptions::default();
 
@@ -237,6 +332,18 @@ impl HlsAudioDecoder {
     }
 
     fn switch_to_next_segment(&mut self) -> Result<bool, AudioError> {
+        let next_index = self.current_segment_index + 1;
+
+        if next_index >= self.format_readers.len() {
+            return Ok(false);
+        }
+
+        // Пытаемся подготовить следующий сегмент. 
+        // Если он не готов, вернется AudioError::InProgress, и мы останемся на текущем индексе (который EOF).
+        // Это заставит движок подождать и вызвать decode_next_block снова.
+        self.get_or_create_format_reader(next_index)?;
+
+        // Только если ридер успешно создан, обновляем состояние
         let durations = self.source.durations();
         let current_duration = durations
             .get(self.current_segment_index)
@@ -244,28 +351,23 @@ impl HlsAudioDecoder {
             .unwrap_or(0.0);
 
         self.accumulated_duration += current_duration;
-        self.current_segment_index += 1;
+        self.current_segment_index = next_index;
 
-        if self.current_segment_index >= self.format_readers.len() {
-            return Ok(false);
-        }
-
-        debug!("Switching to segment {}", self.current_segment_index);
-        self.get_or_create_format_reader(self.current_segment_index)?;
+        debug!("Переключение на сегмент {}", self.current_segment_index);
         self.decoder.reset();
 
         Ok(true)
     }
 
     fn get_or_create_format_reader(&mut self, segment_index: usize) -> Result<(), AudioError> {
-        if self.format_readers[segment_index].is_some() {
+        if let Some(ref _reader) = self.format_readers[segment_index] {
             return Ok(());
         }
 
         let (segment_data, _duration) = self
             .source
             .get_segment(segment_index)
-            .ok_or_else(|| AudioError::DecodingError(format!("Segment {} not available", segment_index)))?;
+            .ok_or(AudioError::InProgress)?; // Возвращаем InProgress вместо ошибки, если данных еще нет
 
         let (format_reader, _, _, _) = Self::create_format_reader_for_segment(segment_data)?;
         self.format_readers[segment_index] = Some(format_reader);

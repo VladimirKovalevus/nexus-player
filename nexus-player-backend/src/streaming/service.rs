@@ -212,13 +212,17 @@ impl StreamingService {
         dir: &std::path::Path,
     ) -> StreamResult<std::path::PathBuf> {
         if let Some((source, url)) = self.download_manager.get_track_with_url(track_id).await {
-            let sanitized_filename: String = url
+            let mut sanitized_filename: String = url
                 .chars()
                 .map(|c| match c {
                     '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
                     _ => c,
                 })
                 .collect();
+
+            if sanitized_filename.len() > 200 {
+                sanitized_filename.truncate(200);
+            }
 
             let file_path = dir.join(format!("{}.mp3", sanitized_filename));
 

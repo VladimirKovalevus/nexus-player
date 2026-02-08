@@ -4,6 +4,7 @@ use crate::audio::types::{AudioSource, MediaSource, SampleRate, TrackSource};
 use crate::error::AudioError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::result;
 use std::sync::Arc;
@@ -11,6 +12,94 @@ use std::sync::Mutex;
 use std::time::Duration;
 use streaming::multi_downloader::source::HlsSource;
 use tracing::{info, warn};
+
+#[derive(Debug, Clone)]
+pub struct HlsReaderAdapter {
+    source: HlsSource,
+    position: u64,
+}
+
+impl HlsReaderAdapter {
+    pub fn new(source: HlsSource) -> Self {
+        Self {
+            source,
+            position: 0,
+        }
+    }
+}
+
+impl Read for HlsReaderAdapter {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self.source.read(buf) {
+            Ok(n) => {
+                self.position += n as u64;
+                Ok(n)
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl Seek for HlsReaderAdapter {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        let total_size = self.source.estimate_total_size().unwrap_or(0);
+        let new_pos = match pos {
+            SeekFrom::Start(p) => p,
+            SeekFrom::End(p) => {
+                if total_size == 0 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Unknown stream size",
+                    ));
+                }
+                if p >= 0 {
+                    total_size.saturating_add(p as u64)
+                } else {
+                    total_size.saturating_sub(p.abs() as u64)
+                }
+            }
+            SeekFrom::Current(p) => {
+                if p >= 0 {
+                    self.position.saturating_add(p as u64)
+                } else {
+                    self.position.saturating_sub(p.abs() as u64)
+                }
+            }
+        };
+
+        if new_pos != self.position {
+            info!(
+                "HlsReaderAdapter seek: {} -> {} (total: {})",
+                self.position, new_pos, total_size
+            );
+            if let Err(e) = self.source.seek_to_byte_approx(new_pos) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ));
+            }
+            self.position = new_pos;
+        }
+
+        Ok(self.position)
+    }
+}
+
+impl symphonia::core::io::MediaSource for HlsReaderAdapter {
+    fn is_seekable(&self) -> bool {
+        true
+    }
+
+    fn byte_len(&self) -> Option<u64> {
+        self.source.estimate_total_size()
+    }
+}
+
+impl MediaSource for HlsReaderAdapter {
+    fn clone_box(&self) -> Box<dyn MediaSource> {
+        Box::new(self.clone())
+    }
+}
 
 pub struct PlaybackEngine {
     decoder: Arc<Mutex<Option<DecoderType>>>,
@@ -107,6 +196,10 @@ impl PlaybackEngine {
 
     pub fn play_hls(&mut self, hls_source: HlsSource) -> Result<(), AudioError> {
         info!("Загрузка HLS потока");
+
+        // Prepare source (wait for metadata/first segment)
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let _ = rt.block_on(hls_source.prepare());
 
         let decoder = HlsAudioDecoder::new(hls_source)?;
         let duration = decoder.duration().map(Duration::from_secs_f64);
@@ -280,23 +373,74 @@ impl PlaybackEngine {
         *self.decoder.lock().unwrap() = None;
         *self.current_position.lock().unwrap() = Duration::ZERO;
         *self.samples_played.lock().unwrap() = 0;
-        self.sample_buffer.lock().unwrap();
+        self.sample_buffer.lock().unwrap().clear();
         *self.buffer_position.lock().unwrap() = 0;
     }
 
     pub fn seek(&mut self, position: Duration) -> Result<(), AudioError> {
+        info!("Запрос перемотки на {:?}", position);
+
+        // Сохраняем состояние воспроизведения
+        let was_playing = *self.is_playing.lock().unwrap();
+
+        // Приостанавливаем стрим на время перемотки
+        if let Some(ref stream) = self.stream {
+            let _ = stream.pause();
+        }
+
         let mut decoder_guard = self.decoder.lock().unwrap();
         if let Some(ref mut dec) = *decoder_guard {
-            dec.seek(position.as_secs_f64());
-            *self.current_position.lock().unwrap() = position;
+            info!("Выполнение перемотки в декодере...");
+            dec.seek(position.as_secs_f64())?;
 
+            // Очищаем буферы
+            self.sample_buffer.lock().unwrap().clear();
+            *self.buffer_position.lock().unwrap() = 0;
+
+            // Цикл ожидания данных
+            info!("Ожидание загрузки данных для новой позиции...");
+            loop {
+                match dec.decode_next_block() {
+                    Ok(Some(samples)) => {
+                        info!(
+                            "Данные получены ({} сэмплов), возобновление...",
+                            samples.len()
+                        );
+                        *self.sample_buffer.lock().unwrap() = samples;
+                        *self.buffer_position.lock().unwrap() = 0;
+                        break;
+                    }
+                    Ok(None) => {
+                        info!("Конец потока достигнут при перемотке");
+                        break;
+                    }
+                    Err(AudioError::InProgress) => {
+                        // Данные еще не загружены, ждем
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                        continue;
+                    }
+                    Err(e) => {
+                        warn!("Ошибка при ожидании данных после перемотки: {}", e);
+                        return Err(e);
+                    }
+                }
+            }
+
+            // Обновляем позицию и счетчик сэмплов
+            *self.current_position.lock().unwrap() = position;
             let sr = *self.sample_rate.lock().unwrap();
             let new_samples = (position.as_secs_f64() * sr as f64) as u64;
             *self.samples_played.lock().unwrap() = new_samples;
-
-            self.sample_buffer.lock().unwrap().clear();
-            *self.buffer_position.lock().unwrap() = 0;
         }
+
+        // Возобновляем стрим, если он был активен
+        if was_playing {
+            if let Some(ref stream) = self.stream {
+                let _ = stream.play();
+            }
+        }
+
+        info!("Перемотка завершена");
         Ok(())
     }
 

@@ -132,18 +132,31 @@ impl AppState {
 
     async fn play(&self, track: Option<Track>) {
         if let Some(track) = track {
-            // Prepare source
+            // Get next track for preloading context
+            let next_track = {
+                let queue = self.queue.lock().await;
+                queue.manual_queue.front().cloned()
+            };
+            let next_track_id = next_track.as_ref().map(|t| t.id as u64);
+
+            // Trigger resolution for next track to start its download/init process
+            if let Some(next) = next_track {
+                let streaming = self.streaming.clone();
+                tokio::spawn(async move {
+                    let _ = streaming.resolve(next.source, next.id as u64).await;
+                });
+            }
+
+            // Prepare source for current track
             match self
                 .streaming()
                 .resolve(track.source.clone(), track.id as u64)
                 .await
             {
                 Ok(wrapper) => {
-                    // Preload next track logic (simplified for now)
-                    // In new architecture, we might need to peek the cursor.
-                    // For now, let's skip preloading to keep it simple or peek if queue supports it.
-
-                    self.streaming().set_context(track.id as u64, None).await;
+                    self.streaming()
+                        .set_context(track.id as u64, next_track_id)
+                        .await;
 
                     if let Err(e) = wrapper.prepare().await {
                         tracing::warn!("Prepare failed: {}", e);

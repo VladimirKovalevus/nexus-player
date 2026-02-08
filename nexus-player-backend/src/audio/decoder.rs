@@ -131,8 +131,8 @@ impl AudioDecoder {
         let total_frames = codec_params.n_frames;
 
         info!(
-            "Chunked streaming трек готов: sample_rate={}, channels={}, frames={:?}",
-            sample_rate, channels, total_frames
+            "Chunked streaming трек готов: sample_rate={}, channels={}, frames={:?}, codec={:?}",
+            sample_rate, channels, total_frames, codec_params.codec
         );
 
         let decoder = symphonia::default::get_codecs()
@@ -198,12 +198,12 @@ impl AudioDecoder {
                         self.decoder.reset();
                         return Err(AudioError::InProgress);
                     }
+                    return Err(AudioError::DecodingError(format!("IO Error: {}", e)));
                 }
                 Err(Error::ResetRequired) => {
-                    warn!("Decoder требует сброса");
-                    return Err(AudioError::DecodingError(
-                        "Decoder reset required".to_string(),
-                    ));
+                    debug!("Format reader requires reset, resetting decoder...");
+                    self.decoder.reset();
+                    // Continue loop to get next packet
                 }
                 Err(e) => {
                     return Err(AudioError::DecodingError(format!(
@@ -219,13 +219,19 @@ impl AudioDecoder {
                 let samples = Self::convert_to_f32(decoded)?;
                 Ok(Some(samples))
             }
+            Err(Error::ResetRequired) => {
+                debug!("Decoder requires reset, resetting and skipping this packet.");
+                self.decoder.reset();
+                // We return an empty block instead of error to keep the stream alive
+                // The next call will pick up the next packet.
+                Ok(Some(vec![]))
+            }
             Err(Error::DecodeError(e)) => {
                 warn!("Ошибка декодирования: {}", e);
-
                 Ok(Some(vec![]))
             }
             Err(e) => Err(AudioError::DecodingError(format!(
-                "Ошибка декодирования: {}",
+                "Критическая ошибка декодирования: {}",
                 e
             ))),
         }
