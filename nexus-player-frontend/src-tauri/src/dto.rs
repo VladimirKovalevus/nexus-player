@@ -41,11 +41,52 @@ pub struct PlaylistWithTracksDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ContainerMetaDto {
+    pub kind: String,
+    pub id: String,
+    pub system: String,
+    pub title: String,
+    pub artist: String,
+    pub track_count: usize,
+    pub thumbnail: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "entryType")]
+pub enum QueueEntryDto {
+    #[serde(rename = "track")]
+    Track { track: TrackDto },
+    #[serde(rename = "container")]
+    Container {
+        meta: ContainerMetaDto,
+        tracks: Option<Vec<TrackDto>>,
+        play_index: usize,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentPositionDto {
+    pub item_index: usize,
+    pub track_within_container: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchContextDto {
+    pub system: String,
+    pub query: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QueueStateDto {
-    pub tracks: Vec<TrackDto>,
-    pub current_index: Option<usize>,
+    pub entries: Vec<QueueEntryDto>,
+    pub current_position: Option<CurrentPositionDto>,
     pub repeat_mode: String,
     pub shuffle_enabled: bool,
+    pub search_context: Option<SearchContextDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +98,29 @@ pub struct AudioStateDto {
     pub volume: f32,
     pub current_track: Option<TrackDto>,
     pub buffered_ranges: Vec<BufferedRangeDto>,
+    pub waveforms: Vec<WaveformDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaveformDto {
+    pub data: Vec<f32>,
+    pub start_time: f64,
+    pub end_time: f64,
+    pub byte_start: Option<u64>,
+    pub byte_end: Option<u64>,
+}
+
+impl From<nexus_player_backend::audio::types::Waveform> for WaveformDto {
+    fn from(w: nexus_player_backend::audio::types::Waveform) -> Self {
+        Self {
+            data: w.data,
+            start_time: w.start_time,
+            end_time: w.end_time,
+            byte_start: w.byte_start,
+            byte_end: w.byte_end,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -246,6 +310,11 @@ impl From<audio::AudioState> for AudioStateDto {
                 .buffered_ranges
                 .into_iter()
                 .map(BufferedRangeDto::from)
+                .collect(),
+            waveforms: state
+                .waveforms
+                .into_iter()
+                .map(WaveformDto::from)
                 .collect(),
         }
     }

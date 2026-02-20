@@ -4,10 +4,21 @@ use std::time::Duration;
 use streaming::multi_downloader::source::HlsSource;
 use symphonia::core::io::MediaSource as SymphoniaSource;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Waveform {
+    pub data: Vec<f32>,
+    pub start_time: f64,
+    pub end_time: f64,
+    pub byte_start: Option<u64>,
+    pub byte_end: Option<u64>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SampleRate(pub u32);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct BufferedRange {
     pub start: f32,
     pub end: f32,
@@ -79,6 +90,8 @@ pub enum AudioEvent {
 
     BufferUpdated { ranges: Vec<BufferedRange> },
 
+    WaveformUpdated { waveforms: Vec<Waveform> },
+
     LoadingStarted { track: Track },
 }
 
@@ -94,6 +107,10 @@ pub struct AudioState {
 
     pub buffered_ranges: Vec<BufferedRange>,
 
+    pub waveforms: Vec<Waveform>,
+
+    pub total_size_bytes: Option<u64>,
+
     pub current_track: Option<Track>,
 }
 
@@ -105,6 +122,8 @@ impl Default for AudioState {
             duration: Duration::ZERO,
             volume: 1.0,
             buffered_ranges: Vec::new(),
+            waveforms: Vec::new(),
+            total_size_bytes: None,
             current_track: None,
         }
     }
@@ -129,6 +148,7 @@ impl Default for PlaybackState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AudioFormat {
     pub sample_rate: SampleRate,
 
@@ -144,6 +164,7 @@ impl AudioFormat {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: usize,
     pub title: String,
@@ -157,6 +178,7 @@ pub struct Track {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum TrackState {
     Saved,
     Streaming,
@@ -171,6 +193,7 @@ pub struct EngineTrack {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
+#[serde(rename_all = "camelCase")]
 pub enum TrackSource {
     Local(PathBuf),
 
@@ -263,6 +286,9 @@ use std::io::{Read, Seek};
 
 pub trait MediaSource: SymphoniaSource + Read + Seek + Send + std::fmt::Debug {
     fn clone_box(&self) -> Box<dyn MediaSource>;
+    fn get_waveforms(&self) -> Vec<Waveform> {
+        Vec::new()
+    }
 }
 
 impl Clone for Box<dyn MediaSource> {

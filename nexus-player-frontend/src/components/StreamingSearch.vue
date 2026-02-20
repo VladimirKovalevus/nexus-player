@@ -71,13 +71,24 @@ const formatNumber = (num?: number): string => {
 const emit = defineEmits<{
   refetch: [];
 }>();
-const handleResultClick = async (result: SearchResult) => {
-  console.log('Clicked result:', result);
-  await invoke('handle_streaming_track', {
-    searchResult: result,
-    strategy: 'cache',
-    query: query.value,
-  });
+const handleResultClick = async (result: SearchResult, index: number) => {
+  console.log('Clicked result:', result, 'at index:', index);
+  try {
+    // Use the new handle_search for search context queue
+    await invoke('handle_search', {
+      system: selectedProvider.value,
+      query: query.value,
+      selectedIndex: index,
+    });
+  } catch (e) {
+    // Fallback to old behavior
+    console.warn('handle_search failed, falling back:', e);
+    await invoke('handle_streaming_track', {
+      searchResult: result,
+      strategy: 'cache',
+      query: query.value,
+    });
+  }
   emit('refetch');
 };
 </script>
@@ -157,7 +168,7 @@ const handleResultClick = async (result: SearchResult) => {
           :key="index"
           class="result-item"
           :class="`result-${result.type}`"
-          @click="handleResultClick(result)"
+          @click="handleResultClick(result, index)"
         >
           <div class="result-thumbnail">
             <img

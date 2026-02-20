@@ -23,19 +23,7 @@
       </div>
       <div :class="$style.progress">
         <span :class="$style.time">{{ formatTime(position) }}</span>
-        <div :class="$style.progressBar" @click="handleSeek">
-          <!-- Buffered ranges -->
-          <div 
-            v-for="(range, index) in bufferedRanges" 
-            :key="index"
-            :class="$style.progressBuffered"
-            :style="{ 
-              left: (range.start / duration * 100) + '%', 
-              width: ((range.end - range.start) / duration * 100) + '%' 
-            }"
-          ></div>
-          <div :class="$style.progressFilled" :style="{ width: (position / duration * 100) + '%' }"></div>
-        </div>
+        <WaveformBar />
         <span :class="$style.time">{{ formatTime(duration) }}</span>
       </div>
     </div>
@@ -52,6 +40,7 @@
 
 <script setup lang="ts">
 import { useAudioStore } from '@/stores/audio';
+import WaveformBar from '@/components/common/WaveformBar.vue';
 import { invoke } from '@tauri-apps/api/core';
 import { computed } from 'vue';
 
@@ -62,7 +51,6 @@ const isLoading = computed(() => audioStore.isLoading);
 const currentTrack = computed(() => audioStore.currentTrack);
 const position = computed(() => audioStore.position);
 const duration = computed(() => audioStore.duration);
-const bufferedRanges = computed(() => audioStore.bufferedRanges);
 
 const formatTime = (seconds: number) => {
   if (isNaN(seconds)) return '0:00';
@@ -81,16 +69,6 @@ const togglePlay = async () => {
 
 const playNext = () => invoke('play_next');
 const playPrevious = () => invoke('play_previous');
-
-const handleSeek = (event: MouseEvent) => {
-  const bar = event.currentTarget as HTMLElement;
-  const rect = bar.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const percentage = x / rect.width;
-  const seekTime = percentage * duration.value;
-  
-  invoke('seek', { positionSecs: seekTime });
-};
 </script>
 
 <style module lang="scss">
@@ -206,38 +184,6 @@ const handleSeek = (event: MouseEvent) => {
   font-size: $font-size-xs;
   min-width: 40px;
   text-align: center;
-}
-
-.progressBar {
-  flex: 1;
-  height: 4px;
-  background-color: $color-bg-secondary;
-  border-radius: 2px;
-  position: relative;
-  cursor: pointer;
-  overflow: hidden;
-
-  &:hover {
-    height: 6px;
-  }
-}
-
-.progressFilled {
-  height: 100%;
-  background-color: $color-accent-primary;
-  border-radius: 2px;
-  position: relative;
-  z-index: 2;
-  transition: width $transition-fast;
-}
-
-.progressBuffered {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
-  z-index: 1;
 }
 
 .spinner {

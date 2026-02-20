@@ -149,6 +149,8 @@ impl AudioEngine {
                         })
                         .collect();
 
+                    let waveforms = playback.waveforms();
+
                     {
                         let mut s = state.write().unwrap();
                         s.position = position;
@@ -158,6 +160,11 @@ impl AudioEngine {
                             let _ = event_tx.send(AudioEvent::BufferUpdated {
                                 ranges: buffered_ranges,
                             });
+                        }
+
+                        if s.waveforms != waveforms {
+                            s.waveforms = waveforms.clone();
+                            let _ = event_tx.send(AudioEvent::WaveformUpdated { waveforms });
                         }
                     }
 

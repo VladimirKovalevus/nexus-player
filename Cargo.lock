@@ -5482,8 +5482,10 @@ dependencies = [
  "crossbeam",
  "lofty 0.22.4",
  "reqwest 0.12.24",
+ "symphonia",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

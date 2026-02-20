@@ -20,6 +20,8 @@ pub struct AudioDecoder {
 
     decoder: Box<dyn Decoder>,
 
+    reader: Option<Box<dyn MediaSource>>,
+
     track_id: u32,
 
     sample_rate: u32,
@@ -88,6 +90,7 @@ impl AudioDecoder {
         Ok(Self {
             format_reader,
             decoder,
+            reader: None,
             track_id,
             sample_rate,
             channels,
@@ -99,6 +102,7 @@ impl AudioDecoder {
         mut reader: Box<dyn MediaSource>,
         hint: Option<Hint>,
     ) -> Result<Self, AudioError> {
+        let reader_clone = reader.clone_box();
         let mss = MediaSourceStream::new(reader, Default::default());
         let mut format_opts = FormatOptions::default();
         format_opts.enable_gapless = true;
@@ -142,6 +146,7 @@ impl AudioDecoder {
         Ok(Self {
             format_reader,
             decoder,
+            reader: Some(reader_clone),
             track_id,
             sample_rate,
             channels,
@@ -186,6 +191,14 @@ impl AudioDecoder {
     pub fn buffered_ranges(&self) -> Vec<(f64, f64)> {
         if let Some(duration) = self.duration() {
             vec![(0.0, duration)]
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn waveforms(&self) -> Vec<crate::audio::types::Waveform> {
+        if let Some(ref reader) = self.reader {
+            reader.get_waveforms()
         } else {
             vec![]
         }
@@ -310,6 +323,13 @@ impl DecoderType {
         match self {
             Self::Standard(d) => d.buffered_ranges(),
             Self::Hls(d) => d.buffered_ranges(),
+        }
+    }
+
+    pub fn waveforms(&self) -> Vec<crate::audio::types::Waveform> {
+        match self {
+            Self::Standard(d) => d.waveforms(),
+            Self::Hls(d) => d.waveforms(),
         }
     }
 }

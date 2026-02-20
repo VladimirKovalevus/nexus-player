@@ -3,6 +3,7 @@ use crate::playlist::cursor::PlayerCursor;
 use crate::playlist::playlist::Playlist;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepeatMode {
@@ -142,6 +143,253 @@ impl CursorQueue {
         tracks.extend(self.manual_queue.iter().cloned());
 
         (tracks, current_index)
+    }
+}
+
+// === Search Queue Types ===
+
+/// Type of container in search results
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ContainerKind {
+    Album,
+    Playlist,
+}
+
+/// Metadata for a container (album or playlist)
+#[derive(Debug, Clone)]
+pub struct ContainerMeta {
+    pub kind: ContainerKind,
+    pub id: String,
+    pub system: String,
+    pub title: String,
+    pub artist: String,
+    pub track_count: usize,
+    pub thumbnail: Option<String>,
+}
+
+/// An item in the search queue
+#[derive(Debug, Clone)]
+pub enum SearchQueueItem {
+    Track(Track),
+    Container {
+        info: ContainerMeta,
+        expanded_tracks: Option<Vec<Track>>,
+        play_index: usize,
+    },
+}
+
+/// Result of navigation in the search queue
+pub enum NextResult {
+    Track(Track),
+    NeedExpand(usize),
+    NeedMorePages,
+    End,
+}
+
+/// Position within the search queue for UI
+#[derive(Debug, Clone)]
+pub struct CurrentPosition {
+    pub item_index: usize,
+    pub track_within_container: Option<usize>,
+}
+
+/// Entry for the UI snapshot
+#[derive(Debug, Clone)]
+pub enum QueueEntry {
+    Track(Track),
+    Container {
+        info: ContainerMeta,
+        tracks: Option<Vec<Track>>,
+        play_index: usize,
+    },
+}
+
+/// Search queue that preserves the full search context
+pub struct SearchQueue {
+    pub system: String,
+    pub query: String,
+    items: Vec<SearchQueueItem>,
+    current_index: Option<usize>,
+    pub search_offset: usize,
+    pub has_more_pages: bool,
+}
+
+impl SearchQueue {
+    pub fn new(system: String, query: String, items: Vec<SearchQueueItem>, has_more: bool) -> Self {
+        let offset = items.len();
+        Self {
+            system,
+            query,
+            items,
+            current_index: None,
+            search_offset: offset,
+            has_more_pages: has_more,
+        }
+    }
+
+    pub fn jump_to(&mut self, index: usize) {
+        if index < self.items.len() {
+            self.current_index = Some(index);
+            // Reset play_index for containers
+            if let Some(SearchQueueItem::Container { play_index, .. }) = self.items.get_mut(index) {
+                *play_index = 0;
+            }
+        }
+    }
+
+    pub fn jump_to_with_track_index(&mut self, index: usize, track_idx: usize) {
+        if index < self.items.len() {
+            self.current_index = Some(index);
+            if let Some(SearchQueueItem::Container { play_index, expanded_tracks, .. }) = self.items.get_mut(index) {
+                if let Some(tracks) = expanded_tracks {
+                    if track_idx < tracks.len() {
+                        *play_index = track_idx;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn current_track(&self) -> Option<Track> {
+        let idx = self.current_index?;
+        match self.items.get(idx)? {
+            SearchQueueItem::Track(track) => Some(track.clone()),
+            SearchQueueItem::Container { expanded_tracks, play_index, .. } => {
+                expanded_tracks.as_ref()?.get(*play_index).cloned()
+            }
+        }
+    }
+
+    pub fn next(&mut self) -> NextResult {
+        let current = match self.current_index {
+            Some(idx) => idx,
+            None => {
+                // Start from the beginning
+                if self.items.is_empty() {
+                    if self.has_more_pages {
+                        return NextResult::NeedMorePages;
+                    }
+                    return NextResult::End;
+                }
+                self.current_index = Some(0);
+                return self.return_current_or_expand(0);
+            }
+        };
+
+        // If current is a container with tracks, try advancing within it
+        if let Some(SearchQueueItem::Container { expanded_tracks: Some(tracks), play_index, .. }) = self.items.get(current) {
+            if *play_index + 1 < tracks.len() {
+                // Advance within container
+                if let Some(SearchQueueItem::Container { play_index, expanded_tracks: Some(tracks), .. }) = self.items.get_mut(current) {
+                    *play_index += 1;
+                    return NextResult::Track(tracks[*play_index].clone());
+                }
+            }
+        }
+
+        // Move to next item
+        let next_idx = current + 1;
+        if next_idx >= self.items.len() {
+            if self.has_more_pages {
+                return NextResult::NeedMorePages;
+            }
+            return NextResult::End;
+        }
+
+        self.current_index = Some(next_idx);
+        self.return_current_or_expand(next_idx)
+    }
+
+    pub fn previous(&mut self) -> NextResult {
+        let current = match self.current_index {
+            Some(idx) => idx,
+            None => return NextResult::End,
+        };
+
+        // If current is a container with tracks, try going back within it
+        if let Some(SearchQueueItem::Container { expanded_tracks: Some(_), play_index, .. }) = self.items.get(current) {
+            if *play_index > 0 {
+                if let Some(SearchQueueItem::Container { play_index, expanded_tracks: Some(tracks), .. }) = self.items.get_mut(current) {
+                    *play_index -= 1;
+                    return NextResult::Track(tracks[*play_index].clone());
+                }
+            }
+        }
+
+        // Move to previous item
+        if current == 0 {
+            return NextResult::End;
+        }
+
+        let prev_idx = current - 1;
+        self.current_index = Some(prev_idx);
+        self.return_current_or_expand(prev_idx)
+    }
+
+    fn return_current_or_expand(&self, idx: usize) -> NextResult {
+        match &self.items[idx] {
+            SearchQueueItem::Track(track) => NextResult::Track(track.clone()),
+            SearchQueueItem::Container { expanded_tracks: None, .. } => NextResult::NeedExpand(idx),
+            SearchQueueItem::Container { expanded_tracks: Some(tracks), play_index, .. } => {
+                if tracks.is_empty() {
+                    // Empty container, skip conceptually — but return End for now
+                    NextResult::End
+                } else {
+                    NextResult::Track(tracks[*play_index].clone())
+                }
+            }
+        }
+    }
+
+    pub fn set_container_tracks(&mut self, index: usize, tracks: Vec<Track>) {
+        if let Some(SearchQueueItem::Container { expanded_tracks, play_index, .. }) = self.items.get_mut(index) {
+            *expanded_tracks = Some(tracks);
+            *play_index = 0;
+        }
+    }
+
+    pub fn append_results(&mut self, new_items: Vec<SearchQueueItem>, has_more: bool) {
+        self.search_offset += new_items.len();
+        self.items.extend(new_items);
+        self.has_more_pages = has_more;
+    }
+
+    pub fn snapshot(&self) -> (Vec<QueueEntry>, Option<CurrentPosition>) {
+        let entries: Vec<QueueEntry> = self.items.iter().map(|item| match item {
+            SearchQueueItem::Track(track) => QueueEntry::Track(track.clone()),
+            SearchQueueItem::Container { info, expanded_tracks, play_index } => {
+                QueueEntry::Container {
+                    info: info.clone(),
+                    tracks: expanded_tracks.clone(),
+                    play_index: *play_index,
+                }
+            }
+        }).collect();
+
+        let position = self.current_index.map(|idx| {
+            let track_within = match &self.items[idx] {
+                SearchQueueItem::Container { expanded_tracks: Some(_), play_index, .. } => Some(*play_index),
+                _ => None,
+            };
+            CurrentPosition {
+                item_index: idx,
+                track_within_container: track_within,
+            }
+        });
+
+        (entries, position)
+    }
+}
+
+/// Unified queue type
+pub enum ActiveQueue {
+    Cursor(CursorQueue),
+    Search(SearchQueue),
+}
+
+impl ActiveQueue {
+    pub fn new_cursor() -> Self {
+        ActiveQueue::Cursor(CursorQueue::new())
     }
 }
 

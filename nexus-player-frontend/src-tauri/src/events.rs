@@ -1,4 +1,6 @@
-use crate::dto::{AudioStateDto, BufferedRangeDto, QueueStateDto, TrackDto};
+use crate::dto::{
+    AudioStateDto, BufferedRangeDto, QueueEntryDto, QueueStateDto, TrackDto, WaveformDto,
+};
 use nexus_player_backend::audio::types::{AudioEvent, AudioState};
 use nexus_player_backend::state::state::AppState;
 use serde::Serialize;
@@ -9,9 +11,8 @@ use tauri::{AppHandle, Emitter, Manager};
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum FrontendEvent {
-    PlaybackStarted {
-        track_id: usize,
-    },
+    #[serde(rename_all = "camelCase")]
+    PlaybackStarted { track_id: usize },
 
     PlaybackPaused,
 
@@ -19,38 +20,35 @@ pub enum FrontendEvent {
 
     PlaybackStopped,
 
-    TrackFinished {
-        track_id: usize,
-    },
+    #[serde(rename_all = "camelCase")]
+    TrackFinished { track_id: usize },
 
-    PositionUpdated {
-        position_secs: f64,
-    },
+    #[serde(rename_all = "camelCase")]
+    PositionUpdated { position_secs: f64 },
 
-    DurationChanged {
-        duration_secs: f64,
-    },
+    #[serde(rename_all = "camelCase")]
+    DurationChanged { duration_secs: f64 },
 
-    VolumeChanged {
-        volume: f32,
-    },
+    #[serde(rename_all = "camelCase")]
+    VolumeChanged { volume: f32 },
 
-    BufferUpdated {
-        ranges: Vec<BufferedRangeDto>,
-    },
+    #[serde(rename_all = "camelCase")]
+    BufferUpdated { ranges: Vec<BufferedRangeDto> },
 
-    LoadingStarted {
-        track: TrackDto,
-    },
+    #[serde(rename_all = "camelCase")]
+    WaveformUpdated { waveforms: Vec<WaveformDto> },
 
+    #[serde(rename_all = "camelCase")]
+    LoadingStarted { track: TrackDto },
+
+    #[serde(rename_all = "camelCase")]
     AudioStateUpdated {
         state: AudioStateDto,
         queue: QueueStateDto,
     },
 
-    Error {
-        message: String,
-    },
+    #[serde(rename_all = "camelCase")]
+    Error { message: String },
 }
 
 pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
@@ -84,6 +82,9 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                     AudioEvent::BufferUpdated { ranges } => FrontendEvent::BufferUpdated {
                         ranges: ranges.into_iter().map(BufferedRangeDto::from).collect(),
                     },
+                    AudioEvent::WaveformUpdated { waveforms } => FrontendEvent::WaveformUpdated {
+                        waveforms: waveforms.into_iter().map(WaveformDto::from).collect(),
+                    },
                     AudioEvent::LoadingStarted { track } => FrontendEvent::LoadingStarted {
                         track: TrackDto::from(track),
                     },
@@ -102,26 +103,78 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
 
             let audio_state: AudioStateDto = state.audio_state().into();
 
-            let (tracks, current_index, repeat_mode, shuffle_enabled) = {
+            let queue_state = {
+                use nexus_player_backend::playlist::playback_queue::{ActiveQueue, ContainerKind, QueueEntry};
+                use crate::dto::{ContainerMetaDto, CurrentPositionDto, QueueEntryDto, SearchContextDto};
+
                 let queue = state.lock_queue().await;
-                let (tracks, idx) = queue.snapshot();
-                
-                let tracks_dto: Vec<TrackDto> = tracks.into_iter().map(|t| t.into()).collect();
-                
-                let repeat_mode = match queue.repeat_mode {
-                    nexus_player_backend::playlist::playback_queue::RepeatMode::Off => "off",
-                    nexus_player_backend::playlist::playback_queue::RepeatMode::All => "all",
-                    nexus_player_backend::playlist::playback_queue::RepeatMode::One => "one",
-                };
-
-                (tracks_dto, idx, repeat_mode.to_string(), queue.shuffle_enabled)
-            };
-
-            let queue_state = QueueStateDto {
-                tracks,
-                current_index,
-                repeat_mode,
-                shuffle_enabled,
+                match &*queue {
+                    ActiveQueue::Cursor(cq) => {
+                        let (tracks, current_index) = cq.snapshot();
+                        let entries: Vec<QueueEntryDto> = tracks
+                            .into_iter()
+                            .map(|t| QueueEntryDto::Track { track: t.into() })
+                            .collect();
+                        let current_position = current_index.map(|idx| CurrentPositionDto {
+                            item_index: idx,
+                            track_within_container: None,
+                        });
+                        let repeat_mode = match cq.repeat_mode {
+                            nexus_player_backend::playlist::playback_queue::RepeatMode::Off => "off",
+                            nexus_player_backend::playlist::playback_queue::RepeatMode::All => "all",
+                            nexus_player_backend::playlist::playback_queue::RepeatMode::One => "one",
+                        };
+                        QueueStateDto {
+                            entries,
+                            current_position,
+                            repeat_mode: repeat_mode.to_string(),
+                            shuffle_enabled: cq.shuffle_enabled,
+                            search_context: None,
+                        }
+                    }
+                    ActiveQueue::Search(sq) => {
+                        let (entries, position) = sq.snapshot();
+                        let entries_dto: Vec<QueueEntryDto> = entries
+                            .into_iter()
+                            .map(|entry| match entry {
+                                QueueEntry::Track(track) => QueueEntryDto::Track { track: track.into() },
+                                QueueEntry::Container { info, tracks, play_index } => {
+                                    let kind_str = match info.kind {
+                                        ContainerKind::Album => "album",
+                                        ContainerKind::Playlist => "playlist",
+                                    };
+                                    QueueEntryDto::Container {
+                                        meta: ContainerMetaDto {
+                                            kind: kind_str.to_string(),
+                                            id: info.id,
+                                            system: info.system,
+                                            title: info.title,
+                                            artist: info.artist,
+                                            track_count: info.track_count,
+                                            thumbnail: info.thumbnail,
+                                        },
+                                        tracks: tracks.map(|ts| ts.into_iter().map(|t| t.into()).collect()),
+                                        play_index,
+                                    }
+                                }
+                            })
+                            .collect();
+                        let current_position = position.map(|p| CurrentPositionDto {
+                            item_index: p.item_index,
+                            track_within_container: p.track_within_container,
+                        });
+                        QueueStateDto {
+                            entries: entries_dto,
+                            current_position,
+                            repeat_mode: "off".to_string(),
+                            shuffle_enabled: false,
+                            search_context: Some(SearchContextDto {
+                                system: sq.system.clone(),
+                                query: sq.query.clone(),
+                            }),
+                        }
+                    }
+                }
             };
 
             if let Err(e) = app_handle.emit(

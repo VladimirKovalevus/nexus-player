@@ -13,6 +13,7 @@ pub enum ConfigError {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProviderSettings {
     pub enabled: bool,
     pub credentials: Option<String>,
@@ -28,6 +29,7 @@ impl Default for ProviderSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProviderConfig {
     pub youtube: ProviderSettings,
     pub soundcloud: ProviderSettings,
@@ -49,10 +51,22 @@ impl Default for ProviderConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct AudioConfig {}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioConfig {
+    pub waveform_enabled: bool,
+}
+
+impl Default for AudioConfig {
+    fn default() -> Self {
+        Self {
+            waveform_enabled: true,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NetworkConfig {
     pub timeout_seconds: u64,
     pub chunk_size: usize,
@@ -70,6 +84,7 @@ impl Default for NetworkConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppConfig {
     pub providers: ProviderConfig,
     pub audio: AudioConfig,

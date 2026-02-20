@@ -32,6 +32,14 @@ export interface BufferedRange {
   end: number;
 }
 
+export interface Waveform {
+  data: number[];
+  startTime: number;
+  endTime: number;
+  byteStart?: number | null;
+  byteEnd?: number | null;
+}
+
 export interface AudioState {
   state: 'playing' | 'paused' | 'stopped' | 'buffering' | 'loading';
   positionSecs: number;
@@ -39,13 +47,39 @@ export interface AudioState {
   volume: number;
   currentTrack: TrackDto | null;
   bufferedRanges: BufferedRange[];
+  waveforms: Waveform[];
+}
+
+export interface ContainerMetaDto {
+  kind: 'album' | 'playlist';
+  id: string;
+  system: string;
+  title: string;
+  artist: string;
+  trackCount: number;
+  thumbnail: string | null;
+}
+
+export type QueueEntryDto =
+  | { entryType: 'track'; track: TrackDto }
+  | { entryType: 'container'; meta: ContainerMetaDto; tracks: TrackDto[] | null; playIndex: number };
+
+export interface CurrentPositionDto {
+  itemIndex: number;
+  trackWithinContainer: number | null;
+}
+
+export interface SearchContextDto {
+  system: string;
+  query: string;
 }
 
 export interface QueueState {
-  tracks: TrackDto[];
-  currentIndex: number | null;
+  entries: QueueEntryDto[];
+  currentPosition: CurrentPositionDto | null;
   repeatMode: 'off' | 'all' | 'one';
   shuffleEnabled: boolean;
+  searchContext: SearchContextDto | null;
 }
 
 export interface AudioEvent {
@@ -111,7 +145,7 @@ export interface ProviderConfig {
 }
 
 export interface AudioConfig {
-  // Empty for now as per backend
+  waveformEnabled: boolean;
 }
 
 export interface NetworkConfig {

@@ -31,6 +31,7 @@ impl StreamingService {
         cache_dir: PathBuf,
         cache_size_mb: u64,
         config: ProviderConfig,
+        waveform_enabled: bool,
     ) -> StreamResult<Self> {
         let cache = Arc::new(CacheManager::new(cache_dir, cache_size_mb)?);
 
@@ -49,7 +50,7 @@ impl StreamingService {
         providers.insert("soundcloud".to_string(), soundcloud);
         providers.insert("vk".to_string(), vk);
 
-        let manager = DownloadManager::new();
+        let manager = DownloadManager::new(waveform_enabled);
 
         Ok(Self {
             providers,

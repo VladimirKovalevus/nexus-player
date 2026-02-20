@@ -161,6 +161,20 @@ impl HlsAudioDecoder {
         self.source.get_buffered_ranges()
     }
 
+    pub fn waveforms(&self) -> Vec<crate::audio::types::Waveform> {
+        self.source
+            .get_waveforms()
+            .into_iter()
+            .map(|w| crate::audio::types::Waveform {
+                data: w.data,
+                start_time: w.start_time,
+                end_time: w.end_time,
+                byte_start: w.byte_start,
+                byte_end: w.byte_end,
+            })
+            .collect()
+    }
+
     pub fn decode_next_block(&mut self) -> Result<Option<Vec<f32>>, AudioError> {
         if self.is_continuous {
             loop {

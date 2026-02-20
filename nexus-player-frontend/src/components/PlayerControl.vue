@@ -49,6 +49,7 @@ const fetchQueueState = async () => {
 
 const togglePlayPause = async () => {
   isLoading.value = true;
+  console.log(audioStore,"STORE");
   try {
     if (audioStore.isPlaying) {
       await invoke('pause');

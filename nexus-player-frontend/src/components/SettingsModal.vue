@@ -27,6 +27,18 @@
             </div>
           </section>
 
+          <!-- Audio Settings -->
+          <section :class="$style.section">
+            <h3 :class="$style.sectionTitle">Аудио</h3>
+            <div :class="$style.field">
+              <label :class="$style.checkboxLabel">
+                <input type="checkbox" v-model="config.audio.waveformEnabled" />
+                Включить анализ формы волны (Waveform)
+              </label>
+              <p :class="$style.hint">Анализирует трек во время загрузки для отображения столбиков звука.</p>
+            </div>
+          </section>
+
           <!-- Providers Settings -->
           <section :class="$style.section">
             <h3 :class="$style.sectionTitle">Провайдеры</h3>
@@ -128,7 +140,9 @@ const config = ref<AppConfig>({
     bandcamp: { enabled: true },
     vk: { enabled: false, credentials: null },
   },
-  audio: {},
+  audio: {
+    waveformEnabled: true
+  },
   network: { timeout_seconds: 30, chunk_size: 1048576, buffer_size: 10485760 },
 });
 
@@ -137,6 +151,7 @@ const fetchConfig = async () => {
   try {
     const res = await invoke<AppConfig>('get_app_config');
     // Ensure nested objects exist just in case backend returns partial (though it shouldn't)
+    console.log(res,"APP CONFIG")
     config.value = res;
   } catch (e) {
     error.value = `Failed to load config: ${e}`;

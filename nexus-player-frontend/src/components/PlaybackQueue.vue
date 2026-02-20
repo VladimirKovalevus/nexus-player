@@ -4,20 +4,24 @@ import { invoke } from '@tauri-apps/api/core';
 import MediaCard from './common/MediaCard.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import { useAudioStore } from '../stores/audio';
+import type { QueueEntryDto } from '@/types/types';
 
 const audioStore = useAudioStore();
 const loading = ref(true);
 const error = ref<string | null>(null);
 const isModalOpen = ref(false);
 const isSavingPlaylist = ref(false);
+const expandedContainers = ref<Set<number>>(new Set());
 
 const queue = computed(() => {
-  return audioStore.tracks.map((track, index) => ({
-    ...track,
+  return audioStore.entries.map((entry, index) => ({
+    entry,
     index,
-    isCurrentlyPlaying: index === audioStore.currentIndex,
+    isCurrentItem: index === audioStore.currentPosition?.itemIndex,
   }));
 });
+
+const isEntryEmpty = computed(() => audioStore.entries.length === 0);
 
 const fetchQueue = async () => {
   try {
@@ -34,9 +38,43 @@ const fetchQueue = async () => {
   }
 };
 
+const playQueueItem = async (itemIndex: number, trackIndexInContainer?: number) => {
+  try {
+    await invoke('play_queue_item', {
+      itemIndex,
+      trackIndexInContainer: trackIndexInContainer ?? null,
+    });
+    await fetchQueue();
+  } catch (e) {
+    console.error('Failed to play queue item:', e);
+  }
+};
+
+const expandContainer = async (itemIndex: number) => {
+  try {
+    const entry = audioStore.entries[itemIndex];
+    if (entry?.entryType === 'container' && !entry.tracks) {
+      await invoke('expand_queue_container', { itemIndex });
+    }
+    expandedContainers.value.add(itemIndex);
+  } catch (e) {
+    console.error('Failed to expand container:', e);
+  }
+};
+
+const toggleContainer = (itemIndex: number) => {
+  if (expandedContainers.value.has(itemIndex)) {
+    expandedContainers.value.delete(itemIndex);
+  } else {
+    expandContainer(itemIndex);
+  }
+};
+
+const isContainerExpanded = (itemIndex: number) => expandedContainers.value.has(itemIndex);
+
 const playAtIndex = async (index: number) => {
   try {
-    await invoke('play_at_index', { index });
+    await invoke('play_queue_item', { itemIndex: index, trackIndexInContainer: null });
     await fetchQueue();
   } catch (e) {
     console.error('Failed to play at index:', e);
@@ -112,34 +150,100 @@ defineExpose({ fetchQueue });
       </div>
     </div>
 
+    <div v-if="audioStore.searchContext" :class="$style.searchBadge">
+      Search: "{{ audioStore.searchContext.query }}" ({{ audioStore.searchContext.system }})
+    </div>
+
     <div v-if="loading" :class="$style.loading">Загрузка...</div>
     <div v-else-if="error" :class="$style.error">{{ error }}</div>
-    <div v-else-if="queue.length === 0" :class="$style.empty">
+    <div v-else-if="isEntryEmpty" :class="$style.empty">
       <div :class="$style.emptyIcon">🎵</div>
       <div :class="$style.emptyText">Очередь пуста</div>
       <div :class="$style.emptyHint">Добавьте треки для воспроизведения</div>
     </div>
 
     <div v-else :class="$style.queueList">
-      <div
-        v-for="track in queue"
-        :key="track.index"
-        :class="[
-          $style.trackWrapper,
-          { [$style.currentlyPlaying]: track.isCurrentlyPlaying },
-        ]"
-      >
-        <MediaCard
-          type="track"
-          :track="track"
-          :queue-index="track.index"
-          context="queue"
-          showAction
-          @click="playAtIndex(track.index)"
-          @play="playAtIndex(track.index)"
-          @refresh="fetchQueue"
-        />
-      </div>
+      <template v-for="item in queue" :key="item.index">
+        <!-- Track entry -->
+        <div
+          v-if="item.entry.entryType === 'track'"
+          :class="[
+            $style.trackWrapper,
+            { [$style.currentlyPlaying]: item.isCurrentItem && audioStore.currentPosition?.trackWithinContainer == null },
+          ]"
+        >
+          <MediaCard
+            type="track"
+            :track="item.entry.track"
+            :queue-index="item.index"
+            context="queue"
+            showAction
+            @click="playQueueItem(item.index)"
+            @play="playQueueItem(item.index)"
+            @refresh="fetchQueue"
+          />
+        </div>
+
+        <!-- Container entry -->
+        <div
+          v-else-if="item.entry.entryType === 'container'"
+          :class="[$style.containerWrapper, { [$style.currentlyPlaying]: item.isCurrentItem }]"
+        >
+          <div :class="$style.containerHeader" @click="toggleContainer(item.index)">
+            <span :class="$style.containerIcon">
+              {{ item.entry.meta.kind === 'album' ? '💿' : '📂' }}
+            </span>
+            <div :class="$style.containerInfo">
+              <div :class="$style.containerTitle">{{ item.entry.meta.title }}</div>
+              <div :class="$style.containerMeta">
+                {{ item.entry.meta.artist }} · {{ item.entry.meta.trackCount }} tracks
+              </div>
+            </div>
+            <img
+              v-if="item.entry.meta.thumbnail"
+              :src="item.entry.meta.thumbnail"
+              :class="$style.containerThumb"
+            />
+            <button :class="$style.expandBtn">
+              {{ isContainerExpanded(item.index) ? '▲' : '▼' }}
+            </button>
+          </div>
+
+          <!-- Expanded tracks inside container -->
+          <div
+            v-if="isContainerExpanded(item.index) && item.entry.tracks"
+            :class="$style.containerTracks"
+          >
+            <div
+              v-for="(track, trackIdx) in item.entry.tracks"
+              :key="trackIdx"
+              :class="[
+                $style.containerTrack,
+                {
+                  [$style.currentlyPlaying]:
+                    item.isCurrentItem &&
+                    audioStore.currentPosition?.trackWithinContainer === trackIdx,
+                },
+              ]"
+              @click="playQueueItem(item.index, trackIdx)"
+            >
+              <span :class="$style.trackNumber">{{ trackIdx + 1 }}</span>
+              <div :class="$style.trackInfo">
+                <div :class="$style.trackTitle">{{ track.title }}</div>
+                <div :class="$style.trackArtist">{{ track.artist }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Not expanded and no tracks loaded yet -->
+          <div
+            v-else-if="isContainerExpanded(item.index) && !item.entry.tracks"
+            :class="$style.containerLoading"
+          >
+            Loading tracks...
+          </div>
+        </div>
+      </template>
     </div>
 
     <PlaylistCreateSimpleModal
@@ -321,6 +425,15 @@ defineExpose({ fetchQueue });
   transition: all $transition-fast;
 }
 
+.searchBadge {
+  padding: $spacing-xs $spacing-md;
+  margin-bottom: $spacing-md;
+  background: rgba(102, 126, 234, 0.15);
+  border-radius: $radius-md;
+  font-size: $font-size-sm;
+  color: var(--color-text-secondary);
+}
+
 .currentlyPlaying {
   position: relative;
 
@@ -341,6 +454,116 @@ defineExpose({ fetchQueue });
     pointer-events: none;
     animation: pulse 2s ease-in-out infinite;
   }
+}
+
+.containerWrapper {
+  border-radius: $radius-md;
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.containerHeader {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  padding: $spacing-md;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: var(--color-bg-hover);
+  }
+}
+
+.containerIcon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.containerInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.containerTitle {
+  font-weight: $font-weight-semibold;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.containerMeta {
+  font-size: $font-size-sm;
+  color: var(--color-text-secondary);
+}
+
+.containerThumb {
+  width: 48px;
+  height: 48px;
+  border-radius: $radius-sm;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.expandBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: $spacing-xs;
+  font-size: $font-size-sm;
+}
+
+.containerTracks {
+  border-top: 1px solid var(--color-border);
+  padding: $spacing-xs 0;
+}
+
+.containerTrack {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  padding: $spacing-xs $spacing-md $spacing-xs $spacing-xl;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: var(--color-bg-hover);
+  }
+}
+
+.trackNumber {
+  color: var(--color-text-secondary);
+  font-size: $font-size-sm;
+  min-width: 24px;
+  text-align: right;
+}
+
+.trackInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.trackTitle {
+  color: var(--color-text-primary);
+  font-size: $font-size-sm;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trackArtist {
+  color: var(--color-text-secondary);
+  font-size: $font-size-xs;
+}
+
+.containerLoading {
+  padding: $spacing-md;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: $font-size-sm;
 }
 
 @keyframes pulse {

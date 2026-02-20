@@ -1,6 +1,7 @@
 use crate::dto::{
-    AudioStateDto, CreatePlaylistRequest, CreatePlaylistWithTracksRequest, PlaylistDto,
-    PlaylistWithTracksDto, QueueStateDto, SearchResultDto, TrackDto,
+    AudioStateDto, ContainerMetaDto, CreatePlaylistRequest, CreatePlaylistWithTracksRequest,
+    CurrentPositionDto, PlaylistDto, PlaylistWithTracksDto, QueueEntryDto, QueueStateDto,
+    SearchContextDto, SearchResultDto, TrackDto,
 };
 use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
 use nexus_player_backend::library::types::{
@@ -210,9 +211,33 @@ pub async fn clear_queue(state: State<'_, Arc<AppState>>) -> Result<()> {
 
 #[tauri::command]
 pub async fn get_queue(state: State<'_, Arc<AppState>>) -> Result<Vec<TrackDto>> {
+    use nexus_player_backend::playlist::playback_queue::ActiveQueue;
     let queue = state.lock_queue().await;
-    let (tracks, _) = queue.snapshot();
-    Ok(tracks.into_iter().map(|t| t.into()).collect())
+    match &*queue {
+        ActiveQueue::Cursor(cq) => {
+            let (tracks, _) = cq.snapshot();
+            Ok(tracks.into_iter().map(|t| TrackDto::from(t)).collect())
+        }
+        ActiveQueue::Search(sq) => {
+            // Return flat list of tracks for compatibility
+            let (entries, _) = sq.snapshot();
+            let mut tracks = Vec::new();
+            for entry in entries {
+                match entry {
+                    nexus_player_backend::playlist::playback_queue::QueueEntry::Track(t) => {
+                        tracks.push(TrackDto::from(t));
+                    }
+                    nexus_player_backend::playlist::playback_queue::QueueEntry::Container { tracks: Some(ts), .. } => {
+                        for t in ts {
+                            tracks.push(TrackDto::from(t));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(tracks)
+        }
+    }
 }
 
 #[tauri::command]
@@ -304,23 +329,130 @@ pub async fn toggle_shuffle(state: State<'_, Arc<AppState>>) -> Result<()> {
 
 #[tauri::command]
 pub async fn get_queue_state(state: State<'_, Arc<AppState>>) -> Result<QueueStateDto> {
+    use nexus_player_backend::playlist::playback_queue::{ActiveQueue, ContainerKind, QueueEntry};
+
     let queue = state.lock_queue().await;
-    let (tracks, current_index) = queue.snapshot();
-    let tracks_dto: Vec<TrackDto> = tracks.into_iter().map(|t| t.into()).collect();
+    build_queue_state_dto(&queue)
+}
 
-    // Re-implement getting repeat/shuffle mode if needed, or define default
-    // Since we disabled them in state proxy, let's assume default for now
-    let repeat_mode = "off"; 
-    let shuffle_enabled = false;
+fn build_queue_state_dto(
+    queue: &nexus_player_backend::playlist::playback_queue::ActiveQueue,
+) -> Result<QueueStateDto> {
+    use nexus_player_backend::playlist::playback_queue::{ActiveQueue, ContainerKind, QueueEntry};
 
-    let q = QueueStateDto {
-        tracks: tracks_dto,
-        current_index,
-        repeat_mode: repeat_mode.to_string(),
-        shuffle_enabled,
-    };
+    match queue {
+        ActiveQueue::Cursor(cq) => {
+            let (tracks, current_index) = cq.snapshot();
+            let entries: Vec<QueueEntryDto> = tracks
+                .into_iter()
+                .map(|t| QueueEntryDto::Track { track: t.into() })
+                .collect();
 
-    Ok(q)
+            let current_position = current_index.map(|idx| CurrentPositionDto {
+                item_index: idx,
+                track_within_container: None,
+            });
+
+            let repeat_mode = match cq.repeat_mode {
+                nexus_player_backend::playlist::playback_queue::RepeatMode::Off => "off",
+                nexus_player_backend::playlist::playback_queue::RepeatMode::All => "all",
+                nexus_player_backend::playlist::playback_queue::RepeatMode::One => "one",
+            };
+
+            Ok(QueueStateDto {
+                entries,
+                current_position,
+                repeat_mode: repeat_mode.to_string(),
+                shuffle_enabled: cq.shuffle_enabled,
+                search_context: None,
+            })
+        }
+        ActiveQueue::Search(sq) => {
+            let (entries, position) = sq.snapshot();
+
+            let entries_dto: Vec<QueueEntryDto> = entries
+                .into_iter()
+                .map(|entry| match entry {
+                    QueueEntry::Track(track) => QueueEntryDto::Track { track: track.into() },
+                    QueueEntry::Container { info, tracks, play_index } => {
+                        let kind_str = match info.kind {
+                            ContainerKind::Album => "album",
+                            ContainerKind::Playlist => "playlist",
+                        };
+                        QueueEntryDto::Container {
+                            meta: ContainerMetaDto {
+                                kind: kind_str.to_string(),
+                                id: info.id,
+                                system: info.system,
+                                title: info.title,
+                                artist: info.artist,
+                                track_count: info.track_count,
+                                thumbnail: info.thumbnail,
+                            },
+                            tracks: tracks.map(|ts| ts.into_iter().map(|t| t.into()).collect()),
+                            play_index,
+                        }
+                    }
+                })
+                .collect();
+
+            let current_position = position.map(|p| CurrentPositionDto {
+                item_index: p.item_index,
+                track_within_container: p.track_within_container,
+            });
+
+            Ok(QueueStateDto {
+                entries: entries_dto,
+                current_position,
+                repeat_mode: "off".to_string(),
+                shuffle_enabled: false,
+                search_context: Some(SearchContextDto {
+                    system: sq.system.clone(),
+                    query: sq.query.clone(),
+                }),
+            })
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn handle_search(
+    state: State<'_, Arc<AppState>>,
+    system: String,
+    query: String,
+    selected_index: usize,
+) -> Result<()> {
+    state
+        .load_search_queue(system, query, selected_index)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    state.play_current_search().await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn expand_queue_container(
+    state: State<'_, Arc<AppState>>,
+    item_index: usize,
+) -> Result<QueueStateDto> {
+    state
+        .expand_search_container(item_index)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let queue = state.lock_queue().await;
+    build_queue_state_dto(&queue)
+}
+
+#[tauri::command]
+pub async fn play_queue_item(
+    state: State<'_, Arc<AppState>>,
+    item_index: usize,
+    track_index_in_container: Option<usize>,
+) -> Result<()> {
+    state.play_queue_item(item_index, track_index_in_container).await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -405,8 +537,18 @@ pub async fn handle_streaming_track(
 
                         state.load_search_to_queue(system, q, target_id).await.map_err(|e| e.to_string())?;
                     } else {
+                        use nexus_player_backend::playlist::playback_queue::{ActiveQueue, CursorQueue};
                         let mut queue = state.lock_queue().await;
-                        queue.add_track(track.into());
+                        match &mut *queue {
+                            ActiveQueue::Cursor(cq) => {
+                                cq.add_track(track.into());
+                            }
+                            _ => {
+                                let mut cq = CursorQueue::new();
+                                cq.add_track(track.into());
+                                *queue = ActiveQueue::Cursor(cq);
+                            }
+                        }
                         tracing::info!("Track added to queue");
                     }
                 }

@@ -6,7 +6,10 @@ use crate::config::{AppConfig, ConfigManager};
 use crate::library::models::{Metadata, Playlist as LibraryPlaylist, Track as LibraryTrack};
 use crate::library::{LibraryService, PlaylistId, TrackId};
 use crate::playlist::cursor::{AppCursorResolver, ContainerContext, PlayerCursor};
-use crate::playlist::playback_queue::{CursorQueue, PlaybackQueue, RepeatMode};
+use crate::playlist::playback_queue::{
+    ActiveQueue, ContainerKind, ContainerMeta, CursorQueue, NextResult, PlaybackQueue, RepeatMode,
+    SearchQueue, SearchQueueItem,
+};
 use crate::playlist::playlist::Playlist;
 use crate::streaming::external::StreamingSourceWrapper;
 use crate::streaming::StreamingService;
@@ -19,8 +22,7 @@ use tokio::sync::Mutex;
 pub struct AppState {
     audio_engine: AudioEngine,
 
-    // NEW: Async Mutex wrapping the new CursorQueue
-    pub queue: Arc<Mutex<CursorQueue>>,
+    pub queue: Arc<Mutex<ActiveQueue>>,
 
     // NEW: Resolver for creating cursors
     pub cursor_resolver: Arc<AppCursorResolver>,
@@ -50,6 +52,7 @@ impl AppState {
             cache_dir,
             config.network.chunk_size as u64,
             config.providers.clone(),
+            config.audio.waveform_enabled,
         )
         .map_err(|e| anyhow::anyhow!("Failed to create streaming service: {}", e))?;
         let streaming = Arc::new(streaming);
@@ -58,7 +61,7 @@ impl AppState {
 
         Ok(Self {
             audio_engine,
-            queue: Arc::new(Mutex::new(CursorQueue::new())),
+            queue: Arc::new(Mutex::new(ActiveQueue::new_cursor())),
             cursor_resolver,
             library,
             streaming,
@@ -80,8 +83,7 @@ impl AppState {
         &self.audio_engine
     }
 
-    // Helper to get queue lock
-    pub async fn lock_queue(&self) -> tokio::sync::MutexGuard<'_, CursorQueue> {
+    pub async fn lock_queue(&self) -> tokio::sync::MutexGuard<'_, ActiveQueue> {
         self.queue.lock().await
     }
 
@@ -96,38 +98,92 @@ impl AppState {
     // --- Playback Control ---
 
     pub async fn play_next(&self) {
-        let track = {
-            let mut queue = self.queue.lock().await;
-            match queue.next().await {
-                Ok(Some(track)) => {
+        loop {
+            let result = {
+                let mut queue = self.queue.lock().await;
+                match &mut *queue {
+                    ActiveQueue::Cursor(cq) => {
+                        match cq.next().await {
+                            Ok(Some(track)) => NextResult::Track(track),
+                            Ok(None) => NextResult::End,
+                            Err(e) => {
+                                tracing::error!("Error fetching next track: {}", e);
+                                NextResult::End
+                            }
+                        }
+                    }
+                    ActiveQueue::Search(sq) => sq.next(),
+                }
+            };
+
+            match result {
+                NextResult::Track(track) => {
                     tracing::info!("Next track: {}", track.id);
-                    Some(track)
+                    self.play(Some(track)).await;
+                    return;
                 }
-                Ok(None) => {
+                NextResult::NeedExpand(idx) => {
+                    if let Err(e) = self.expand_search_container(idx).await {
+                        tracing::error!("Failed to expand container {}: {}", idx, e);
+                        self.play(None).await;
+                        return;
+                    }
+                    // Retry after expansion
+                    continue;
+                }
+                NextResult::NeedMorePages => {
+                    if let Err(e) = self.fetch_more_search_results().await {
+                        tracing::error!("Failed to fetch more pages: {}", e);
+                        self.play(None).await;
+                        return;
+                    }
+                    // Retry after fetching
+                    continue;
+                }
+                NextResult::End => {
                     tracing::info!("End of queue");
-                    None
-                }
-                Err(e) => {
-                    tracing::error!("Error fetching next track: {}", e);
-                    None
+                    self.play(None).await;
+                    return;
                 }
             }
-        };
-
-        self.play(track).await;
+        }
     }
 
     pub async fn play_previous(&self) {
-        let track = {
-            let mut queue = self.queue.lock().await;
-            queue.previous()
-        };
+        loop {
+            let result = {
+                let mut queue = self.queue.lock().await;
+                match &mut *queue {
+                    ActiveQueue::Cursor(cq) => {
+                        match cq.previous() {
+                            Some(track) => NextResult::Track(track),
+                            None => NextResult::End,
+                        }
+                    }
+                    ActiveQueue::Search(sq) => sq.previous(),
+                }
+            };
 
-        if let Some(ref t) = track {
-            tracing::info!("Previous track: {}", t.id);
+            match result {
+                NextResult::Track(track) => {
+                    tracing::info!("Previous track: {}", track.id);
+                    self.play(Some(track)).await;
+                    return;
+                }
+                NextResult::NeedExpand(idx) => {
+                    if let Err(e) = self.expand_search_container(idx).await {
+                        tracing::error!("Failed to expand container {}: {}", idx, e);
+                        self.play(None).await;
+                        return;
+                    }
+                    continue;
+                }
+                _ => {
+                    self.play(None).await;
+                    return;
+                }
+            }
         }
-
-        self.play(track).await;
     }
 
     async fn play(&self, track: Option<Track>) {
@@ -138,7 +194,10 @@ impl AppState {
             // Get next track for preloading context
             let next_track = {
                 let queue = self.queue.lock().await;
-                queue.manual_queue.front().cloned()
+                match &*queue {
+                    ActiveQueue::Cursor(cq) => cq.manual_queue.front().cloned(),
+                    ActiveQueue::Search(_) => None, // No preload for search queue
+                }
             };
             let next_track_id = next_track.as_ref().map(|t| t.id as u64);
 
@@ -209,39 +268,59 @@ impl AppState {
         let audio_track: AudioTrack = library_track.into();
 
         let mut queue = self.queue.lock().await;
-        queue.add_track(audio_track);
+        match &mut *queue {
+            ActiveQueue::Cursor(cq) => cq.add_track(audio_track),
+            ActiveQueue::Search(_) => {
+                // Switch to cursor queue when manually adding
+                let mut cq = CursorQueue::new();
+                cq.add_track(audio_track);
+                *queue = ActiveQueue::Cursor(cq);
+            }
+        }
 
         Ok(())
     }
 
     pub async fn clear_queue(&self) {
         let mut queue = self.queue.lock().await;
-        queue.clear();
+        match &mut *queue {
+            ActiveQueue::Cursor(cq) => cq.clear(),
+            ActiveQueue::Search(_) => {
+                *queue = ActiveQueue::new_cursor();
+            }
+        }
     }
 
     pub async fn load_context_to_queue(&self, context: ContainerContext) -> Result<()> {
         tracing::info!("Loading context to queue: {:?}", context);
-        // Create a new cursor from the context
         let cursor = PlayerCursor::from_context(context, self.cursor_resolver.clone()).await?;
 
-        // Update queue
         {
             let mut queue = self.queue.lock().await;
-            queue.clear();
-            queue.set_cursor(cursor);
+            let cq = match &mut *queue {
+                ActiveQueue::Cursor(cq) => {
+                    cq.clear();
+                    cq
+                }
+                _ => {
+                    *queue = ActiveQueue::new_cursor();
+                    match &mut *queue {
+                        ActiveQueue::Cursor(cq) => cq,
+                        _ => unreachable!(),
+                    }
+                }
+            };
+            cq.set_cursor(cursor);
 
-            // Pre-fill the current track
-            if let Ok(Some(first)) = queue.next().await {
+            if let Ok(Some(first)) = cq.next().await {
                 tracing::info!("First track loaded: {}", first.id);
             }
 
-            // Prefetch next 50 tracks to make them visible in UI
-            let prefetched = queue.prefetch(5).await?;
+            let prefetched = cq.prefetch(5).await?;
             tracing::info!("Prefetched {} tracks from cursor", prefetched);
         }
 
         tracing::info!("Queue updated and pre-filled");
-
         Ok(())
     }
 
@@ -258,16 +337,30 @@ impl AppState {
         selected_track_id: usize,
     ) -> Result<()> {
         tracing::info!("Loading search context: {} from {}", query, system);
-        let context = ContainerContext::SearchQuery { system, query };
+        let context = ContainerContext::SearchQuery {
+            system: system.clone(),
+            query: query.clone(),
+        };
         let cursor = PlayerCursor::from_context(context, self.cursor_resolver.clone()).await?;
 
         let mut queue = self.queue.lock().await;
-        queue.clear();
-        queue.set_cursor(cursor);
+        let cq = match &mut *queue {
+            ActiveQueue::Cursor(cq) => {
+                cq.clear();
+                cq
+            }
+            _ => {
+                *queue = ActiveQueue::new_cursor();
+                match &mut *queue {
+                    ActiveQueue::Cursor(cq) => cq,
+                    _ => unreachable!(),
+                }
+            }
+        };
+        cq.set_cursor(cursor);
 
-        // Fast-forward to the selected track
         let mut found = false;
-        while let Ok(Some(track)) = queue.next().await {
+        while let Ok(Some(track)) = cq.next().await {
             if track.id == selected_track_id {
                 found = true;
                 break;
@@ -281,10 +374,242 @@ impl AppState {
             );
         }
 
-        // Prefetch next 50 tracks
-        queue.prefetch(50).await?;
+        cq.prefetch(50).await?;
+        Ok(())
+    }
+
+    /// Load search results into a SearchQueue with full context (tracks, albums, playlists)
+    pub async fn load_search_queue(
+        &self,
+        system: String,
+        query: String,
+        selected_index: usize,
+    ) -> Result<()> {
+        use crate::streaming::types::{ContentType, SearchResult as SR};
+
+        tracing::info!("Loading search queue: '{}' from {}", query, system);
+
+        let results = self
+            .streaming
+            .search(&system, None, &query, 50, 0)
+            .await
+            .context("Search failed")?;
+
+        let has_more = results.len() >= 50;
+        let items: Vec<SearchQueueItem> = results
+            .into_iter()
+            .map(|r| match r {
+                SR::Track(track) => SearchQueueItem::Track(track.into()),
+                SR::Album(album) => SearchQueueItem::Container {
+                    info: ContainerMeta {
+                        kind: ContainerKind::Album,
+                        id: album.id,
+                        system: album.service.to_string(),
+                        title: album.title,
+                        artist: album.artist,
+                        track_count: album.track_count,
+                        thumbnail: album.thumbnail,
+                    },
+                    expanded_tracks: if album.tracks.is_empty() {
+                        None
+                    } else {
+                        Some(album.tracks.into_iter().map(|t| t.into()).collect())
+                    },
+                    play_index: 0,
+                },
+                SR::Playlist(playlist) => SearchQueueItem::Container {
+                    info: ContainerMeta {
+                        kind: ContainerKind::Playlist,
+                        id: playlist.id,
+                        system: playlist.service.to_string(),
+                        title: playlist.title,
+                        artist: playlist.creator,
+                        track_count: playlist.track_count,
+                        thumbnail: playlist.thumbnail,
+                    },
+                    expanded_tracks: if playlist.tracks.is_empty() {
+                        None
+                    } else {
+                        Some(playlist.tracks.into_iter().map(|t| t.into()).collect())
+                    },
+                    play_index: 0,
+                },
+                SR::Channel(_) => {
+                    // Skip channels, treat as empty track placeholder
+                    SearchQueueItem::Track(Track {
+                        id: 0,
+                        title: "Channel (unsupported)".to_string(),
+                        artist: None,
+                        album: None,
+                        duration: None,
+                        artwork_url: None,
+                        format: None,
+                        source: crate::audio::types::TrackSource::local("".to_string()),
+                        state: crate::audio::types::TrackState::Streaming,
+                    })
+                }
+            })
+            .collect();
+
+        let mut sq = SearchQueue::new(system.clone(), query.clone(), items, has_more);
+        sq.jump_to(selected_index);
+
+        // If selected item is a container without tracks, expand it
+        let needs_expand = {
+            let (entries, _) = sq.snapshot();
+            if let Some(entry) = entries.get(selected_index) {
+                matches!(
+                    entry,
+                    crate::playlist::playback_queue::QueueEntry::Container { tracks: None, .. }
+                )
+            } else {
+                false
+            }
+        };
+
+        let mut queue = self.queue.lock().await;
+        *queue = ActiveQueue::Search(sq);
+        drop(queue);
+
+        if needs_expand {
+            self.expand_search_container(selected_index).await?;
+        }
 
         Ok(())
+    }
+
+    /// Expand a container in the search queue by loading its tracks
+    pub async fn expand_search_container(&self, item_index: usize) -> Result<()> {
+        use crate::streaming::types::ContentType;
+
+        // Get container info while holding lock briefly
+        let (kind, id, system) = {
+            let queue = self.queue.lock().await;
+            match &*queue {
+                ActiveQueue::Search(sq) => {
+                    let (entries, _) = sq.snapshot();
+                    match entries.get(item_index) {
+                        Some(crate::playlist::playback_queue::QueueEntry::Container { info, .. }) => {
+                            (info.kind.clone(), info.id.clone(), info.system.clone())
+                        }
+                        _ => return Err(anyhow::anyhow!("Item at index {} is not a container", item_index)),
+                    }
+                }
+                _ => return Err(anyhow::anyhow!("Not in search queue mode")),
+            }
+        };
+
+        let content_type = match kind {
+            ContainerKind::Album => ContentType::Album,
+            ContainerKind::Playlist => ContentType::Playlist,
+        };
+
+        let track_infos = self
+            .streaming
+            .expand_collection(&system, content_type, &id)
+            .await
+            .context("Failed to expand container")?;
+
+        let tracks: Vec<Track> = track_infos.into_iter().map(|t| t.into()).collect();
+        tracing::info!("Expanded container {} with {} tracks", item_index, tracks.len());
+
+        let mut queue = self.queue.lock().await;
+        if let ActiveQueue::Search(sq) = &mut *queue {
+            sq.set_container_tracks(item_index, tracks);
+        }
+
+        Ok(())
+    }
+
+    /// Fetch more search results for pagination
+    async fn fetch_more_search_results(&self) -> Result<()> {
+        use crate::streaming::types::SearchResult as SR;
+
+        let (system, query, offset) = {
+            let queue = self.queue.lock().await;
+            match &*queue {
+                ActiveQueue::Search(sq) => (sq.system.clone(), sq.query.clone(), sq.search_offset),
+                _ => return Err(anyhow::anyhow!("Not in search queue mode")),
+            }
+        };
+
+        let results = self
+            .streaming
+            .search(&system, None, &query, 50, offset)
+            .await
+            .context("Search pagination failed")?;
+
+        let has_more = results.len() >= 50;
+        let items: Vec<SearchQueueItem> = results
+            .into_iter()
+            .map(|r| match r {
+                SR::Track(track) => SearchQueueItem::Track(track.into()),
+                SR::Album(album) => SearchQueueItem::Container {
+                    info: ContainerMeta {
+                        kind: ContainerKind::Album,
+                        id: album.id,
+                        system: album.service.to_string(),
+                        title: album.title,
+                        artist: album.artist,
+                        track_count: album.track_count,
+                        thumbnail: album.thumbnail,
+                    },
+                    expanded_tracks: if album.tracks.is_empty() {
+                        None
+                    } else {
+                        Some(album.tracks.into_iter().map(|t| t.into()).collect())
+                    },
+                    play_index: 0,
+                },
+                SR::Playlist(playlist) => SearchQueueItem::Container {
+                    info: ContainerMeta {
+                        kind: ContainerKind::Playlist,
+                        id: playlist.id,
+                        system: playlist.service.to_string(),
+                        title: playlist.title,
+                        artist: playlist.creator,
+                        track_count: playlist.track_count,
+                        thumbnail: playlist.thumbnail,
+                    },
+                    expanded_tracks: if playlist.tracks.is_empty() {
+                        None
+                    } else {
+                        Some(playlist.tracks.into_iter().map(|t| t.into()).collect())
+                    },
+                    play_index: 0,
+                },
+                SR::Channel(_) => SearchQueueItem::Track(Track {
+                    id: 0,
+                    title: "Channel (unsupported)".to_string(),
+                    artist: None,
+                    album: None,
+                    duration: None,
+                    artwork_url: None,
+                    format: None,
+                    source: crate::audio::types::TrackSource::local("".to_string()),
+                    state: crate::audio::types::TrackState::Streaming,
+                }),
+            })
+            .collect();
+
+        let mut queue = self.queue.lock().await;
+        if let ActiveQueue::Search(sq) = &mut *queue {
+            sq.append_results(items, has_more);
+        }
+
+        Ok(())
+    }
+
+    /// Play the current track from the search queue
+    pub async fn play_current_search(&self) {
+        let track = {
+            let queue = self.queue.lock().await;
+            match &*queue {
+                ActiveQueue::Search(sq) => sq.current_track(),
+                _ => None,
+            }
+        };
+        self.play(track).await;
     }
 
     // --- Audio Control Proxies ---
@@ -405,56 +730,147 @@ impl AppState {
 
     pub async fn remove_from_queue(&self, index: usize) -> Option<AudioTrack> {
         let mut queue = self.queue.lock().await;
-        let removed = queue.remove_track(index);
-        if removed.is_some() {
-            tracing::info!("Removed track at index {}", index);
+        match &mut *queue {
+            ActiveQueue::Cursor(cq) => {
+                let removed = cq.remove_track(index);
+                if removed.is_some() {
+                    tracing::info!("Removed track at index {}", index);
+                }
+                removed
+            }
+            ActiveQueue::Search(_) => None, // Can't remove from search queue
         }
-        removed
     }
 
     pub async fn set_repeat_mode(&self, mode: RepeatMode) {
         let mut queue = self.queue.lock().await;
-        queue.repeat_mode = mode;
+        if let ActiveQueue::Cursor(cq) = &mut *queue {
+            cq.repeat_mode = mode;
+        }
         tracing::info!("Repeat mode set to {:?}", mode);
     }
 
     pub async fn get_repeat_mode(&self) -> RepeatMode {
         let queue = self.queue.lock().await;
-        queue.repeat_mode
+        match &*queue {
+            ActiveQueue::Cursor(cq) => cq.repeat_mode,
+            ActiveQueue::Search(_) => RepeatMode::Off,
+        }
     }
 
     pub async fn toggle_shuffle(&self) {
         let mut queue = self.queue.lock().await;
-        queue.shuffle_enabled = !queue.shuffle_enabled;
-        tracing::info!("Shuffle toggled to {}", queue.shuffle_enabled);
+        if let ActiveQueue::Cursor(cq) = &mut *queue {
+            cq.shuffle_enabled = !cq.shuffle_enabled;
+            tracing::info!("Shuffle toggled to {}", cq.shuffle_enabled);
+        }
     }
 
     pub async fn is_shuffle_enabled(&self) -> bool {
         let queue = self.queue.lock().await;
-        queue.shuffle_enabled
+        match &*queue {
+            ActiveQueue::Cursor(cq) => cq.shuffle_enabled,
+            ActiveQueue::Search(_) => false,
+        }
     }
 
     pub async fn get_current_track_index(&self) -> Option<usize> {
         let queue = self.queue.lock().await;
-        let (_, index) = queue.snapshot();
-        index
+        match &*queue {
+            ActiveQueue::Cursor(cq) => {
+                let (_, index) = cq.snapshot();
+                index
+            }
+            ActiveQueue::Search(sq) => {
+                let (_, position) = sq.snapshot();
+                position.map(|p| p.item_index)
+            }
+        }
     }
 
     pub async fn play_at_index(&self, index: usize) {
-        // This is hard with CursorQueue because "index" is ambiguous (history? manual? cursor offset?)
-        // For now, we only support jumping within manual_queue or history as presented in snapshot.
-        // Assuming snapshot order: [history] + [current] + [manual]
-
-        let (tracks, _) = {
-            let queue = self.queue.lock().await;
-            queue.snapshot()
+        let track = {
+            let mut queue = self.queue.lock().await;
+            match &mut *queue {
+                ActiveQueue::Cursor(cq) => {
+                    let (tracks, _) = cq.snapshot();
+                    tracks.get(index).cloned()
+                }
+                ActiveQueue::Search(sq) => {
+                    sq.jump_to(index);
+                    sq.current_track()
+                }
+            }
         };
 
-        if let Some(track) = tracks.get(index) {
-            // Logic to "jump" is complex: we basically need to rebuild state.
-            // Simplification: just play that track and clear current?
-            // Or maybe just Play it directly.
-            self.play(Some(track.clone())).await;
+        if let Some(track) = track {
+            self.play(Some(track)).await;
+        }
+    }
+
+    /// Play a specific item in the search queue, optionally with a track index within a container
+    pub async fn play_queue_item(&self, item_index: usize, track_index: Option<usize>) {
+        loop {
+            let result = {
+                let mut queue = self.queue.lock().await;
+                match &mut *queue {
+                    ActiveQueue::Search(sq) => {
+                        if let Some(track_idx) = track_index {
+                            sq.jump_to_with_track_index(item_index, track_idx);
+                        } else {
+                            sq.jump_to(item_index);
+                        }
+                        match sq.current_track() {
+                            Some(track) => NextResult::Track(track),
+                            None => {
+                                // Might need expansion
+                                let (entries, _) = sq.snapshot();
+                                match entries.get(item_index) {
+                                    Some(crate::playlist::playback_queue::QueueEntry::Container { tracks: None, .. }) => {
+                                        NextResult::NeedExpand(item_index)
+                                    }
+                                    _ => NextResult::End,
+                                }
+                            }
+                        }
+                    }
+                    ActiveQueue::Cursor(_) => {
+                        // Fallback for cursor queue
+                        let (tracks, _) = match &*queue {
+                            ActiveQueue::Cursor(cq) => cq.snapshot(),
+                            _ => unreachable!(),
+                        };
+                        match tracks.get(item_index).cloned() {
+                            Some(track) => NextResult::Track(track),
+                            None => NextResult::End,
+                        }
+                    }
+                }
+            };
+
+            match result {
+                NextResult::Track(track) => {
+                    self.play(Some(track)).await;
+                    return;
+                }
+                NextResult::NeedExpand(idx) => {
+                    if let Err(e) = self.expand_search_container(idx).await {
+                        tracing::error!("Failed to expand: {}", e);
+                        return;
+                    }
+                    // After expanding, the jump_to is already set, just get current track
+                    let track = {
+                        let queue = self.queue.lock().await;
+                        match &*queue {
+                            ActiveQueue::Search(sq) => sq.current_track(),
+                            _ => None,
+                        }
+                    };
+                    self.play(track).await;
+                    return;
+                }
+                _ => return,
+            }
         }
     }
 }

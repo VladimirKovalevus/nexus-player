@@ -10,13 +10,15 @@ export const useAudioStore = defineStore('audio', () => {
     volume: 1.0,
     currentTrack: null,
     bufferedRanges: [],
+    waveforms: [],
   });
 
   const queueState = ref<QueueState>({
-    tracks: [],
-    currentIndex: null,
+    entries: [],
+    currentPosition: null,
     repeatMode: 'off',
     shuffleEnabled: false,
+    searchContext: null,
   });
 
   const isPlaying = computed(() => audioState.value.state === 'playing');
@@ -27,11 +29,28 @@ export const useAudioStore = defineStore('audio', () => {
   const position = computed(() => audioState.value.positionSecs);
   const duration = computed(() => audioState.value.durationSecs);
   const bufferedRanges = computed(() => audioState.value.bufferedRanges);
+  const waveforms = computed(() => audioState.value.waveforms);
   const volume = computed(() => audioState.value.volume);
   const repeatMode = computed(() => queueState.value.repeatMode);
   const shuffleEnabled = computed(() => queueState.value.shuffleEnabled);
-  const tracks = computed(() => queueState.value.tracks);
-  const currentIndex = computed(() => queueState.value.currentIndex);
+  const entries = computed(() => queueState.value.entries);
+  const currentPosition = computed(() => queueState.value.currentPosition);
+  const isSearchQueue = computed(() => queueState.value.searchContext !== null);
+  const searchContext = computed(() => queueState.value.searchContext);
+
+  // Compatibility: flat list of tracks from entries
+  const tracks = computed(() => {
+    const result: import('@/types/types').TrackDto[] = [];
+    for (const entry of queueState.value.entries) {
+      if (entry.entryType === 'track') {
+        result.push(entry.track);
+      } else if (entry.entryType === 'container' && entry.tracks) {
+        result.push(...entry.tracks);
+      }
+    }
+    return result;
+  });
+  const currentIndex = computed(() => queueState.value.currentPosition?.itemIndex ?? null);
 
   const repeatIcon = computed((): string => {
     switch (queueState.value.repeatMode) {
@@ -62,13 +81,13 @@ export const useAudioStore = defineStore('audio', () => {
         audioState.value.currentTrack = null;
         break;
       case 'PositionUpdated':
-        if (event.payload?.position_secs !== undefined) {
-          audioState.value.positionSecs = event.payload.position_secs;
+        if (event.payload?.positionSecs !== undefined) {
+          audioState.value.positionSecs = event.payload.positionSecs;
         }
         break;
       case 'DurationChanged':
-        if (event.payload?.duration_secs !== undefined) {
-          audioState.value.durationSecs = event.payload.duration_secs;
+        if (event.payload?.durationSecs !== undefined) {
+          audioState.value.durationSecs = event.payload.durationSecs;
         }
         break;
       case 'VolumeChanged':
@@ -81,16 +100,23 @@ export const useAudioStore = defineStore('audio', () => {
           audioState.value.bufferedRanges = event.payload.ranges;
         }
         break;
+      case 'WaveformUpdated':
+        if (event.payload?.waveforms !== undefined) {
+          audioState.value.waveforms = event.payload.waveforms;
+        }
+        break;
       case 'LoadingStarted':
         audioState.value.state = 'loading';
         audioState.value.positionSecs = 0;
         audioState.value.bufferedRanges = [];
+        audioState.value.waveforms = [];
         if (event.payload?.track) {
           audioState.value.currentTrack = event.payload.track;
         }
         break;
       case 'AudioStateUpdated':
         if (event.payload?.state) {
+    console.log(event.payload?.state,"STATE");
           audioState.value = event.payload.state;
         }
         if (event.payload?.queue) {
@@ -104,6 +130,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   function updateAudioState(newState: AudioState) {
+    console.log(newState,"STATE");
     audioState.value = newState;
   }
 
@@ -126,9 +153,14 @@ export const useAudioStore = defineStore('audio', () => {
     position,
     duration,
     bufferedRanges,
+    waveforms,
     volume,
     repeatMode,
     shuffleEnabled,
+    entries,
+    currentPosition,
+    isSearchQueue,
+    searchContext,
     tracks,
     currentIndex,
     repeatIcon,

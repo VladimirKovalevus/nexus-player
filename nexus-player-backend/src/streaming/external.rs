@@ -52,6 +52,20 @@ impl crate::audio::types::MediaSource for StreamingMediaSource {
     fn clone_box(&self) -> Box<dyn crate::audio::types::MediaSource> {
         Box::new(StreamingMediaSource(self.0.clone()))
     }
+
+    fn get_waveforms(&self) -> Vec<crate::audio::types::Waveform> {
+        self.0
+            .get_waveforms()
+            .into_iter()
+            .map(|w| crate::audio::types::Waveform {
+                data: w.data,
+                start_time: w.start_time,
+                end_time: w.end_time,
+                byte_start: w.byte_start,
+                byte_end: w.byte_end,
+            })
+            .collect()
+    }
 }
 
 impl symphonia::core::io::MediaSource for StreamingMediaSource {

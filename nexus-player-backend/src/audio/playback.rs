@@ -99,6 +99,20 @@ impl MediaSource for HlsReaderAdapter {
     fn clone_box(&self) -> Box<dyn MediaSource> {
         Box::new(self.clone())
     }
+
+    fn get_waveforms(&self) -> Vec<crate::audio::types::Waveform> {
+        self.source
+            .get_waveforms()
+            .into_iter()
+            .map(|w| crate::audio::types::Waveform {
+                data: w.data,
+                start_time: w.start_time,
+                end_time: w.end_time,
+                byte_start: w.byte_start,
+                byte_end: w.byte_end,
+            })
+            .collect()
+    }
 }
 
 pub struct PlaybackEngine {
@@ -456,6 +470,15 @@ impl PlaybackEngine {
         let decoder_guard = self.decoder.lock().unwrap();
         if let Some(ref dec) = *decoder_guard {
             dec.buffered_ranges()
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn waveforms(&self) -> Vec<crate::audio::types::Waveform> {
+        let decoder_guard = self.decoder.lock().unwrap();
+        if let Some(ref dec) = *decoder_guard {
+            dec.waveforms()
         } else {
             vec![]
         }
