@@ -1,24 +1,19 @@
 use async_trait::async_trait;
-use bandcamp::Album;
-use std::sync::Arc;
 
 use crate::audio::types::MediaSource;
 use crate::library::TrackSource;
-use crate::streaming::cache::CacheManager;
 use crate::streaming::error::{StreamError, StreamResult};
 use crate::streaming::provider::StreamProvider;
 use crate::streaming::types::{
-    AlbumInfo, ContentType, ResolvedContent, SearchResult, StreamMetadata, StreamingService,
+    AlbumInfo, ContentType, ResolvedContent, ResolveOptions, SearchResult, StreamMetadata, StreamingService,
     TrackInfo,
 };
 
-pub struct BandcampProvider {
-    ytdlp: Arc<dyn StreamProvider>,
-}
+pub struct BandcampProvider {}
 
 impl BandcampProvider {
-    pub fn new(ytdlp: Arc<dyn StreamProvider>) -> Self {
-        Self { ytdlp }
+    pub fn new() -> Self {
+        Self {}
     }
 
     fn is_bandcamp_url(url: &str) -> bool {
@@ -90,12 +85,34 @@ impl StreamProvider for BandcampProvider {
         "Bandcamp"
     }
 
-    async fn resolve(&self, source: &TrackSource) -> StreamResult<String> {
-        match source {
-            TrackSource::Http(url) => Ok(url.clone()),
-            TrackSource::External { id: id, system: _ } => self.ytdlp.resolve(source).await,
-            _ => Err(StreamError::NotSupported),
+    async fn resolve(
+        &self,
+        source: &TrackSource,
+        _options: Option<ResolveOptions>,
+    ) -> StreamResult<String> {
+        let url = match source {
+            TrackSource::Http(url) => url.clone(),
+            TrackSource::External { id, .. } => id.clone(),
+            _ => return Err(StreamError::NotSupported),
+        };
+        if url.contains("stream_redirect") {
+            return Ok(url.clone());
         }
+
+        let album = bandcamp::track_from_url(&url)
+            .await
+            .map_err(|e| StreamError::MetadataError(format!("Bandcamp API error: {:?}", e)))?;
+
+        let track = album.tracks.first().ok_or_else(|| {
+            StreamError::NoStreamAvailable("No tracks found in Bandcamp response".to_string())
+        })?;
+
+        let streaming_url =
+            track.streaming_url.values().next().ok_or_else(|| {
+                StreamError::NoStreamAvailable("No streaming URL found".to_string())
+            })?;
+
+        Ok(streaming_url.clone())
     }
 
     async fn fetch_metadata(&self, source: &TrackSource) -> StreamResult<StreamMetadata> {
@@ -129,12 +146,12 @@ impl StreamProvider for BandcampProvider {
         })
     }
 
-    async fn get_stream(&self, source: &TrackSource) -> StreamResult<Box<dyn MediaSource>> {
-        self.ytdlp.get_stream(source).await
+    async fn get_stream(&self, _source: &TrackSource) -> StreamResult<Box<dyn MediaSource>> {
+        Err(StreamError::NotSupported)
     }
 
-    async fn get_stream_v2(&self, source: &ResolvedContent) -> StreamResult<Box<dyn MediaSource>> {
-        self.ytdlp.get_stream_v2(source).await
+    async fn get_stream_v2(&self, _source: &ResolvedContent) -> StreamResult<Box<dyn MediaSource>> {
+        Err(StreamError::NotSupported)
     }
 
     async fn search_typed(

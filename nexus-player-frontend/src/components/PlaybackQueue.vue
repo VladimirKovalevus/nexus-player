@@ -5,16 +5,6 @@ import MediaCard from './common/MediaCard.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import { useAudioStore } from '../stores/audio';
 
-interface QueueTrack {
-  index: number;
-  id: number;
-  title: string;
-  artist: string | null;
-  thumbnail: string | null;
-  duration: number | null;
-  isCurrentlyPlaying: boolean;
-}
-
 const audioStore = useAudioStore();
 const loading = ref(true);
 const error = ref<string | null>(null);
@@ -23,12 +13,8 @@ const isSavingPlaylist = ref(false);
 
 const queue = computed(() => {
   return audioStore.tracks.map((track, index) => ({
+    ...track,
     index,
-    id: track.id,
-    title: track.title,
-    artist: track.artist,
-    artworkUrl: track.artworkUrl,
-    duration: track.durationSecs,
     isCurrentlyPlaying: index === audioStore.currentIndex,
   }));
 });
@@ -38,7 +24,7 @@ const fetchQueue = async () => {
     loading.value = true;
     error.value = null;
 
-    const queueState = await invoke('get_queue_state');
+    const queueState = await invoke<any>('get_queue_state');
     audioStore.updateQueueState(queueState);
   } catch (e) {
     error.value = `Failed to load queue: ${e}`;
@@ -54,15 +40,6 @@ const playAtIndex = async (index: number) => {
     await fetchQueue();
   } catch (e) {
     console.error('Failed to play at index:', e);
-  }
-};
-
-const removeFromQueue = async (index: number) => {
-  try {
-    await invoke('remove_from_queue', { index });
-    await fetchQueue();
-  } catch (e) {
-    console.error('Failed to remove from queue:', e);
   }
 };
 
@@ -155,9 +132,12 @@ defineExpose({ fetchQueue });
         <MediaCard
           type="track"
           :track="track"
+          :queue-index="track.index"
+          context="queue"
           showAction
           @click="playAtIndex(track.index)"
           @play="playAtIndex(track.index)"
+          @refresh="fetchQueue"
         />
       </div>
     </div>

@@ -70,9 +70,9 @@ impl AppState {
         self.config_manager.get()
     }
 
-    pub fn update_config(&self, config: AppConfig) -> anyhow::Result<()> {
+    pub async fn update_config(&self, config: AppConfig) -> anyhow::Result<()> {
         self.config_manager.update(config.clone())?;
-        self.streaming.update_config(config.providers);
+        self.streaming.update_config(config.providers).await;
         Ok(())
     }
 
@@ -132,6 +132,9 @@ impl AppState {
 
     async fn play(&self, track: Option<Track>) {
         if let Some(track) = track {
+            // МГНОВЕННО переключаем контекст в движке, чтобы остановить старый звук
+            self.audio_engine().set_loading(track.clone());
+
             // Get next track for preloading context
             let next_track = {
                 let queue = self.queue.lock().await;
@@ -143,14 +146,14 @@ impl AppState {
             if let Some(next) = next_track {
                 let streaming = self.streaming.clone();
                 tokio::spawn(async move {
-                    let _ = streaming.resolve(next.source, next.id as u64).await;
+                    let _ = streaming.resolve(next.source, next.id as u64, None).await;
                 });
             }
 
             // Prepare source for current track
             match self
                 .streaming()
-                .resolve(track.source.clone(), track.id as u64)
+                .resolve(track.source.clone(), track.id as u64, None)
                 .await
             {
                 Ok(wrapper) => {
@@ -160,18 +163,19 @@ impl AppState {
 
                     if let Err(e) = wrapper.prepare().await {
                         tracing::warn!("Prepare failed: {}", e);
+                        self.audio_engine().stop();
                         return;
                     }
 
                     match wrapper {
                         StreamingSourceWrapper::Streaming(source) => {
-                            self.audio_engine().play_source(Box::new(source));
+                            self.audio_engine().play_source(track, Box::new(source));
                         }
                         StreamingSourceWrapper::Hls(hls) => {
-                            self.audio_engine().play_hls(hls);
+                            self.audio_engine().play_hls(track, hls);
                         }
                         StreamingSourceWrapper::Local(source) => {
-                            self.audio_engine().play_source(source);
+                            self.audio_engine().play_source(track, source);
                         }
                     }
                 }
@@ -451,4 +455,3 @@ impl AppState {
         }
     }
 }
-

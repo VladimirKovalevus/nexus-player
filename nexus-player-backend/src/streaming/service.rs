@@ -12,10 +12,13 @@ use streaming::multi_downloader::source::Source;
 use super::cache::CacheManager;
 use super::error::{StreamError, StreamResult};
 use super::provider::StreamProvider;
-use super::providers::{BandcampProvider, SoundCloudProvider, YtDlpProvider};
-use super::types::{ContentType, SearchResult, StreamingService as StreamingServiceEnum, PlaylistInfo};
-use streaming::state::manager::DownloadManager;
+use super::providers::{BandcampProvider, SoundCloudProvider, VkProvider, YtDlpProvider};
+use super::types::{
+    ContentType, PlaylistInfo, ResolveOptions, SearchResult,
+    StreamingService as StreamingServiceEnum,
+};
 use std::str::FromStr;
+use streaming::state::manager::DownloadManager;
 
 pub struct StreamingService {
     providers: HashMap<String, Arc<dyn StreamProvider>>,
@@ -33,17 +36,18 @@ impl StreamingService {
 
         let ytdlp = Arc::new(YtDlpProvider::new(cache)) as Arc<dyn StreamProvider>;
 
-        let bandcamp = Arc::new(BandcampProvider::new(ytdlp.clone())) as Arc<dyn StreamProvider>;
-        let soundcloud =
-            Arc::new(SoundCloudProvider::new(ytdlp.clone())) as Arc<dyn StreamProvider>;
-        // let vk = Arc::new(VkProvider::new(ytdlp.clone())) as Arc<dyn StreamProvider>;
+        let bandcamp = Arc::new(BandcampProvider::new()) as Arc<dyn StreamProvider>;
+        let soundcloud = Arc::new(SoundCloudProvider::new()) as Arc<dyn StreamProvider>;
+        let vk =
+            Arc::new(VkProvider::new(config.vk.credentials.clone())) as Arc<dyn StreamProvider>;
 
         let mut providers = HashMap::new();
+
         providers.insert("ytdlp".to_string(), ytdlp.clone());
         providers.insert("youtube".to_string(), ytdlp);
         providers.insert("bandcamp".to_string(), bandcamp);
         providers.insert("soundcloud".to_string(), soundcloud);
-        // providers.insert("vk".to_string(), vk);
+        providers.insert("vk".to_string(), vk);
 
         let manager = DownloadManager::new();
 
@@ -54,9 +58,13 @@ impl StreamingService {
         })
     }
 
-    pub fn update_config(&self, config: ProviderConfig) {
+    pub async fn update_config(&self, config: ProviderConfig) {
         if let Ok(mut c) = self.config.write() {
-            *c = config;
+            *c = config.clone();
+        }
+
+        if let Some(vk) = self.providers.get("vk") {
+            vk.set_credentials(config.vk.credentials.clone()).await;
         }
     }
 
@@ -91,7 +99,9 @@ impl StreamingService {
             .get(provider_name)
             .ok_or_else(|| StreamError::NoProviderFound)?;
 
-        provider.search_typed(query, content_type, limit, offset).await
+        provider
+            .search_typed(query, content_type, limit, offset)
+            .await
     }
 
     pub fn get_provider(&self, name: &str) -> Option<Arc<dyn StreamProvider>> {
@@ -129,7 +139,8 @@ impl StreamingService {
             ContentType::Playlist => SearchResult::Playlist(PlaylistInfo {
                 id: id.to_string(),
                 url: id.to_string(),
-                service: StreamingServiceEnum::from_str(provider_name).unwrap_or(StreamingServiceEnum::YouTube),
+                service: StreamingServiceEnum::from_str(provider_name)
+                    .unwrap_or(StreamingServiceEnum::YouTube),
                 title: "".to_string(),
                 creator: "".to_string(),
                 tracks: vec![],
@@ -140,7 +151,8 @@ impl StreamingService {
             ContentType::Album => SearchResult::Album(AlbumInfo {
                 id: id.to_string(),
                 url: id.to_string(),
-                service: StreamingServiceEnum::from_str(provider_name).unwrap_or(StreamingServiceEnum::YouTube),
+                service: StreamingServiceEnum::from_str(provider_name)
+                    .unwrap_or(StreamingServiceEnum::YouTube),
                 title: "".to_string(),
                 artist: "".to_string(),
                 tracks: vec![],
@@ -159,6 +171,7 @@ impl StreamingService {
         &self,
         source: TrackSource,
         track_id: u64,
+        options: Option<ResolveOptions>,
     ) -> StreamResult<StreamingSourceWrapper> {
         println!("Source {:?}", source);
         match source {
@@ -176,13 +189,29 @@ impl StreamingService {
             }
             TrackSource::External { system, id } => {
                 if let Some(provider) = self.providers.get(&system) {
+                    let mut effective_options =
+                        options.unwrap_or(ResolveOptions { user_agent: None });
+
+                    if system == "vk" && effective_options.user_agent.is_none() {
+                        effective_options.user_agent =
+                            Some(vk_down::auth::VK_USER_AGENT.to_string());
+                    }
+
                     let source = TrackSource::External { system, id };
                     if let Some(stream) = self.download_manager.get_track(track_id).await {
                         Ok(StreamingSourceWrapper::from_source(stream))
                     } else {
-                        match provider.resolve(&source).await {
+                        match provider
+                            .resolve(&source, Some(effective_options.clone()))
+                            .await
+                        {
                             Ok(url) => {
-                                match self.download_manager.add_track(&url, track_id).await {
+                                let user_agent = effective_options.user_agent;
+                                match self
+                                    .download_manager
+                                    .add_track(&url, track_id, user_agent)
+                                    .await
+                                {
                                     Ok(s) => Ok(StreamingSourceWrapper::from_source(s)),
                                     Err(e) => Err(StreamError::Other(e.to_string())),
                                 }

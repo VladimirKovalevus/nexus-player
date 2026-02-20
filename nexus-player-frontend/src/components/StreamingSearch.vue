@@ -16,6 +16,7 @@ const providers = [
   { value: 'bandcamp', label: 'Bandcamp' },
   { value: 'youtube', label: 'YouTube' },
   { value: 'soundcloud', label: 'SoundCloud' },
+  { value: 'vk', label: 'VK' },
   { value: 'ytdlp', label: 'YT-DLP (All)' },
 ];
 

@@ -29,6 +29,7 @@ pub struct PlaylistDto {
     pub track_count: usize,
     pub created_at: i64,
     pub updated_at: i64,
+    pub source: Option<TrackSourceDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +56,23 @@ pub struct AudioStateDto {
     pub duration_secs: f64,
     pub volume: f32,
     pub current_track: Option<TrackDto>,
+    pub buffered_ranges: Vec<BufferedRangeDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BufferedRangeDto {
+    pub start: f32,
+    pub end: f32,
+}
+
+impl From<nexus_player_backend::audio::types::BufferedRange> for BufferedRangeDto {
+    fn from(range: nexus_player_backend::audio::types::BufferedRange) -> Self {
+        Self {
+            start: range.start,
+            end: range.end,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -191,6 +209,7 @@ impl From<models::Playlist> for PlaylistDto {
             track_count: 0,
             created_at: playlist.created_at.timestamp(),
             updated_at: playlist.updated_at.timestamp(),
+            source: None,
         }
     }
 }
@@ -214,6 +233,7 @@ impl From<audio::AudioState> for AudioStateDto {
             audio::PlaybackState::Paused => "paused",
             audio::PlaybackState::Stopped => "stopped",
             audio::PlaybackState::Buffering => "buffering",
+            audio::PlaybackState::Loading => "loading",
         };
 
         Self {
@@ -221,8 +241,12 @@ impl From<audio::AudioState> for AudioStateDto {
             position_secs: state.position.as_secs_f64(),
             duration_secs: state.duration.as_secs_f64(),
             volume: state.volume,
-            current_track: None,
-            // current_track: state.current_track.map(|t| t.into()),
+            current_track: state.current_track.map(|t| t.into()),
+            buffered_ranges: state
+                .buffered_ranges
+                .into_iter()
+                .map(BufferedRangeDto::from)
+                .collect(),
         }
     }
 }
@@ -485,6 +509,48 @@ impl From<SearchResultDto> for streaming::SearchResult {
                     description: None,
                 })
             }
+        }
+    }
+}
+
+impl From<nexus_player_backend::streaming::types::TrackInfo> for TrackDto {
+    fn from(track: nexus_player_backend::streaming::types::TrackInfo) -> Self {
+        let (url, system) = match &track.source {
+            nexus_player_backend::library::TrackSource::External { id, system } => {
+                (id.clone(), system.clone())
+            }
+            _ => (track.source.as_str(), "unknown".to_string()),
+        };
+
+        Self {
+            id: (rand::random::<u64>() as i64).abs(),
+            title: track.title,
+            artist: Some(track.artist),
+            album: None,
+            duration_secs: track.duration.map(|d| d.as_secs_f64()),
+            artwork_url: track.thumbnail,
+            play_count: 0,
+            state: TrackStateDto::Streaming,
+            source: Some(TrackSourceDto { url, system }),
+        }
+    }
+}
+
+impl From<nexus_player_backend::streaming::types::PlaylistInfo> for PlaylistDto {
+    fn from(playlist: nexus_player_backend::streaming::types::PlaylistInfo) -> Self {
+        Self {
+            id: (rand::random::<u64>() as i64).abs(),
+            title: playlist.title,
+            description: playlist.description,
+            creator: Some(playlist.creator),
+            thumbnail: playlist.thumbnail,
+            track_count: playlist.track_count,
+            created_at: 0,
+            updated_at: 0,
+            source: Some(TrackSourceDto {
+                url: playlist.id,
+                system: playlist.service.to_string(),
+            }),
         }
     }
 }

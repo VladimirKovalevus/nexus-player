@@ -15,7 +15,7 @@ use crate::streaming::cache::CacheManager;
 use crate::streaming::error::{StreamError, StreamResult};
 use crate::streaming::provider::StreamProvider;
 use crate::streaming::types::{
-    AlbumInfo, AudioQuality, ChannelInfo, ContentType, PlaylistInfo, ResolvedContent, SearchResult,
+    AlbumInfo, AudioQuality, ChannelInfo, ContentType, PlaylistInfo, ResolvedContent, ResolveOptions, SearchResult,
     StreamMetadata, StreamingService, TrackInfo,
 };
 
@@ -243,7 +243,11 @@ impl StreamProvider for YtDlpProvider {
         "YtDlp"
     }
 
-    async fn resolve(&self, source: &TrackSource) -> StreamResult<String> {
+    async fn resolve(
+        &self,
+        source: &TrackSource,
+        _options: Option<ResolveOptions>,
+    ) -> StreamResult<String> {
         match source {
             TrackSource::Http(url) => self.get_audio_url(url, AudioQuality::Best).await,
             TrackSource::External { id, system } => {

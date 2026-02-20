@@ -77,6 +77,11 @@ pub fn run() {
             commands::save_track_to_file,
             commands::get_app_config,
             commands::update_app_config,
+            commands::get_vk_auth_url,
+            commands::get_vk_auth_html,
+            commands::extract_vk_token,
+            commands::open_vk_login,
+            commands::get_vk_profile,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

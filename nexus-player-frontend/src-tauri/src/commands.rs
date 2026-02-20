@@ -11,7 +11,7 @@ use nexus_player_backend::streaming::types::{ContentType, ResolvedContent, Searc
 use nexus_player_backend::playlist::cursor::ContainerContext;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 type Result<T> = std::result::Result<T, String>;
@@ -413,13 +413,13 @@ pub async fn handle_streaming_track(
                 SearchResult::Playlist(playlist) => {
                     state.load_context_to_queue(ContainerContext::ExternalPlaylist { 
                         system: playlist.service.to_string(), 
-                        id: playlist.url 
+                        id: playlist.id 
                     }).await.map_err(|e| e.to_string())?;
                 }
                 SearchResult::Album(album) => {
                      state.load_context_to_queue(ContainerContext::ExternalAlbum { 
                         system: album.service.to_string(), 
-                        id: album.url 
+                        id: album.id 
                     }).await.map_err(|e| e.to_string())?;
                 }
                 _ => todo!(),
@@ -434,13 +434,87 @@ pub async fn handle_streaming_track(
 use nexus_player_backend::config::AppConfig;
 
 #[tauri::command]
+pub async fn open_vk_login(app: AppHandle) -> Result<()> {
+    let url = vk_down::get_default_auth_url();
+    let app_handle = app.clone();
+
+    let _login_window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "vk-login",
+        tauri::WebviewUrl::External(url.parse().expect("Failed to parse VK URL")),
+    )
+    .title("VK Авторизация")
+    .inner_size(500.0, 700.0)
+    .always_on_top(true)
+    .on_navigation(move |url| {
+        let url_str = url.as_str();
+        if url_str.contains("access_token=") {
+            let token = vk_down::extract_token_from_url(url_str);
+            let _ = app_handle.emit("vk-token-received", token);
+            if let Some(w) = app_handle.get_webview_window("vk-login") {
+                let _ = w.close();
+            }
+            return false;
+        }
+        true
+    })
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_vk_auth_url() -> String {
+    vk_down::auth::get_oauth_url(&vk_down::auth::AuthConfig::default())
+}
+
+#[tauri::command]
+pub fn get_vk_auth_html() -> String {
+    vk_down::get_auth_html()
+}
+
+#[tauri::command]
+pub fn extract_vk_token(url_or_token: String) -> String {
+    vk_down::extract_token_from_url(&url_or_token)
+}
+
+#[tauri::command]
 pub fn get_app_config(state: State<'_, Arc<AppState>>) -> Result<AppConfig> {
     Ok(state.config())
 }
 
 #[tauri::command]
-pub fn update_app_config(state: State<'_, Arc<AppState>>, config: AppConfig) -> Result<()> {
-    state.update_config(config).map_err(|e| e.to_string())
+pub async fn update_app_config(state: State<'_, Arc<AppState>>, config: AppConfig) -> Result<()> {
+    state.update_config(config).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_vk_profile(
+    state: State<'_, Arc<AppState>>,
+) -> Result<(Vec<TrackDto>, Vec<PlaylistDto>)> {
+    tracing::info!("get_vk_profile command called");
+    let vk_provider = state
+        .streaming()
+        .get_provider("vk")
+        .ok_or_else(|| {
+            tracing::error!("VK provider not found in streaming service");
+            "VK provider not found".to_string()
+        })?;
+
+    let (tracks, playlists) = vk_provider.get_profile_content().await.map_err(|e| {
+        tracing::error!("Failed to get VK profile content from provider: {}", e);
+        e.to_string()
+    })?;
+
+    tracing::info!("Successfully retrieved VK profile data. Converting {} tracks and {} playlists to DTOs...", tracks.len(), playlists.len());
+
+    let tracks_dto = tracks.into_iter().map(TrackDto::from).collect();
+    let playlists_dto = playlists.into_iter().map(PlaylistDto::from).collect();
+
+    tracing::info!("Conversion complete.");
+
+    Ok((tracks_dto, playlists_dto))
 }
 
 #[tauri::command]

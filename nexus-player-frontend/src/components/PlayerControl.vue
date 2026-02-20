@@ -10,7 +10,7 @@ interface Props {
   queueVisible?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   queueVisible: true,
 });
 
@@ -30,7 +30,7 @@ const displayPosition = computed(() => {
 
 const fetchAudioState = async () => {
   try {
-    const state = await invoke('get_audio_state');
+    const state = await invoke<any>('get_audio_state');
     audioStore.updateAudioState(state);
   } catch (e) {
     console.error('Failed to fetch audio state:', e);
@@ -40,7 +40,7 @@ defineExpose({ fetchAudioState });
 
 const fetchQueueState = async () => {
   try {
-    const state = await invoke('get_queue_state');
+    const state = await invoke<any>('get_queue_state');
     audioStore.updateQueueState(state);
   } catch (e) {
     console.error('Failed to fetch queue state:', e);

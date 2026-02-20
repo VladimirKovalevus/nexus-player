@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "bld": "NO_STRIP=true tauri build",
+    "install": "cp ../target/release/bundle/appimage/nexus-player-frontend_0.1.0_amd64.AppImage ~/nexus",
     "start": "WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev"
   },
   "dependencies": {

@@ -11,20 +11,18 @@ use crate::library::TrackSource;
 use crate::streaming::error::{StreamError, StreamResult};
 use crate::streaming::provider::StreamProvider;
 use crate::streaming::types::{
-    AlbumInfo, ContentType, PlaylistInfo, ResolvedContent, SearchResult, StreamMetadata,
+    AlbumInfo, ContentType, PlaylistInfo, ResolvedContent, ResolveOptions, SearchResult, StreamMetadata,
     StreamingService, TrackInfo,
 };
 
 pub struct SoundCloudProvider {
     client: OnceCell<SoundCloudClient>,
-    ytdlp: Arc<dyn StreamProvider>,
 }
 
 impl SoundCloudProvider {
-    pub fn new(ytdlp: Arc<dyn StreamProvider>) -> Self {
+    pub fn new() -> Self {
         Self {
             client: OnceCell::new(),
-            ytdlp,
         }
     }
 
@@ -53,12 +51,46 @@ impl StreamProvider for SoundCloudProvider {
         "SoundCloud"
     }
 
-    async fn resolve(&self, source: &TrackSource) -> StreamResult<String> {
-        match source {
-            TrackSource::Http(_) => self.ytdlp.resolve(source).await,
-            TrackSource::External { system: _, id: _ } => self.ytdlp.resolve(source).await,
-            _ => Err(StreamError::NotSupported),
-        }
+    async fn resolve(
+        &self,
+        source: &TrackSource,
+        _options: Option<ResolveOptions>,
+    ) -> StreamResult<String> {
+        let url = match source {
+            TrackSource::Http(url) => url.clone(),
+            TrackSource::External { id, .. } => id.clone(),
+            _ => return Err(StreamError::NotSupported),
+        };
+
+        let client = self.get_client().await?;
+        let track = client
+            .get_track(ResourceId::Url(url))
+            .await
+            .map_err(|e| StreamError::MetadataError(format!("SoundCloud API error: {}", e)))?;
+
+        // Find HLS transcoding
+        let transcoding = track
+            .track
+            .media
+            .transcodings
+            .iter()
+            .find(|t| t.format.protocol == "hls" && t.format.mime_type.contains("opus"))
+            .or_else(|| {
+                track
+                    .track
+                    .media
+                    .transcodings
+                    .iter()
+                    .find(|t| t.format.protocol == "hls")
+            })
+            .or_else(|| track.track.media.transcodings.first())
+            .ok_or_else(|| StreamError::NoStreamAvailable("No transcodings found".to_string()))?;
+
+        let stream_url = client.get_stream_url(&transcoding.url).await.map_err(|e| {
+            StreamError::Other(format!("Failed to get SoundCloud stream URL: {}", e))
+        })?;
+
+        Ok(stream_url)
     }
 
     async fn fetch_metadata(&self, source: &TrackSource) -> StreamResult<StreamMetadata> {
@@ -91,12 +123,12 @@ impl StreamProvider for SoundCloudProvider {
         })
     }
 
-    async fn get_stream(&self, source: &TrackSource) -> StreamResult<Box<dyn MediaSource>> {
-        self.ytdlp.get_stream(source).await
+    async fn get_stream(&self, _source: &TrackSource) -> StreamResult<Box<dyn MediaSource>> {
+        Err(StreamError::NotSupported)
     }
 
-    async fn get_stream_v2(&self, source: &ResolvedContent) -> StreamResult<Box<dyn MediaSource>> {
-        self.ytdlp.get_stream_v2(source).await
+    async fn get_stream_v2(&self, _source: &ResolvedContent) -> StreamResult<Box<dyn MediaSource>> {
+        Err(StreamError::NotSupported)
     }
 
     async fn search_typed(

@@ -75,11 +75,11 @@ impl CursorResolver for AppCursorResolver {
                         SearchResult::Track(info) => CursorItem::Track(info.into()),
                         SearchResult::Playlist(info) => CursorItem::Container(ContainerContext::ExternalPlaylist { 
                             system: system.clone(), 
-                            id: info.url 
+                            id: info.id 
                         }),
                         SearchResult::Album(info) => CursorItem::Container(ContainerContext::ExternalAlbum { 
                             system: system.clone(), 
-                            id: info.url 
+                            id: info.id 
                         }),
                         _ => CursorItem::Container(ContainerContext::SearchQuery { system: system.clone(), query: query.clone() }) 
                     }

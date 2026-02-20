@@ -98,7 +98,11 @@ interface Props {
   type: 'track' | 'playlist';
   track?: TrackDto;
   playlist?: PlaylistDto;
-  showAction:Boolean;
+  showAction: boolean;
+  context?: string;
+  isLocal?: boolean;
+  isInLibrary?: boolean;
+  queueIndex?: number;
 }
 
 const props = defineProps<Props>();
@@ -131,9 +135,9 @@ const entity = computed(() => {
       id: props.playlist.id,
       title: props.playlist.title,
       artist: props.playlist.creator || 'Unknown Creator',
-      thumbnail: undefined,
+      thumbnail: props.playlist.thumbnail || undefined,
       duration: undefined,
-      trackCount: props.playlist.track_count,
+      trackCount: props.playlist.trackCount,
       year: undefined,
     };
   }
@@ -173,6 +177,12 @@ const menuOptions = computed<MenuOption[]>(() => {
       label: 'Удалить из очереди',
       icon: '🗑️',
       action: handleRemoveFromQueue,
+    });
+  } else {
+    options.push({
+      label: 'Добавить в очередь',
+      icon: '➕',
+      action: handleAddToQueue,
     });
   }
 
@@ -270,6 +280,18 @@ const handleAddToPlaylist = async (playlistId: number) => {
     closeDropdown();
   } catch (e) {
     console.error('Failed to add track to playlist:', e);
+  }
+};
+
+const handleAddToQueue = async () => {
+  if (props.type !== 'track') return;
+
+  try {
+    await invoke('add_to_queue', { trackId: entity.value.id });
+    emit('refresh');
+    closeDropdown();
+  } catch (e) {
+    console.error('Failed to add track to queue:', e);
   }
 };
 

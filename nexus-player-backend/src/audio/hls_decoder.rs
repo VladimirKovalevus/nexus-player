@@ -47,6 +47,7 @@ pub struct HlsAudioDecoder {
     total_duration: f64,
 
     is_continuous: bool,
+    hls_contiguous: bool,
 }
 
 impl HlsAudioDecoder {
@@ -62,6 +63,8 @@ impl HlsAudioDecoder {
         let total_duration: f64 = durations.iter().sum();
 
         let is_continuous = source.is_continuous();
+        // Enable contiguous seek restriction by default for OGG
+        let hls_contiguous = is_continuous;
 
         let (mut format_reader, track_id, sample_rate, channels) = if is_continuous {
             // For continuous streams (OGG), wrap the whole HlsSource
@@ -141,7 +144,16 @@ impl HlsAudioDecoder {
             accumulated_duration: 0.0,
             total_duration,
             is_continuous,
+            hls_contiguous,
         })
+    }
+
+    pub fn set_hls_contiguous(&mut self, enabled: bool) {
+        self.hls_contiguous = enabled;
+    }
+
+    pub fn buffered_ranges(&self) -> Vec<(f64, f64)> {
+        self.source.get_buffered_ranges()
     }
 
     pub fn decode_next_block(&mut self) -> Result<Option<Vec<f32>>, AudioError> {
@@ -213,8 +225,25 @@ impl HlsAudioDecoder {
         info!("HLS seek to {:.2}s is_cont: {}", time_secs, self.is_continuous);
 
         if self.is_continuous {
+            if self.hls_contiguous {
+                let ranges = self.source.get_buffered_ranges();
+                let is_buffered = ranges
+                    .iter()
+                    .any(|(start, end)| time_secs >= *start && time_secs <= *end);
+                if !is_buffered {
+                    warn!(
+                        "Seek to {:.2}s ignored (not buffered in contiguous mode)",
+                        time_secs
+                    );
+                    return Err(AudioError::DecodingError(
+                        "Seek outside of buffer in contiguous mode".into(),
+                    ));
+                }
+            }
+
             // Explicitly tell source to seek to this time to trigger download if needed
-            self.source.seek((time_secs * 1000.0) as u64)
+            self.source
+                .seek((time_secs * 1000.0) as u64)
                 .map_err(|e| AudioError::DecodingError(format!("HLS source seek failed: {}", e)))?;
 
             let reader = self.continuous_reader.as_mut().unwrap();

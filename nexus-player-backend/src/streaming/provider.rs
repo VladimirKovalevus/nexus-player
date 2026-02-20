@@ -1,9 +1,9 @@
 use crate::audio::types::MediaSource;
 use crate::library::TrackSource;
-use crate::streaming::types::ResolvedContent;
+use crate::streaming::types::{ResolvedContent, ResolveOptions};
 
 use super::error::StreamResult;
-use super::types::{ContentType, SearchResult, StreamMetadata, TrackInfo};
+use super::types::{ContentType, PlaylistInfo, SearchResult, StreamMetadata, TrackInfo};
 
 use async_trait::async_trait;
 
@@ -11,7 +11,11 @@ use async_trait::async_trait;
 pub trait StreamProvider: Send + Sync {
     fn name(&self) -> &str;
 
-    async fn resolve(&self, source: &TrackSource) -> StreamResult<String>;
+    async fn resolve(
+        &self,
+        source: &TrackSource,
+        options: Option<ResolveOptions>,
+    ) -> StreamResult<String>;
 
     async fn fetch_metadata(&self, source: &TrackSource) -> StreamResult<StreamMetadata>;
 
@@ -32,7 +36,14 @@ pub trait StreamProvider: Send + Sync {
 
     async fn expand_collection(&self, _collection: SearchResult)
         -> StreamResult<Vec<TrackInfo>>;
+
+    async fn get_profile_content(&self) -> StreamResult<(Vec<TrackInfo>, Vec<PlaylistInfo>)> {
+        Ok((vec![], vec![]))
+    }
+
     async fn is_available(&self) -> bool {
         true
     }
+
+    async fn set_credentials(&self, _credentials: Option<String>) {}
 }

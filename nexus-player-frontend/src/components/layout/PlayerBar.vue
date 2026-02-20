@@ -1,26 +1,42 @@
 <template>
   <footer :class="$style.playerBar">
     <div :class="$style.trackInfo">
-      <div :class="$style.trackCover">🎵</div>
+      <div :class="$style.trackCover">
+        <img v-if="currentTrack?.artworkUrl" :src="currentTrack.artworkUrl" :alt="currentTrack.title" />
+        <span v-else>🎵</span>
+      </div>
       <div :class="$style.trackDetails">
-        <div :class="$style.trackName">Название трека</div>
-        <div :class="$style.trackArtist">Исполнитель</div>
+        <div :class="$style.trackName">{{ currentTrack?.title || 'Нет воспроизведения' }}</div>
+        <div :class="$style.trackArtist">{{ currentTrack?.artist || '—' }}</div>
       </div>
       <button :class="$style.likeButton">♡</button>
     </div>
 
     <div :class="$style.playerControls">
       <div :class="$style.controls">
-        <button :class="$style.controlButton">⏮</button>
-        <button :class="[$style.controlButton, $style.playButton]">▶</button>
-        <button :class="$style.controlButton">⏭</button>
+        <button :class="$style.controlButton" @click="playPrevious">⏮</button>
+        <button :class="[$style.controlButton, $style.playButton]" @click="togglePlay" :disabled="isLoading">
+          <div v-if="isLoading" :class="$style.spinner"></div>
+          <template v-else>{{ isPlaying ? '⏸' : '▶' }}</template>
+        </button>
+        <button :class="$style.controlButton" @click="playNext">⏭</button>
       </div>
       <div :class="$style.progress">
-        <span :class="$style.time">1:45</span>
-        <div :class="$style.progressBar">
-          <div :class="$style.progressFilled" :style="{ width: '45%' }"></div>
+        <span :class="$style.time">{{ formatTime(position) }}</span>
+        <div :class="$style.progressBar" @click="handleSeek">
+          <!-- Buffered ranges -->
+          <div 
+            v-for="(range, index) in bufferedRanges" 
+            :key="index"
+            :class="$style.progressBuffered"
+            :style="{ 
+              left: (range.start / duration * 100) + '%', 
+              width: ((range.end - range.start) / duration * 100) + '%' 
+            }"
+          ></div>
+          <div :class="$style.progressFilled" :style="{ width: (position / duration * 100) + '%' }"></div>
         </div>
-        <span :class="$style.time">3:33</span>
+        <span :class="$style.time">{{ formatTime(duration) }}</span>
       </div>
     </div>
 
@@ -35,7 +51,46 @@
 </template>
 
 <script setup lang="ts">
-// Player state and controls will be added via Pinia store
+import { useAudioStore } from '@/stores/audio';
+import { invoke } from '@tauri-apps/api/core';
+import { computed } from 'vue';
+
+const audioStore = useAudioStore();
+
+const isPlaying = computed(() => audioStore.isPlaying);
+const isLoading = computed(() => audioStore.isLoading);
+const currentTrack = computed(() => audioStore.currentTrack);
+const position = computed(() => audioStore.position);
+const duration = computed(() => audioStore.duration);
+const bufferedRanges = computed(() => audioStore.bufferedRanges);
+
+const formatTime = (seconds: number) => {
+  if (isNaN(seconds)) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
+const togglePlay = async () => {
+  if (isPlaying.value) {
+    await invoke('pause');
+  } else {
+    await invoke('resume');
+  }
+};
+
+const playNext = () => invoke('play_next');
+const playPrevious = () => invoke('play_previous');
+
+const handleSeek = (event: MouseEvent) => {
+  const bar = event.currentTarget as HTMLElement;
+  const rect = bar.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const percentage = x / rect.width;
+  const seekTime = percentage * duration.value;
+  
+  invoke('seek', { positionSecs: seekTime });
+};
 </script>
 
 <style module lang="scss">
@@ -171,7 +226,33 @@
   height: 100%;
   background-color: $color-accent-primary;
   border-radius: 2px;
+  position: relative;
+  z-index: 2;
   transition: width $transition-fast;
+}
+
+.progressBuffered {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  z-index: 1;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 // Right: Volume & Settings

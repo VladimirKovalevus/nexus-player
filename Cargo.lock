@@ -2975,6 +2975,7 @@ dependencies = [
  "chrono",
  "nexus-player-backend",
  "openssl",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "tauri",
@@ -2984,6 +2985,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "vk-down",
 ]
 
 [[package]]

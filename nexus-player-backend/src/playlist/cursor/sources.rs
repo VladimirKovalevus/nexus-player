@@ -192,11 +192,11 @@ impl StreamingSearchCursor {
             SearchResult::Track(info) => Some(CursorItem::Track(info.into())),
             SearchResult::Playlist(info) => Some(CursorItem::Container(ContainerContext::ExternalPlaylist { 
                 system: self.system.clone(), 
-                id: info.url 
+                id: info.id 
             })),
             SearchResult::Album(info) => Some(CursorItem::Container(ContainerContext::ExternalAlbum { 
                 system: self.system.clone(), 
-                id: info.url 
+                id: info.id 
             })),
             _ => None,
         }).collect();

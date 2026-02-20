@@ -4,6 +4,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{audio::types::Track, library::TrackSource, playlist::playlist::Playlist};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolveOptions {
+    pub user_agent: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum ContentType {
     Track,
@@ -25,6 +30,7 @@ pub enum StreamingService {
     YouTube,
     SoundCloud,
     Bandcamp,
+    Vk,
 }
 
 impl std::fmt::Display for StreamingService {
@@ -33,6 +39,7 @@ impl std::fmt::Display for StreamingService {
             Self::YouTube => write!(f, "youtube"),
             Self::SoundCloud => write!(f, "soundcloud"),
             Self::Bandcamp => write!(f, "bandcamp"),
+            Self::Vk => write!(f, "vk"),
         }
     }
 }
@@ -45,6 +52,7 @@ impl std::str::FromStr for StreamingService {
             "youtube" | "ytdlp" => Ok(Self::YouTube),
             "soundcloud" => Ok(Self::SoundCloud),
             "bandcamp" => Ok(Self::Bandcamp),
+            "vk" => Ok(Self::Vk),
             _ => Err(()),
         }
     }
@@ -56,6 +64,7 @@ impl StreamingService {
             Self::YouTube => "YouTube",
             Self::SoundCloud => "SoundCloud",
             Self::Bandcamp => "Bandcamp",
+            Self::Vk => "VK",
         }
     }
 
@@ -64,6 +73,7 @@ impl StreamingService {
             Self::YouTube => format!("ytsearch{}", limit),
             Self::SoundCloud => format!("scsearch{}", limit),
             Self::Bandcamp => String::new(),
+            Self::Vk => String::new(),
         }
     }
 }

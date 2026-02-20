@@ -182,6 +182,15 @@ impl AudioDecoder {
     pub fn channels(&self) -> usize {
         self.channels
     }
+
+    pub fn buffered_ranges(&self) -> Vec<(f64, f64)> {
+        if let Some(duration) = self.duration() {
+            vec![(0.0, duration)]
+        } else {
+            vec![]
+        }
+    }
+
     pub fn decode_next_block(&mut self) -> Result<Option<Vec<f32>>, AudioError> {
         let packet = loop {
             match self.format_reader.next_packet() {
@@ -294,6 +303,13 @@ impl DecoderType {
         match self {
             Self::Standard(d) => d.channels(),
             Self::Hls(d) => d.channels(),
+        }
+    }
+
+    pub fn buffered_ranges(&self) -> Vec<(f64, f64)> {
+        match self {
+            Self::Standard(d) => d.buffered_ranges(),
+            Self::Hls(d) => d.buffered_ranges(),
         }
     }
 }

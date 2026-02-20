@@ -452,6 +452,15 @@ impl PlaybackEngine {
         self.duration
     }
 
+    pub fn buffered_ranges(&self) -> Vec<(f64, f64)> {
+        let decoder_guard = self.decoder.lock().unwrap();
+        if let Some(ref dec) = *decoder_guard {
+            dec.buffered_ranges()
+        } else {
+            vec![]
+        }
+    }
+
     pub fn is_playing(&self) -> bool {
         *self.is_playing.lock().unwrap()
     }

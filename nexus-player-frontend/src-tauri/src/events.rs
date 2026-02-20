@@ -1,4 +1,4 @@
-use crate::dto::{AudioStateDto, QueueStateDto, TrackDto};
+use crate::dto::{AudioStateDto, BufferedRangeDto, QueueStateDto, TrackDto};
 use nexus_player_backend::audio::types::{AudioEvent, AudioState};
 use nexus_player_backend::state::state::AppState;
 use serde::Serialize;
@@ -35,6 +35,14 @@ pub enum FrontendEvent {
         volume: f32,
     },
 
+    BufferUpdated {
+        ranges: Vec<BufferedRangeDto>,
+    },
+
+    LoadingStarted {
+        track: TrackDto,
+    },
+
     AudioStateUpdated {
         state: AudioStateDto,
         queue: QueueStateDto,
@@ -54,7 +62,9 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
 
             for event in events {
                 let frontend_event = match event {
-                    AudioEvent::PlaybackStarted => FrontendEvent::PlaybackStarted { track_id: 0 },
+                    AudioEvent::PlaybackStarted { track } => {
+                        FrontendEvent::PlaybackStarted { track_id: track.id }
+                    }
                     AudioEvent::PlaybackPaused => FrontendEvent::PlaybackPaused,
                     AudioEvent::PlaybackResumed => FrontendEvent::PlaybackResumed,
                     AudioEvent::PlaybackStopped => FrontendEvent::PlaybackStopped,
@@ -71,6 +81,12 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                     },
                     AudioEvent::VolumeChanged { volume } => FrontendEvent::VolumeChanged { volume },
                     AudioEvent::Error { message } => FrontendEvent::Error { message },
+                    AudioEvent::BufferUpdated { ranges } => FrontendEvent::BufferUpdated {
+                        ranges: ranges.into_iter().map(BufferedRangeDto::from).collect(),
+                    },
+                    AudioEvent::LoadingStarted { track } => FrontendEvent::LoadingStarted {
+                        track: TrackDto::from(track),
+                    },
                     AudioEvent::BufferingStarted => {
                         continue;
                     }

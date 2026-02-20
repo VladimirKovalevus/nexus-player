@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import type { TrackDto } from '@/types/types';
 
 const emit = defineEmits<{
   'track-added-to-queue': []
@@ -37,11 +38,11 @@ const reloadTracks = async () => {
     loading.value = false;
   }
 };
-const trackClick = async (track)=>{
-    console.log(track,'track Click')
-    const res = await invoke('add_to_queue',{trackId:track.id})
-    console.log(res,'res Click')
-    emit('track-added-to-queue');
+const trackClick = async (track: TrackDto) => {
+  console.log(track, 'track Click')
+  const res = await invoke('add_to_queue', { trackId: track.id })
+  console.log(res, 'res Click')
+  emit('track-added-to-queue');
 }
 
 // Format duration from seconds to MM:SS

@@ -73,6 +73,20 @@
                      <button @click="handleVkAuth" :class="$style.smallButton">Войти</button>
                    </div>
                  </div>
+
+                 <div v-if="isVkLoginActive" :class="$style.vkLoginBox">
+                   <p :class="$style.hint">Для авторизации:</p>
+                   <ol :class="$style.instructions">
+                     <li><a :href="vkLoginUrl" target="_blank" :class="$style.link">Перейдите по этой ссылке</a></li>
+                     <li>Разрешите доступ к музыке</li>
+                     <li>Скопируйте весь URL страницы, на которую вас перенаправит</li>
+                     <li>Вставьте его ниже:</li>
+                   </ol>
+                   <div :class="$style.inputGroup">
+                     <input v-model="vkRedirectUrl" placeholder="Вставьте полученный URL здесь" />
+                     <button @click="handleTokenExtraction" :class="$style.smallButton">ОК</button>
+                   </div>
+                 </div>
               </div>
             </div>
           </section>
@@ -90,6 +104,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { AppConfig } from '@/types/types';
 
 const props = defineProps<{
@@ -103,6 +118,9 @@ const emit = defineEmits<{
 
 const loading = ref(false);
 const error = ref<string | null>(null);
+const vkLoginUrl = ref('');
+const vkRedirectUrl = ref('');
+const isVkLoginActive = ref(false);
 const config = ref<AppConfig>({
   providers: {
     youtube: { enabled: true },
@@ -142,12 +160,35 @@ const save = async () => {
 
 const handleVkAuth = async () => {
   try {
-    const token = await invoke<string>('authenticate_vk');
-    if (config.value.providers.vk) {
-       config.value.providers.vk.credentials = token;
-    }
+    await invoke('open_vk_login');
   } catch (e) {
-    alert(`VK Auth failed: ${e}`);
+    alert(`Failed to start VK login: ${e}`);
+  }
+};
+
+onMounted(async () => {
+  await listen('vk-token-received', (event: any) => {
+    const token = event.payload;
+    if (config.value.providers.vk) {
+      config.value.providers.vk.credentials = token;
+      isVkLoginActive.value = false;
+    }
+  });
+});
+
+const handleTokenExtraction = async () => {
+  if (!vkRedirectUrl.value) return;
+  try {
+    const token = await invoke<string>('extract_vk_token', {
+      urlOrToken: vkRedirectUrl.value,
+    });
+    if (config.value.providers.vk) {
+      config.value.providers.vk.credentials = token;
+    }
+    isVkLoginActive.value = false;
+    vkRedirectUrl.value = '';
+  } catch (e) {
+    alert(`Ошибка: ${e}`);
   }
 };
 
@@ -311,6 +352,40 @@ watch(
   
   input {
     flex: 1;
+  }
+}
+
+.vkLoginBox {
+  margin-top: $spacing-md;
+  padding: $spacing-md;
+  background-color: var(--color-bg-player);
+  border: 1px dashed var(--color-accent-primary);
+  border-radius: $radius-md;
+}
+
+.hint {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-bold;
+  margin-bottom: $spacing-xs;
+}
+
+.instructions {
+  font-size: $font-size-xs;
+  color: var(--color-text-secondary);
+  padding-left: $spacing-lg;
+  margin-bottom: $spacing-md;
+
+  li {
+    margin-bottom: $spacing-xxs;
+  }
+}
+
+.link {
+  color: var(--color-accent-primary);
+  text-decoration: underline;
+  
+  &:hover {
+    color: var(--color-accent-hover);
   }
 }
 

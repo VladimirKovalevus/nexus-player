@@ -9,21 +9,25 @@
     </div>
 
     <nav :class="$style.nav">
-      <a href="#" :class="[$style.navItem, $style.active]">
+      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'home' }]" @click.prevent="$emit('changeView', 'home')">
         <span :class="$style.icon">🏠</span>
         <span>Главная</span>
       </a>
-      <a href="#" :class="$style.navItem">
+      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'search' }]" @click.prevent="$emit('changeView', 'search')">
         <span :class="$style.icon">🔍</span>
         <span>Поиск</span>
       </a>
-      <a href="#" :class="$style.navItem">
+      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'library' }]" @click.prevent="$emit('changeView', 'library')">
         <span :class="$style.icon">🎵</span>
         <span>Музыка</span>
       </a>
-      <a href="#" :class="$style.navItem">
+      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'playlists' }]" @click.prevent="$emit('changeView', 'playlists')">
         <span :class="$style.icon">📋</span>
         <span>Плейлисты</span>
+      </a>
+      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'vk' }]" @click.prevent="$emit('changeView', 'vk')">
+        <span :class="$style.icon">VK</span>
+        <span>VK Музыка</span>
       </a>
     </nav>
 
@@ -45,6 +49,14 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import SettingsModal from '@/components/SettingsModal.vue';
+
+defineProps<{
+  activeView: string;
+}>();
+
+defineEmits<{
+  changeView: [view: string];
+}>();
 
 const isSettingsOpen = ref(false);
 </script>

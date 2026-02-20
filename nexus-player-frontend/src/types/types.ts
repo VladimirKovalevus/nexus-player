@@ -1,3 +1,8 @@
+export interface TrackSourceDto {
+  url: string;
+  system: string;
+}
+
 export interface TrackDto {
   id: number;
   title: string;
@@ -7,6 +12,7 @@ export interface TrackDto {
   artworkUrl: string | null;
   playCount: number;
   state: string;
+  source?: TrackSourceDto | null;
 }
 
 export interface PlaylistDto {
@@ -14,17 +20,25 @@ export interface PlaylistDto {
   title: string;
   description: string | null;
   creator: string | null;
-  track_count: number;
-  created_at: number;
-  updated_at: number;
+  thumbnail: string | null;
+  trackCount: number;
+  createdAt: number;
+  updatedAt: number;
+  source?: TrackSourceDto | null;
+}
+
+export interface BufferedRange {
+  start: number;
+  end: number;
 }
 
 export interface AudioState {
-  state: 'playing' | 'paused' | 'stopped' | 'buffering';
+  state: 'playing' | 'paused' | 'stopped' | 'buffering' | 'loading';
   positionSecs: number;
   durationSecs: number;
   volume: number;
   currentTrack: TrackDto | null;
+  bufferedRanges: BufferedRange[];
 }
 
 export interface QueueState {

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { TrackDto, AudioState, QueueState, AudioEvent } from '@/types/types';
+import type { AudioState, QueueState, AudioEvent } from '@/types/types';
 
 export const useAudioStore = defineStore('audio', () => {
   const audioState = ref<AudioState>({
@@ -9,6 +9,7 @@ export const useAudioStore = defineStore('audio', () => {
     durationSecs: 0,
     volume: 1.0,
     currentTrack: null,
+    bufferedRanges: [],
   });
 
   const queueState = ref<QueueState>({
@@ -21,9 +22,11 @@ export const useAudioStore = defineStore('audio', () => {
   const isPlaying = computed(() => audioState.value.state === 'playing');
   const isPaused = computed(() => audioState.value.state === 'paused');
   const isStopped = computed(() => audioState.value.state === 'stopped');
+  const isLoading = computed(() => audioState.value.state === 'loading');
   const currentTrack = computed(() => audioState.value.currentTrack);
   const position = computed(() => audioState.value.positionSecs);
   const duration = computed(() => audioState.value.durationSecs);
+  const bufferedRanges = computed(() => audioState.value.bufferedRanges);
   const volume = computed(() => audioState.value.volume);
   const repeatMode = computed(() => queueState.value.repeatMode);
   const shuffleEnabled = computed(() => queueState.value.shuffleEnabled);
@@ -73,6 +76,19 @@ export const useAudioStore = defineStore('audio', () => {
           audioState.value.volume = event.payload.volume;
         }
         break;
+      case 'BufferUpdated':
+        if (event.payload?.ranges !== undefined) {
+          audioState.value.bufferedRanges = event.payload.ranges;
+        }
+        break;
+      case 'LoadingStarted':
+        audioState.value.state = 'loading';
+        audioState.value.positionSecs = 0;
+        audioState.value.bufferedRanges = [];
+        if (event.payload?.track) {
+          audioState.value.currentTrack = event.payload.track;
+        }
+        break;
       case 'AudioStateUpdated':
         if (event.payload?.state) {
           audioState.value = event.payload.state;
@@ -105,9 +121,11 @@ export const useAudioStore = defineStore('audio', () => {
     isPlaying,
     isPaused,
     isStopped,
+    isLoading,
     currentTrack,
     position,
     duration,
+    bufferedRanges,
     volume,
     repeatMode,
     shuffleEnabled,

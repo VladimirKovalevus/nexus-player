@@ -7,6 +7,12 @@ use symphonia::core::io::MediaSource as SymphoniaSource;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SampleRate(pub u32);
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BufferedRange {
+    pub start: f32,
+    pub end: f32,
+}
+
 impl SampleRate {
     pub const LOW: Self = Self(44100);
 
@@ -23,9 +29,17 @@ impl SampleRate {
 pub enum AudioCommand {
     Play(Track),
 
-    PlaySource(Box<dyn MediaSource>),
+    PlaySource {
+        track: Track,
+        source: Box<dyn MediaSource>,
+    },
 
-    PlayHLS(HlsSource),
+    PlayHLS {
+        track: Track,
+        source: HlsSource,
+    },
+
+    SetLoading(Track),
 
     Pause,
 
@@ -41,7 +55,7 @@ pub enum AudioCommand {
 }
 #[derive(Debug, Clone)]
 pub enum AudioEvent {
-    PlaybackStarted,
+    PlaybackStarted { track: Track },
 
     PlaybackPaused,
 
@@ -62,6 +76,10 @@ pub enum AudioEvent {
     BufferingStarted,
 
     BufferingFinished,
+
+    BufferUpdated { ranges: Vec<BufferedRange> },
+
+    LoadingStarted { track: Track },
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +91,10 @@ pub struct AudioState {
     pub duration: Duration,
 
     pub volume: f32,
+
+    pub buffered_ranges: Vec<BufferedRange>,
+
+    pub current_track: Option<Track>,
 }
 
 impl Default for AudioState {
@@ -82,6 +104,8 @@ impl Default for AudioState {
             position: Duration::ZERO,
             duration: Duration::ZERO,
             volume: 1.0,
+            buffered_ranges: Vec::new(),
+            current_track: None,
         }
     }
 }
@@ -94,6 +118,8 @@ pub enum PlaybackState {
     Paused,
 
     Buffering,
+
+    Loading,
 }
 
 impl Default for PlaybackState {
