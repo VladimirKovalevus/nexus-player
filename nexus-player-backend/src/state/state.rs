@@ -233,7 +233,7 @@ impl AppState {
             }
 
             // Prefetch next 50 tracks to make them visible in UI
-            let prefetched = queue.prefetch(50).await?;
+            let prefetched = queue.prefetch(5).await?;
             tracing::info!("Prefetched {} tracks from cursor", prefetched);
         }
 

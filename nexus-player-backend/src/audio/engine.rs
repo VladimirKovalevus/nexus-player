@@ -52,7 +52,9 @@ impl AudioEngine {
     }
     pub fn play_hls(&self, track: Track, source: HlsSource) {
         info!("Команда: воспроизвести трек ");
-        let _ = self.command_tx.send(AudioCommand::PlayHLS { track, source });
+        let _ = self
+            .command_tx
+            .send(AudioCommand::PlayHLS { track, source });
     }
 
     pub fn set_loading(&self, track: Track) {
@@ -130,51 +132,8 @@ impl AudioEngine {
             }
         };
         let mut last_position_update = std::time::Instant::now();
-        let mut pending_hls: Option<(Track, HlsSource, u32)> = None;
 
         loop {
-            // Попытка запустить отложенный HLS
-            if let Some((track, source, retries)) = pending_hls.take() {
-                let result = playback.play_hls(source.clone());
-                match result {
-                    Ok(_) => {
-                        let duration = playback.duration().unwrap_or(Duration::ZERO);
-                        {
-                            let mut s = state.write().unwrap();
-                            s.playback_state = PlaybackState::Playing;
-                            s.position = Duration::ZERO;
-                            s.duration = duration;
-                            s.current_track = Some(track.clone());
-                        }
-                        if duration > Duration::ZERO {
-                            let _ = event_tx.send(AudioEvent::DurationChanged { duration });
-                        }
-                        last_position_update = std::time::Instant::now();
-                        let _ = event_tx.send(AudioEvent::PlaybackStarted {
-                            track: track.clone(),
-                        });
-                        info!(
-                            "HLS воспроизведение началось после {} ретраев, трек {}",
-                            retries, track.id
-                        );
-                    }
-                    Err(AudioError::InProgress) if retries < 200 => {
-                        // Возвращаем для следующей попытки
-                        pending_hls = Some((track, source, retries + 1));
-                    }
-                    Err(e) => {
-                        warn!("Ошибка отложенного HLS (попыток {}): {}", retries, e);
-                        {
-                            let mut s = state.write().unwrap();
-                            s.playback_state = PlaybackState::Stopped;
-                        }
-                        let _ = event_tx.send(AudioEvent::Error {
-                            message: format!("Ошибка HLS воспроизведения: {}", e),
-                        });
-                    }
-                }
-            }
-
             if playback.is_playing() || playback.buffered_ranges().len() > 0 {
                 let now = std::time::Instant::now();
                 if now.duration_since(last_position_update) >= Duration::from_millis(100) {
@@ -219,8 +178,6 @@ impl AudioEngine {
             // Обработка команд
             match command_rx.recv_timeout(Duration::from_millis(10)) {
                 Ok(command) => {
-                    pending_hls = None;
-
                     match command {
                         AudioCommand::PlayHLS { track, source } => {
                             info!("Команда PlayHLS: сброс и переход в Loading");
@@ -252,18 +209,18 @@ impl AudioEngine {
                                     }
 
                                     if duration > Duration::ZERO {
-                                        let _ = event_tx.send(AudioEvent::DurationChanged { duration });
+                                        let _ =
+                                            event_tx.send(AudioEvent::DurationChanged { duration });
                                     }
                                     last_position_update = std::time::Instant::now();
 
                                     let _ = event_tx.send(AudioEvent::PlaybackStarted {
                                         track: track.clone(),
                                     });
-                                    info!("HLS воспроизведение началось, длительность: {:?}", duration);
-                                }
-                                Err(AudioError::InProgress) => {
-                                    info!("HLS данные еще не готовы, откладываем запуск...");
-                                    pending_hls = Some((track, source, 0));
+                                    info!(
+                                        "HLS воспроизведение началось, длительность: {:?}",
+                                        duration
+                                    );
                                 }
                                 Err(e) => {
                                     warn!("Ошибка HLS воспроизведения: {}", e);
@@ -310,7 +267,8 @@ impl AudioEngine {
 
                                     // Отправляем события
                                     if duration > Duration::ZERO {
-                                        let _ = event_tx.send(AudioEvent::DurationChanged { duration });
+                                        let _ =
+                                            event_tx.send(AudioEvent::DurationChanged { duration });
                                     }
                                     last_position_update = std::time::Instant::now();
 
@@ -366,7 +324,8 @@ impl AudioEngine {
 
                                     // Отправляем события
                                     if duration > Duration::ZERO {
-                                        let _ = event_tx.send(AudioEvent::DurationChanged { duration });
+                                        let _ =
+                                            event_tx.send(AudioEvent::DurationChanged { duration });
                                     }
                                     last_position_update = std::time::Instant::now();
 
