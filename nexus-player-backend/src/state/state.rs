@@ -169,12 +169,15 @@ impl AppState {
 
                     match wrapper {
                         StreamingSourceWrapper::Streaming(source) => {
+                            tracing::info!("STREAMING");
                             self.audio_engine().play_source(track, Box::new(source));
                         }
                         StreamingSourceWrapper::Hls(hls) => {
+                            tracing::info!("HLS");
                             self.audio_engine().play_hls(track, hls);
                         }
                         StreamingSourceWrapper::Local(source) => {
+                            tracing::info!("LOCAL");
                             self.audio_engine().play_source(track, source);
                         }
                     }

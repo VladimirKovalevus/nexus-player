@@ -5,6 +5,17 @@ members = [
     "nexus-player-frontend/src-tauri",
 ]
 
+[profile.dev]
+# Reduced debug info speeds up linking without losing line numbers
+debug = 1
+# More parallelism within each crate
+codegen-units = 256
+
+[profile.dev.package."*"]
+# Compile dependencies with optimizations — they rarely change
+# and this dramatically reduces overhead from heavy deps (symphonia, sea-orm, etc.)
+opt-level = 3
+
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }

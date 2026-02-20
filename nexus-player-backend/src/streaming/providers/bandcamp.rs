@@ -5,8 +5,8 @@ use crate::library::TrackSource;
 use crate::streaming::error::{StreamError, StreamResult};
 use crate::streaming::provider::StreamProvider;
 use crate::streaming::types::{
-    AlbumInfo, ContentType, ResolvedContent, ResolveOptions, SearchResult, StreamMetadata, StreamingService,
-    TrackInfo,
+    AlbumInfo, ContentType, ResolveOptions, ResolvedContent, SearchResult, StreamMetadata,
+    StreamingService, TrackInfo,
 };
 
 pub struct BandcampProvider {}
@@ -23,13 +23,7 @@ impl BandcampProvider {
     fn convert_album_to_search_result(
         album: bandcamp::SearchResultItemAlbum,
     ) -> Option<SearchResult> {
-        let id = album
-            .url
-            .item_url
-            .split('/')
-            .last()
-            .unwrap_or("unknown")
-            .to_string();
+        let id = album.url.item_url.clone();
         let url = album.url.item_url.clone();
         let thumbnail = album.image.get_url();
 
@@ -202,6 +196,7 @@ impl StreamProvider for BandcampProvider {
     }
 
     async fn expand_collection(&self, collection: SearchResult) -> StreamResult<Vec<TrackInfo>> {
+        tracing::info!("expand collection {collection:?}");
         match collection {
             SearchResult::Track(t) => Ok(vec![t]),
             SearchResult::Album(a) => {

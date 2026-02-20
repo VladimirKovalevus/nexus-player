@@ -164,7 +164,9 @@ impl StreamingService {
             _ => return Err(StreamError::NotSupported),
         };
 
-        provider.expand_collection(collection).await
+        let res = provider.expand_collection(collection).await;
+        println!("EXPAND RESULT{res:?}");
+        res
     }
 
     pub async fn resolve(

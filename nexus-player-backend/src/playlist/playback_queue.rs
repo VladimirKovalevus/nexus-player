@@ -1,6 +1,6 @@
 use crate::audio::types::Track;
-use crate::playlist::playlist::Playlist;
 use crate::playlist::cursor::PlayerCursor;
+use crate::playlist::playlist::Playlist;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
@@ -127,12 +127,10 @@ impl CursorQueue {
     /// Creates a flat list view of the queue for the UI.
     /// Returns (all_tracks, current_index)
     pub fn snapshot(&self) -> (Vec<Track>, Option<usize>) {
-        let mut tracks = Vec::with_capacity(
-            self.history.len() + 1 + self.manual_queue.len()
-        );
+        let mut tracks = Vec::with_capacity(self.history.len() + 1 + self.manual_queue.len());
 
         tracks.extend(self.history.iter().cloned());
-        
+
         let current_index = if let Some(current) = &self.current_track {
             let idx = tracks.len();
             tracks.push(current.clone());
@@ -142,14 +140,6 @@ impl CursorQueue {
         };
 
         tracks.extend(self.manual_queue.iter().cloned());
-
-        tracing::debug!(
-            "Queue snapshot created: {} tracks (history: {}, current: {}, manual: {})",
-            tracks.len(),
-            self.history.len(),
-            if self.current_track.is_some() { 1 } else { 0 },
-            self.manual_queue.len()
-        );
 
         (tracks, current_index)
     }
