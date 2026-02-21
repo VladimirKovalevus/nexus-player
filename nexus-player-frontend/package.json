@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "andr":"NO_STRIP=true tauri android build",
     "bld": "NO_STRIP=true tauri build",
     "install": "cp ../target/release/bundle/appimage/nexus-player-frontend_0.1.0_amd64.AppImage ~/nexus",
     "start": "WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev"

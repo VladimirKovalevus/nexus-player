@@ -624,31 +624,39 @@ use nexus_player_backend::config::AppConfig;
 
 #[tauri::command]
 pub async fn open_vk_login(app: AppHandle) -> Result<()> {
-    let url = vk_down::get_default_auth_url();
-    let app_handle = app.clone();
+    #[cfg(not(target_os = "android"))]
+    {
+        let url = vk_down::get_default_auth_url();
+        let app_handle = app.clone();
 
-    let _login_window = tauri::WebviewWindowBuilder::new(
-        &app,
-        "vk-login",
-        tauri::WebviewUrl::External(url.parse().expect("Failed to parse VK URL")),
-    )
-    .title("VK Авторизация")
-    .inner_size(500.0, 700.0)
-    .always_on_top(true)
-    .on_navigation(move |url| {
-        let url_str = url.as_str();
-        if url_str.contains("access_token=") {
-            let token = vk_down::extract_token_from_url(url_str);
-            let _ = app_handle.emit("vk-token-received", token);
-            if let Some(w) = app_handle.get_webview_window("vk-login") {
-                let _ = w.close();
+        let _login_window = tauri::WebviewWindowBuilder::new(
+            &app,
+            "vk-login",
+            tauri::WebviewUrl::External(url.parse().expect("Failed to parse VK URL")),
+        )
+        .title("VK Авторизация")
+        .inner_size(500.0, 700.0)
+        .always_on_top(true)
+        .on_navigation(move |url: &tauri::Url| {
+            let url_str = url.as_str();
+            if url_str.contains("access_token=") {
+                let token = vk_down::extract_token_from_url(url_str);
+                let _ = app_handle.emit("vk-token-received", token);
+                if let Some(w) = app_handle.get_webview_window("vk-login") {
+                    let _ = w.destroy();
+                }
+                return false;
             }
-            return false;
-        }
-        true
-    })
-    .build()
-    .map_err(|e| e.to_string())?;
+            true
+        })
+        .build()
+        .map_err(|e: tauri::Error| e.to_string())?;
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        return Err("VK login window is not supported on Android".into());
+    }
 
     Ok(())
 }
