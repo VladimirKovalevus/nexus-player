@@ -133,6 +133,14 @@ impl LibraryService {
         self.track_repo.increment_play_count(id).await
     }
 
+    /// Find existing track by source or insert a new one
+    pub async fn ensure_track(&self, track: models::Track) -> Result<TrackId> {
+        if let Some(existing) = self.track_repo.find_by_source(&track.source).await? {
+            return Ok(existing.id);
+        }
+        self.add_track(track).await
+    }
+
     // ========================================================================
     // Playlist Operations
     // ========================================================================
@@ -184,6 +192,7 @@ impl LibraryService {
             .context("Playlist not found")?;
 
         let position = playlist.tracks.len() as u32;
+        tracing::info!("ENSURE POSITION {position}");
 
         self.playlist_repo
             .add_track(playlist_id, track_id, position)
@@ -347,23 +356,23 @@ impl LibraryService {
         txn.commit().await.context("Failed to commit transaction")?;
 
         let artwork = if let Some(id) = playlist_artwork_id {
-             let url = if let Some(url) = &runtime_playlist.artwork {
-                 Some(url.clone())
-             } else {
-                 fallback_url
-             };
-             
-             if let Some(url) = url {
-                 Some(super::types::Artwork {
+            let url = if let Some(url) = &runtime_playlist.artwork {
+                Some(url.clone())
+            } else {
+                fallback_url
+            };
+
+            if let Some(url) = url {
+                Some(super::types::Artwork {
                     id: super::types::ArtworkId(id),
                     source: super::types::ArtworkSource::Url { url },
                     width: None,
                     height: None,
                     created_at: now,
-                 })
-             } else {
-                 None
-             }
+                })
+            } else {
+                None
+            }
         } else {
             None
         };

@@ -102,16 +102,14 @@ impl AppState {
             let result = {
                 let mut queue = self.queue.lock().await;
                 match &mut *queue {
-                    ActiveQueue::Cursor(cq) => {
-                        match cq.next().await {
-                            Ok(Some(track)) => NextResult::Track(track),
-                            Ok(None) => NextResult::End,
-                            Err(e) => {
-                                tracing::error!("Error fetching next track: {}", e);
-                                NextResult::End
-                            }
+                    ActiveQueue::Cursor(cq) => match cq.next().await {
+                        Ok(Some(track)) => NextResult::Track(track),
+                        Ok(None) => NextResult::End,
+                        Err(e) => {
+                            tracing::error!("Error fetching next track: {}", e);
+                            NextResult::End
                         }
-                    }
+                    },
                     ActiveQueue::Search(sq) => sq.next(),
                 }
             };
@@ -154,12 +152,10 @@ impl AppState {
             let result = {
                 let mut queue = self.queue.lock().await;
                 match &mut *queue {
-                    ActiveQueue::Cursor(cq) => {
-                        match cq.previous() {
-                            Some(track) => NextResult::Track(track),
-                            None => NextResult::End,
-                        }
-                    }
+                    ActiveQueue::Cursor(cq) => match cq.previous() {
+                        Some(track) => NextResult::Track(track),
+                        None => NextResult::End,
+                    },
                     ActiveQueue::Search(sq) => sq.previous(),
                 }
             };
@@ -316,7 +312,7 @@ impl AppState {
                 tracing::info!("First track loaded: {}", first.id);
             }
 
-            let prefetched = cq.prefetch(5).await?;
+            let prefetched = cq.prefetch(50).await?;
             tracing::info!("Prefetched {} tracks from cursor", prefetched);
         }
 
@@ -489,10 +485,16 @@ impl AppState {
                 ActiveQueue::Search(sq) => {
                     let (entries, _) = sq.snapshot();
                     match entries.get(item_index) {
-                        Some(crate::playlist::playback_queue::QueueEntry::Container { info, .. }) => {
-                            (info.kind.clone(), info.id.clone(), info.system.clone())
+                        Some(crate::playlist::playback_queue::QueueEntry::Container {
+                            info,
+                            ..
+                        }) => (info.kind.clone(), info.id.clone(), info.system.clone()),
+                        _ => {
+                            return Err(anyhow::anyhow!(
+                                "Item at index {} is not a container",
+                                item_index
+                            ))
                         }
-                        _ => return Err(anyhow::anyhow!("Item at index {} is not a container", item_index)),
                     }
                 }
                 _ => return Err(anyhow::anyhow!("Not in search queue mode")),
@@ -511,7 +513,11 @@ impl AppState {
             .context("Failed to expand container")?;
 
         let tracks: Vec<Track> = track_infos.into_iter().map(|t| t.into()).collect();
-        tracing::info!("Expanded container {} with {} tracks", item_index, tracks.len());
+        tracing::info!(
+            "Expanded container {} with {} tracks",
+            item_index,
+            tracks.len()
+        );
 
         let mut queue = self.queue.lock().await;
         if let ActiveQueue::Search(sq) = &mut *queue {
@@ -691,8 +697,12 @@ impl AppState {
     pub async fn add_track_to_playlist(
         &self,
         playlist_id: PlaylistId,
-        track_id: TrackId,
+        track: AudioTrack,
     ) -> Result<()> {
+        let library_track: LibraryTrack = track.into();
+        let track_id = self.library.ensure_track(library_track).await?;
+        tracing::info!("ENSURE TRACK {track_id:?}");
+
         self.library
             .add_track_to_playlist(playlist_id, track_id)
             .await
@@ -826,9 +836,12 @@ impl AppState {
                                 // Might need expansion
                                 let (entries, _) = sq.snapshot();
                                 match entries.get(item_index) {
-                                    Some(crate::playlist::playback_queue::QueueEntry::Container { tracks: None, .. }) => {
-                                        NextResult::NeedExpand(item_index)
-                                    }
+                                    Some(
+                                        crate::playlist::playback_queue::QueueEntry::Container {
+                                            tracks: None,
+                                            ..
+                                        },
+                                    ) => NextResult::NeedExpand(item_index),
                                     _ => NextResult::End,
                                 }
                             }

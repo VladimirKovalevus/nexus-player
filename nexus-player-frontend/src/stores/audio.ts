@@ -116,7 +116,6 @@ export const useAudioStore = defineStore('audio', () => {
         break;
       case 'AudioStateUpdated':
         if (event.payload?.state) {
-    console.log(event.payload?.state,"STATE");
           audioState.value = event.payload.state;
         }
         if (event.payload?.queue) {
@@ -130,7 +129,6 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   function updateAudioState(newState: AudioState) {
-    console.log(newState,"STATE");
     audioState.value = newState;
   }
 

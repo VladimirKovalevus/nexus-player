@@ -183,11 +183,9 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
             position: ActiveValue::Set(position as i64),
             added_at: ActiveValue::Set(now),
         };
+        tracing::info!("ACTIVE TRACK {track_active:?}");
 
-        track_active
-            .insert(&self.db)
-            .await
-            .context("Failed to add track to playlist")?;
+        track_active.insert(&self.db).await?;
 
         let playlist_active = playlist::ActiveModel {
             id: ActiveValue::Unchanged(playlist_id.0),

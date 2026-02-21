@@ -161,10 +161,10 @@ pub async fn create_playlist_with_tracks(
 pub async fn add_track_to_playlist(
     state: State<'_, Arc<AppState>>,
     playlist_id: i64,
-    track_id: i64,
+    track: TrackDto,
 ) -> Result<()> {
     state
-        .add_track_to_playlist(PlaylistId(playlist_id), TrackId(track_id))
+        .add_track_to_playlist(PlaylistId(playlist_id), track.to_audio_track())
         .await
         .map_err(|e| e.to_string())?;
 

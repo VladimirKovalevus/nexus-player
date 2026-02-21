@@ -189,22 +189,15 @@ defineExpose({ fetchQueue });
           v-else-if="item.entry.entryType === 'container'"
           :class="[$style.containerWrapper, { [$style.currentlyPlaying]: item.isCurrentItem }]"
         >
-          <div :class="$style.containerHeader" @click="toggleContainer(item.index)">
-            <span :class="$style.containerIcon">
-              {{ item.entry.meta.kind === 'album' ? '💿' : '📂' }}
-            </span>
-            <div :class="$style.containerInfo">
-              <div :class="$style.containerTitle">{{ item.entry.meta.title }}</div>
-              <div :class="$style.containerMeta">
-                {{ item.entry.meta.artist }} · {{ item.entry.meta.trackCount }} tracks
-              </div>
-            </div>
-            <img
-              v-if="item.entry.meta.thumbnail"
-              :src="item.entry.meta.thumbnail"
-              :class="$style.containerThumb"
+          <div :class="$style.containerHeader">
+            <MediaCard
+              type="album"
+              :album="item.entry.meta"
+              :show-action="false"
+              context="queue"
+              @click="toggleContainer(item.index)"
             />
-            <button :class="$style.expandBtn">
+            <button :class="$style.expandBtn" @click="toggleContainer(item.index)">
               {{ isContainerExpanded(item.index) ? '▲' : '▼' }}
             </button>
           </div>
@@ -458,53 +451,24 @@ defineExpose({ fetchQueue });
 
 .containerWrapper {
   border-radius: $radius-md;
-  overflow: hidden;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
+  position: relative;
+
+  &:has([data-dropdown-open]) {
+    z-index: 1000;
+  }
 }
 
 .containerHeader {
   display: flex;
   align-items: center;
-  gap: $spacing-sm;
-  padding: $spacing-md;
-  cursor: pointer;
-  transition: background-color $transition-fast;
+  gap: $spacing-xs;
 
-  &:hover {
-    background-color: var(--color-bg-hover);
+  > :first-child {
+    flex: 1;
+    min-width: 0;
   }
-}
-
-.containerIcon {
-  font-size: 1.5rem;
-  flex-shrink: 0;
-}
-
-.containerInfo {
-  flex: 1;
-  min-width: 0;
-}
-
-.containerTitle {
-  font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.containerMeta {
-  font-size: $font-size-sm;
-  color: var(--color-text-secondary);
-}
-
-.containerThumb {
-  width: 48px;
-  height: 48px;
-  border-radius: $radius-sm;
-  object-fit: cover;
-  flex-shrink: 0;
 }
 
 .expandBtn {
@@ -512,13 +476,17 @@ defineExpose({ fetchQueue });
   border: none;
   color: var(--color-text-secondary);
   cursor: pointer;
-  padding: $spacing-xs;
+  padding: $spacing-xs $spacing-md $spacing-xs $spacing-xs;
   font-size: $font-size-sm;
+  flex-shrink: 0;
 }
 
 .containerTracks {
   border-top: 1px solid var(--color-border);
   padding: $spacing-xs 0;
+  border-bottom-left-radius: $radius-md;
+  border-bottom-right-radius: $radius-md;
+  overflow: hidden;
 }
 
 .containerTrack {

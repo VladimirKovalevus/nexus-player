@@ -215,6 +215,57 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
             .collect::<Result<Vec<_>>>()
     }
 
+    async fn find_by_source(&self, source: &crate::library::types::TrackSource) -> Result<Option<Track>> {
+        use serde::{Deserialize, Serialize};
+        #[derive(Debug, Serialize, Deserialize)]
+        #[serde(tag = "type", rename_all = "snake_case")]
+        enum TrackSourceData {
+            Local { path: String },
+            Http { url: String },
+            External { system: String, id: String },
+        }
+
+        let (source_type, source_data) = match source {
+            crate::library::types::TrackSource::Local(path) => {
+                let data = TrackSourceData::Local {
+                    path: path.display().to_string(),
+                };
+                ("local".to_string(), serde_json::to_string(&data).ok())
+            }
+            crate::library::types::TrackSource::Http(url) => {
+                let data = TrackSourceData::Http { url: url.clone() };
+                ("http".to_string(), serde_json::to_string(&data).ok())
+            }
+            crate::library::types::TrackSource::External { system, id } => {
+                let data = TrackSourceData::External {
+                    system: system.clone(),
+                    id: id.clone(),
+                };
+                ("external".to_string(), serde_json::to_string(&data).ok())
+            }
+            _ => ("unknown".to_string(), None),
+        };
+
+        let result = track::Entity::find()
+            .filter(track::Column::SourceType.eq(source_type))
+            .filter(track::Column::SourceData.eq(source_data))
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
+            .one(&self.db)
+            .await
+            .context("Failed to find track by source")?;
+
+        match result {
+            Some((entity, artwork_entity)) => {
+                let mut domain_track: Track = entity.try_into()?;
+                if let Some(art_entity) = artwork_entity {
+                    domain_track.metadata.artwork = Some(art_entity.try_into()?);
+                }
+                Ok(Some(domain_track))
+            }
+            None => Ok(None),
+        }
+    }
+
     async fn increment_play_count(&self, id: TrackId) -> Result<()> {
         let entity = track::Entity::find_by_id(id.0)
             .one(&self.db)

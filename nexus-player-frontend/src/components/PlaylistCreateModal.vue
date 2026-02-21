@@ -2,15 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-interface Track {
-  id: number;
-  title: string;
-  artist: string | null;
-  album: string | null;
-  durationSecs: number | null;
-  artworkUrl: string | null;
-  playCount: number;
-}
+import type { TrackDto } from '@/types/types';
 
 interface Props {
   isOpen: boolean;
@@ -24,7 +16,7 @@ const emit = defineEmits<{
 
 const title = ref('');
 const description = ref('');
-const allTracks = ref<Track[]>([]);
+const allTracks = ref<TrackDto[]>([]);
 const selectedTrackIds = ref<Set<number>>(new Set());
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -35,7 +27,7 @@ onMounted(async () => {
 
 const fetchTracks = async () => {
   try {
-    allTracks.value = await invoke<Track[]>('get_all_tracks');
+    allTracks.value = await invoke<TrackDto[]>('get_all_tracks');
   } catch (e) {
     console.error('Failed to fetch tracks:', e);
     error.value = `Failed to load tracks: ${e}`;
@@ -60,19 +52,15 @@ const handleSave = async () => {
   error.value = null;
 
   try {
-    const playlistId = await invoke<number>('create_playlist', {
+    const tracksToSave = allTracks.value.filter(t => selectedTrackIds.value.has(t.id));
+
+    await invoke<number>('create_playlist_with_tracks', {
       request: {
         title: title.value.trim(),
         description: description.value.trim() || null,
+        tracks: tracksToSave,
       },
     });
-
-    for (const trackId of selectedTrackIds.value) {
-      await invoke('add_track_to_playlist', {
-        playlistId,
-        trackId,
-      });
-    }
 
     emit('created');
     handleClose();

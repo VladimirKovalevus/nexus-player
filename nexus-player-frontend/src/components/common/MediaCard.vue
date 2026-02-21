@@ -1,5 +1,5 @@
 <template>
-  <div :class="[$style.mediaCard, $style[`type-${type}`], { [$style.dropdownActive]: dropdownOpen }]">
+  <div :class="[$style.mediaCard, $style[`type-${type}`], { [$style.dropdownActive]: dropdownOpen }]" :data-dropdown-open="dropdownOpen || undefined">
     <div :class="$style.content" @click="handleClick">
     <div :class="$style.thumbnail">
       <img
@@ -29,7 +29,7 @@
 
         <template
           v-if="
-            (type === 'playlist' ) &&
+            (type === 'playlist' || type === 'album') &&
             entity.trackCount !== undefined
           "
         >
@@ -90,14 +90,15 @@
 import { computed, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { onClickOutside } from '@vueuse/core';
-import type { TrackDto, PlaylistDto } from '@/types/types';
+import type { TrackDto, PlaylistDto, ContainerMetaDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
 const store = useAudioStore()
 
 interface Props {
-  type: 'track' | 'playlist';
+  type: 'track' | 'playlist' | 'album';
   track?: TrackDto;
   playlist?: PlaylistDto;
+  album?: ContainerMetaDto;
   showAction: boolean;
   context?: string;
   isLocal?: boolean;
@@ -138,6 +139,16 @@ const entity = computed(() => {
       thumbnail: props.playlist.thumbnail || undefined,
       duration: undefined,
       trackCount: props.playlist.trackCount,
+      year: undefined,
+    };
+  } else if (props.type === 'album' && props.album) {
+    return {
+      id: props.album.id,
+      title: props.album.title,
+      artist: props.album.artist || 'Unknown Artist',
+      thumbnail: props.album.thumbnail || undefined,
+      duration: undefined,
+      trackCount: props.album.trackCount,
       year: undefined,
     };
   }
@@ -217,6 +228,8 @@ const placeholderIcon = computed(() => {
       return '🎵';
     case 'playlist':
       return '📂';
+    case 'album':
+      return '💿';
     default:
       return '🎵';
   }
@@ -270,12 +283,13 @@ const handleShowPlaylistSubmenu = () => {
 };
 
 const handleAddToPlaylist = async (playlistId: number) => {
-  if (props.type !== 'track') return;
+  if (props.type !== 'track' || !props.track) return;
 
   try {
+    console.log(props.track,'TRACK')
     await invoke('add_track_to_playlist', {
       playlistId,
-      trackId: entity.value.id,
+      track: props.track,
     });
     closeDropdown();
   } catch (e) {

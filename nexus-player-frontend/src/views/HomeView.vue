@@ -98,6 +98,7 @@ const isPlaylistModalOpen = ref(false);
 const fetchPlaylists = async () => {
   try {
     const playlistDtos = await invoke<PlaylistDto[]>('get_all_playlists');
+    console.log(playlistDtos,"PLAYLISTS")
     playlists.value = playlistDtos; 
     } catch (e) {
     console.error('Failed to fetch playlists:', e);
@@ -147,8 +148,9 @@ const showAllPlaylists = () => {
   
 };
 
-const handlePlaylistClick = (playlist: PlaylistDto) => {
+const handlePlaylistClick =async  (playlist: PlaylistDto) => {
   console.log('Playlist clicked:', playlist);
+  await invoke('load_playlist_to_queue', { playlistId: playlist.id });
   
 };
 

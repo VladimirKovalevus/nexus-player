@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::library::models::{Playlist, PlaylistWithTracks, Track};
-use crate::library::types::{PlaylistId, TrackId};
+use crate::library::types::{PlaylistId, TrackId, TrackSource};
 
 #[async_trait]
 pub trait TrackRepositoryV2: Send + Sync {
@@ -21,6 +21,8 @@ pub trait TrackRepositoryV2: Send + Sync {
     async fn find_by_artist(&self, artist: &str) -> Result<Vec<Track>>;
 
     async fn find_by_album(&self, album: &str) -> Result<Vec<Track>>;
+
+    async fn find_by_source(&self, source: &TrackSource) -> Result<Option<Track>>;
 
     async fn increment_play_count(&self, id: TrackId) -> Result<()>;
 }
