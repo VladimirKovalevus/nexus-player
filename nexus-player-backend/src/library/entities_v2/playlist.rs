@@ -30,8 +30,8 @@ pub enum Relation {
     )]
     Artwork,
 
-    #[sea_orm(has_many = "super::playlist_track::Entity")]
-    PlaylistTracks,
+    #[sea_orm(has_many = "super::playlist_item::Entity")]
+    PlaylistItems,
 }
 
 impl Related<super::artwork::Entity> for Entity {
@@ -40,9 +40,9 @@ impl Related<super::artwork::Entity> for Entity {
     }
 }
 
-impl Related<super::playlist_track::Entity> for Entity {
+impl Related<super::playlist_item::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::PlaylistTracks.def()
+        Relation::PlaylistItems.def()
     }
 }
 

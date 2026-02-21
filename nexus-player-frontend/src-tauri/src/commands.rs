@@ -1,7 +1,7 @@
 use crate::dto::{
     AudioStateDto, ContainerMetaDto, CreatePlaylistRequest, CreatePlaylistWithTracksRequest,
-    CurrentPositionDto, PlaylistDto, PlaylistWithTracksDto, QueueEntryDto, QueueStateDto,
-    SearchContextDto, SearchResultDto, TrackDto,
+    CurrentPositionDto, PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, PlaylistWithTracksDto,
+    QueueEntryDto, QueueStateDto, SearchContextDto, SearchResultDto, TrackDto,
 };
 use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
 use nexus_player_backend::library::types::{
@@ -90,34 +90,81 @@ pub async fn get_all_playlists(state: State<'_, Arc<AppState>>) -> Result<Vec<Pl
 pub async fn get_playlist_with_tracks(
     state: State<'_, Arc<AppState>>,
     playlist_id: i64,
-) -> Result<Option<PlaylistWithTracksDto>> {
-    let playlist = state
-        .get_playlist_with_tracks(PlaylistId(playlist_id))
+) -> Result<Option<PlaylistWithItemsDto>> {
+    let pwi = state
+        .get_playlist_with_items(PlaylistId(playlist_id))
         .await
         .map_err(|e| e.to_string())?;
 
-    if let Some(pwt) = playlist {
-        let mut tracks = Vec::new();
-        for pt in &pwt.tracks {
-            if let Some(track) = state
-                .get_library_track(pt.track_id)
-                .await
-                .map_err(|e| e.to_string())?
-            {
-                tracks.push(track.into());
+    let Some(pwi) = pwi else {
+        return Ok(None);
+    };
+
+    let mut items = Vec::new();
+    for item in &pwi.items {
+        match item.item_kind {
+            nexus_player_backend::library::models::PlaylistItemKind::Track => {
+                if let Some(track) = state
+                    .get_library_track(TrackId(item.item_id))
+                    .await
+                    .map_err(|e| e.to_string())?
+                {
+                    items.push(PlaylistItemDto::Track {
+                        item_id: item.item_id,
+                        track: track.into(),
+                        position: item.position,
+                    });
+                }
+            }
+            nexus_player_backend::library::models::PlaylistItemKind::Playlist => {
+                if let Some(playlist) = state
+                    .get_playlist(PlaylistId(item.item_id))
+                    .await
+                    .map_err(|e| e.to_string())?
+                {
+                    items.push(PlaylistItemDto::Playlist {
+                        item_id: item.item_id,
+                        playlist: playlist.into(),
+                        position: item.position,
+                    });
+                }
             }
         }
-
-        let mut playlist_dto: PlaylistDto = pwt.playlist.into();
-        playlist_dto.track_count = tracks.len();
-
-        Ok(Some(PlaylistWithTracksDto {
-            playlist: playlist_dto,
-            tracks,
-        }))
-    } else {
-        Ok(None)
     }
+
+    let mut playlist_dto: PlaylistDto = pwi.playlist.into();
+    playlist_dto.track_count = items.len();
+
+    Ok(Some(PlaylistWithItemsDto {
+        playlist: playlist_dto,
+        items,
+    }))
+}
+
+#[tauri::command]
+pub async fn add_playlist_to_playlist(
+    state: State<'_, Arc<AppState>>,
+    parent_playlist_id: i64,
+    child_playlist_id: i64,
+) -> Result<()> {
+    state
+        .add_playlist_to_playlist(PlaylistId(parent_playlist_id), PlaylistId(child_playlist_id))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn remove_playlist_from_playlist(
+    state: State<'_, Arc<AppState>>,
+    parent_playlist_id: i64,
+    child_playlist_id: i64,
+) -> Result<()> {
+    state
+        .remove_playlist_from_playlist(PlaylistId(parent_playlist_id), PlaylistId(child_playlist_id))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]

@@ -31,9 +31,31 @@
       </button>
 
       <div v-if="menuOpen" :class="$style.dropdownMenu" @click.stop>
-        <button :class="$style.menuItem" @click.stop="handleDelete">
-          Delete
-        </button>
+        <template v-if="!showPlaylistSubmenu">
+          <button :class="$style.menuItem" @click.stop="handleShowPlaylistSubmenu">
+            Добавить в плейлист ›
+          </button>
+          <button :class="[$style.menuItem, $style.danger]" @click.stop="handleDelete">
+            Delete
+          </button>
+        </template>
+        <template v-else>
+          <button :class="$style.menuItem" @click.stop="showPlaylistSubmenu = false">
+            ‹ Назад
+          </button>
+          <div :class="$style.divider"></div>
+          <button
+            v-for="pl in filteredPlaylists"
+            :key="pl.id"
+            :class="$style.menuItem"
+            @click.stop="handleAddToPlaylist(pl.id)"
+          >
+            {{ pl.title }}
+          </button>
+          <div v-if="filteredPlaylists.length === 0" :class="$style.emptyHint">
+            Нет плейлистов
+          </div>
+        </template>
       </div>
     </div>
 
@@ -46,6 +68,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 
 interface Props {
   type: 'track' | 'playlist' | 'album';
@@ -53,11 +76,13 @@ interface Props {
   artist: string;
   thumbnail?: string;
   trackCount?: number;
+  playlistId?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   thumbnail: undefined,
   trackCount: undefined,
+  playlistId: undefined,
 });
 
 const emit = defineEmits<{
@@ -67,9 +92,44 @@ const emit = defineEmits<{
 }>();
 
 const menuOpen = ref(false);
+const showPlaylistSubmenu = ref(false);
+const allPlaylists = ref<Array<{ id: number; title: string }>>([]);
 
-const toggleMenu = () => {
+const filteredPlaylists = computed(() => {
+  if (props.playlistId !== undefined) {
+    return allPlaylists.value.filter(p => p.id !== props.playlistId);
+  }
+  return allPlaylists.value;
+});
+
+const toggleMenu = async () => {
   menuOpen.value = !menuOpen.value;
+  showPlaylistSubmenu.value = false;
+  if (menuOpen.value && allPlaylists.value.length === 0) {
+    try {
+      allPlaylists.value = await invoke<Array<{ id: number; title: string }>>('get_all_playlists');
+    } catch (e) {
+      console.error('Failed to fetch playlists:', e);
+    }
+  }
+};
+
+const handleShowPlaylistSubmenu = () => {
+  showPlaylistSubmenu.value = true;
+};
+
+const handleAddToPlaylist = async (targetPlaylistId: number) => {
+  if (props.playlistId === undefined) return;
+  try {
+    await invoke('add_playlist_to_playlist', {
+      parentPlaylistId: targetPlaylistId,
+      childPlaylistId: props.playlistId,
+    });
+    menuOpen.value = false;
+    showPlaylistSubmenu.value = false;
+  } catch (e) {
+    console.error('Failed to add playlist to playlist:', e);
+  }
 };
 
 const handleDelete = () => {
@@ -272,12 +332,29 @@ const handlePlay = () => {
   text-align: left;
   cursor: pointer;
   font-size: $font-size-sm;
-  color: #e74c3c;
+  color: var(--color-text-primary);
   transition: background-color $transition-fast;
 
   &:hover {
     background-color: var(--color-bg-secondary);
   }
+
+  &.danger {
+    color: #e74c3c;
+  }
+}
+
+.divider {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 2px 0;
+}
+
+.emptyHint {
+  padding: $spacing-sm $spacing-md;
+  font-size: $font-size-xs;
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 // Info Section

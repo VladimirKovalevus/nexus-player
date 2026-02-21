@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import MediaCard from './common/MediaCard.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import { useAudioStore } from '../stores/audio';
-import type { QueueEntryDto } from '@/types/types';
+import type { QueueEntryDto, TrackDto, PlaylistDto } from '@/types/types';
 
 const audioStore = useAudioStore();
 const loading = ref(true);
@@ -12,6 +12,14 @@ const error = ref<string | null>(null);
 const isModalOpen = ref(false);
 const isSavingPlaylist = ref(false);
 const expandedContainers = ref<Set<number>>(new Set());
+
+// Container context menu state
+const containerMenuOpen = ref<number | null>(null);
+const containerSubmenu = ref<'addToPlaylist' | null>(null);
+const allPlaylists = ref<PlaylistDto[]>([]);
+
+// Modal mode: 'queue' for whole queue, or {index, entry} for single container
+const modalTarget = ref<'queue' | { index: number } >('queue');
 
 const queue = computed(() => {
   return audioStore.entries.map((entry, index) => ({
@@ -54,7 +62,8 @@ const expandContainer = async (itemIndex: number) => {
   try {
     const entry = audioStore.entries[itemIndex];
     if (entry?.entryType === 'container' && !entry.tracks) {
-      await invoke('expand_queue_container', { itemIndex });
+      const result = await invoke<any>('expand_queue_container', { itemIndex });
+      audioStore.updateQueueState(result);
     }
     expandedContainers.value.add(itemIndex);
   } catch (e) {
@@ -92,7 +101,20 @@ const clearQueue = async () => {
 
 const openCreatePlaylistModal = () => {
   if (queue.value.length > 0) {
+    modalTarget.value = 'queue';
     isModalOpen.value = true;
+  }
+};
+
+// Ensure all containers have their tracks loaded
+const ensureAllContainersExpanded = async () => {
+  const entries = audioStore.entries;
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (entry.entryType === 'container' && !entry.tracks) {
+      const result = await invoke<any>('expand_queue_container', { itemIndex: i });
+      audioStore.updateQueueState(result);
+    }
   }
 };
 
@@ -102,20 +124,84 @@ const handleCreatePlaylist = async (name: string) => {
   isSavingPlaylist.value = true;
   error.value = null;
   try {
-    const tracks = audioStore.tracks;
-
-    if (tracks.length === 0) {
+    if (modalTarget.value !== 'queue') {
+      // Creating playlist from a single container
+      const idx = modalTarget.value.index;
+      const entry = audioStore.entries[idx];
+      if (entry?.entryType === 'container') {
+        // Ensure tracks are loaded
+        if (!entry.tracks) {
+          const result = await invoke<any>('expand_queue_container', { itemIndex: idx });
+          audioStore.updateQueueState(result);
+        }
+        const freshEntry = audioStore.entries[idx];
+        if (freshEntry?.entryType === 'container' && freshEntry.tracks) {
+          await invoke<number>('create_playlist_with_tracks', {
+            request: {
+              title: name,
+              description: `${freshEntry.meta.title} - ${freshEntry.meta.artist}`,
+              tracks: freshEntry.tracks,
+            },
+          });
+        }
+      }
       isModalOpen.value = false;
       return;
     }
 
-    await invoke<number>('create_playlist_with_tracks', {
-      request: {
-        title: name,
-        description: `Сформирован из очереди ${new Date().toLocaleDateString()}`,
-        tracks: tracks,
-      },
-    });
+    // Creating playlist from whole queue — preserve structure
+    await ensureAllContainersExpanded();
+
+    const entries = audioStore.entries;
+    if (entries.length === 0) {
+      isModalOpen.value = false;
+      return;
+    }
+
+    // Check if queue has only tracks (no containers) — use simple path
+    const hasContainers = entries.some(e => e.entryType === 'container');
+
+    if (!hasContainers) {
+      const tracks = audioStore.tracks;
+      await invoke<number>('create_playlist_with_tracks', {
+        request: {
+          title: name,
+          description: `Сформирован из очереди ${new Date().toLocaleDateString()}`,
+          tracks,
+        },
+      });
+    } else {
+      // Create parent playlist (empty)
+      const parentId = await invoke<number>('create_playlist', {
+        request: {
+          title: name,
+          description: `Сформирован из очереди ${new Date().toLocaleDateString()}`,
+        },
+      });
+
+      for (const entry of entries) {
+        if (entry.entryType === 'track') {
+          await invoke('add_track_to_playlist', {
+            playlistId: parentId,
+            track: entry.track,
+          });
+        } else if (entry.entryType === 'container' && entry.tracks) {
+          // Create sub-playlist from container tracks
+          const childId = await invoke<number>('create_playlist_with_tracks', {
+            request: {
+              title: entry.meta.title,
+              description: `${entry.meta.artist}`,
+              tracks: entry.tracks,
+            },
+          });
+          // Nest it
+          await invoke('add_playlist_to_playlist', {
+            parentPlaylistId: parentId,
+            childPlaylistId: childId,
+          });
+        }
+      }
+    }
 
     isModalOpen.value = false;
   } catch (e) {
@@ -125,6 +211,76 @@ const handleCreatePlaylist = async (name: string) => {
   } finally {
     isSavingPlaylist.value = false;
   }
+};
+
+// Container context menu
+const toggleContainerMenu = async (itemIndex: number) => {
+  if (containerMenuOpen.value === itemIndex) {
+    containerMenuOpen.value = null;
+    containerSubmenu.value = null;
+  } else {
+    containerMenuOpen.value = itemIndex;
+    containerSubmenu.value = null;
+    if (allPlaylists.value.length === 0) {
+      try {
+        allPlaylists.value = await invoke<PlaylistDto[]>('get_all_playlists');
+      } catch (e) {
+        console.error('Failed to fetch playlists:', e);
+      }
+    }
+  }
+};
+
+const closeContainerMenu = () => {
+  containerMenuOpen.value = null;
+  containerSubmenu.value = null;
+};
+
+const handleContainerCreatePlaylist = (itemIndex: number) => {
+  closeContainerMenu();
+  modalTarget.value = { index: itemIndex };
+  isModalOpen.value = true;
+};
+
+const handleContainerAddToPlaylist = async (itemIndex: number, playlistId: number) => {
+  const entry = audioStore.entries[itemIndex];
+  if (entry?.entryType !== 'container') return;
+
+  try {
+    // Ensure tracks are loaded
+    if (!entry.tracks) {
+      const result = await invoke<any>('expand_queue_container', { itemIndex });
+      audioStore.updateQueueState(result);
+    }
+    const freshEntry = audioStore.entries[itemIndex];
+    if (freshEntry?.entryType === 'container' && freshEntry.tracks) {
+      // Create sub-playlist from container, then nest it
+      const childId = await invoke<number>('create_playlist_with_tracks', {
+        request: {
+          title: freshEntry.meta.title,
+          description: `${freshEntry.meta.artist}`,
+          tracks: freshEntry.tracks,
+        },
+      });
+      await invoke('add_playlist_to_playlist', {
+        parentPlaylistId: playlistId,
+        childPlaylistId: childId,
+      });
+    }
+  } catch (e) {
+    console.error('Failed to add container to playlist:', e);
+  }
+  closeContainerMenu();
+};
+
+const handleContainerRemove = async (itemIndex: number) => {
+  try {
+    await invoke('remove_from_queue', { index: itemIndex });
+    await fetchQueue();
+  } catch (e) {
+    console.error('Failed to remove container from queue:', e);
+  }
+  closeContainerMenu();
 };
 
 onMounted(() => {
@@ -197,9 +353,46 @@ defineExpose({ fetchQueue });
               context="queue"
               @click="toggleContainer(item.index)"
             />
-            <button :class="$style.expandBtn" @click="toggleContainer(item.index)">
-              {{ isContainerExpanded(item.index) ? '▲' : '▼' }}
-            </button>
+            <div :class="$style.containerActions">
+              <div :class="$style.containerMenuWrapper">
+                <button :class="$style.containerMenuBtn" @click.stop="toggleContainerMenu(item.index)">
+                  ⋯
+                </button>
+                <div v-if="containerMenuOpen === item.index" :class="$style.containerDropdown" @click.stop>
+                  <template v-if="!containerSubmenu">
+                    <button :class="$style.containerMenuItem" @click="containerSubmenu = 'addToPlaylist'">
+                      Сохранить в плейлист ›
+                    </button>
+                    <button :class="$style.containerMenuItem" @click="handleContainerCreatePlaylist(item.index)">
+                      Сформировать плейлист
+                    </button>
+                    <button :class="[$style.containerMenuItem, $style.dangerItem]" @click="handleContainerRemove(item.index)">
+                      Удалить из очереди
+                    </button>
+                  </template>
+                  <template v-else>
+                    <button :class="$style.containerMenuItem" @click="containerSubmenu = null">
+                      ‹ Назад
+                    </button>
+                    <div :class="$style.menuDivider"></div>
+                    <button
+                      v-for="pl in allPlaylists"
+                      :key="pl.id"
+                      :class="$style.containerMenuItem"
+                      @click="handleContainerAddToPlaylist(item.index, pl.id)"
+                    >
+                      {{ pl.title }}
+                    </button>
+                    <div v-if="allPlaylists.length === 0" :class="$style.menuEmpty">
+                      Нет плейлистов
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <button :class="$style.expandBtn" @click="toggleContainer(item.index)">
+                {{ isContainerExpanded(item.index) ? '▲' : '▼' }}
+              </button>
+            </div>
           </div>
 
           <!-- Expanded tracks inside container -->
@@ -469,6 +662,84 @@ defineExpose({ fetchQueue });
     flex: 1;
     min-width: 0;
   }
+}
+
+.containerActions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.containerMenuWrapper {
+  position: relative;
+}
+
+.containerMenuBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: $font-size-lg;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all $transition-fast;
+
+  &:hover {
+    background-color: var(--color-bg-hover);
+    color: var(--color-text-primary);
+  }
+}
+
+.containerDropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: $spacing-xs;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: $radius-md;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 200px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.containerMenuItem {
+  display: block;
+  width: 100%;
+  padding: $spacing-sm $spacing-md;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-size: $font-size-sm;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: var(--color-bg-hover);
+  }
+
+  &.dangerItem {
+    color: #e74c3c;
+  }
+}
+
+.menuDivider {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 2px 0;
+}
+
+.menuEmpty {
+  padding: $spacing-sm $spacing-md;
+  font-size: $font-size-xs;
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 .expandBtn {

@@ -46,15 +46,23 @@ pub struct Playlist {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlaylistItemKind {
+    Track,
+    Playlist,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlaylistTrack {
-    pub track_id: TrackId,
+pub struct PlaylistItem {
+    pub id: i64,
+    pub item_kind: PlaylistItemKind,
+    pub item_id: i64,
     pub position: u32,
     pub added_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlaylistWithTracks {
+pub struct PlaylistWithItems {
     pub playlist: Playlist,
-    pub tracks: Vec<PlaylistTrack>,
+    pub items: Vec<PlaylistItem>,
 }

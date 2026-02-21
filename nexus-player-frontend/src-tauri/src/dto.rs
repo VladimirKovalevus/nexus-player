@@ -41,6 +41,31 @@ pub struct PlaylistWithTracksDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(tag = "itemType")]
+pub enum PlaylistItemDto {
+    #[serde(rename = "track")]
+    Track {
+        item_id: i64,
+        track: TrackDto,
+        position: u32,
+    },
+    #[serde(rename = "playlist")]
+    Playlist {
+        item_id: i64,
+        playlist: PlaylistDto,
+        position: u32,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistWithItemsDto {
+    pub playlist: PlaylistDto,
+    pub items: Vec<PlaylistItemDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ContainerMetaDto {
     pub kind: String,
     pub id: String,
@@ -278,17 +303,6 @@ impl From<models::Playlist> for PlaylistDto {
     }
 }
 
-impl From<models::PlaylistWithTracks> for PlaylistWithTracksDto {
-    fn from(pwt: models::PlaylistWithTracks) -> Self {
-        let mut playlist_dto: PlaylistDto = pwt.playlist.into();
-        playlist_dto.track_count = pwt.tracks.len();
-
-        Self {
-            playlist: playlist_dto,
-            tracks: vec![],
-        }
-    }
-}
 
 impl From<audio::AudioState> for AudioStateDto {
     fn from(state: audio::AudioState) -> Self {

@@ -155,12 +155,12 @@ impl LibraryService {
         self.playlist_repo.get(id).await
     }
 
-    /// Get playlist with tracks
-    pub async fn get_playlist_with_tracks(
+    /// Get playlist with items (tracks and sub-playlists)
+    pub async fn get_playlist_with_items(
         &self,
         id: PlaylistId,
-    ) -> Result<Option<models::PlaylistWithTracks>> {
-        self.playlist_repo.get_with_tracks(id).await
+    ) -> Result<Option<models::PlaylistWithItems>> {
+        self.playlist_repo.get_with_items(id).await
     }
 
     /// Get all playlists
@@ -184,18 +184,16 @@ impl LibraryService {
         playlist_id: PlaylistId,
         track_id: TrackId,
     ) -> Result<()> {
-        // Get current playlist to determine position
         let playlist = self
             .playlist_repo
-            .get_with_tracks(playlist_id)
+            .get_with_items(playlist_id)
             .await?
             .context("Playlist not found")?;
 
-        let position = playlist.tracks.len() as u32;
-        tracing::info!("ENSURE POSITION {position}");
+        let position = playlist.items.len() as u32;
 
         self.playlist_repo
-            .add_track(playlist_id, track_id, position)
+            .add_item(playlist_id, models::PlaylistItemKind::Track, track_id.0, position)
             .await
     }
 
@@ -205,17 +203,49 @@ impl LibraryService {
         playlist_id: PlaylistId,
         track_id: TrackId,
     ) -> Result<()> {
-        self.playlist_repo.remove_track(playlist_id, track_id).await
+        self.playlist_repo
+            .remove_item(playlist_id, models::PlaylistItemKind::Track, track_id.0)
+            .await
     }
 
-    /// Reorder tracks in playlist
-    pub async fn reorder_playlist_tracks(
+    /// Add sub-playlist to playlist
+    pub async fn add_playlist_to_playlist(
         &self,
-        playlist_id: PlaylistId,
-        track_ids: Vec<TrackId>,
+        parent_id: PlaylistId,
+        child_id: PlaylistId,
+    ) -> Result<()> {
+        let playlist = self
+            .playlist_repo
+            .get_with_items(parent_id)
+            .await?
+            .context("Playlist not found")?;
+
+        let position = playlist.items.len() as u32;
+
+        self.playlist_repo
+            .add_item(parent_id, models::PlaylistItemKind::Playlist, child_id.0, position)
+            .await
+    }
+
+    /// Remove sub-playlist from playlist
+    pub async fn remove_playlist_from_playlist(
+        &self,
+        parent_id: PlaylistId,
+        child_id: PlaylistId,
     ) -> Result<()> {
         self.playlist_repo
-            .reorder_tracks(playlist_id, track_ids)
+            .remove_item(parent_id, models::PlaylistItemKind::Playlist, child_id.0)
+            .await
+    }
+
+    /// Reorder items in playlist
+    pub async fn reorder_playlist_items(
+        &self,
+        playlist_id: PlaylistId,
+        item_ids: Vec<i64>,
+    ) -> Result<()> {
+        self.playlist_repo
+            .reorder_items(playlist_id, item_ids)
             .await
     }
 
@@ -223,14 +253,15 @@ impl LibraryService {
     ///
     /// Takes a runtime playlist (from streaming/playback), saves all tracks to library,
     /// creates the playlist, and links tracks together atomically.
+    /// Create playlist with tracks in a single transaction
     pub async fn create_playlist_with_tracks(
         &self,
         runtime_playlist: crate::playlist::playlist::Playlist,
-    ) -> Result<models::PlaylistWithTracks> {
+    ) -> Result<models::PlaylistWithItems> {
         use chrono::Utc;
         use sea_orm::{ActiveModelTrait, ActiveValue, TransactionTrait};
 
-        use super::entities_v2::{playlist, playlist_track, track};
+        use super::entities_v2::{playlist, playlist_item, track};
 
         let txn = self.db.begin().await?;
 
@@ -242,7 +273,6 @@ impl LibraryService {
             let library_track: models::Track = audio_track.clone().into();
             let entity_track: track::Model = library_track.into();
 
-            // Resolve artwork if present
             let artwork_id = if let Some(url) = &audio_track.artwork_url {
                 let id = self.ensure_artwork(url, &txn).await?;
                 if first_artwork.is_none() {
@@ -304,7 +334,6 @@ impl LibraryService {
             updated_at: now,
         };
 
-        // Resolve playlist artwork
         let playlist_artwork_id = if let Some(url) = &runtime_playlist.artwork {
             Some(self.ensure_artwork(url, &txn).await?)
         } else {
@@ -329,25 +358,29 @@ impl LibraryService {
 
         let playlist_id = PlaylistId(playlist_result.id);
 
-        let mut playlist_tracks = Vec::new();
+        let mut playlist_items = Vec::new();
 
         for (position, track_id) in saved_track_ids.iter().enumerate() {
             let now_ts = Utc::now().timestamp();
 
-            let active_playlist_track = playlist_track::ActiveModel {
+            let active_item = playlist_item::ActiveModel {
+                id: ActiveValue::NotSet,
                 playlist_id: ActiveValue::Set(playlist_id.0),
-                track_id: ActiveValue::Set(track_id.0),
+                item_type: ActiveValue::Set("track".to_string()),
+                item_id: ActiveValue::Set(track_id.0),
                 position: ActiveValue::Set(position as i64),
                 added_at: ActiveValue::Set(now_ts),
             };
 
-            active_playlist_track
+            let inserted = active_item
                 .insert(&txn)
                 .await
-                .context("Failed to add track to playlist")?;
+                .context("Failed to add item to playlist")?;
 
-            playlist_tracks.push(models::PlaylistTrack {
-                track_id: *track_id,
+            playlist_items.push(models::PlaylistItem {
+                id: inserted.id,
+                item_kind: models::PlaylistItemKind::Track,
+                item_id: track_id.0,
                 position: position as u32,
                 added_at: Utc::now(),
             });
@@ -389,9 +422,9 @@ impl LibraryService {
             updated_at: now,
         };
 
-        Ok(models::PlaylistWithTracks {
+        Ok(models::PlaylistWithItems {
             playlist,
-            tracks: playlist_tracks,
+            items: playlist_items,
         })
     }
 

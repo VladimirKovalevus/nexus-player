@@ -290,25 +290,22 @@ impl From<models::Playlist> for entities_v2::playlist::Model {
     }
 }
 
-impl TryFrom<entities_v2::playlist_track::Model> for models::PlaylistTrack {
+impl TryFrom<entities_v2::playlist_item::Model> for models::PlaylistItem {
     type Error = anyhow::Error;
 
-    fn try_from(entity: entities_v2::playlist_track::Model) -> Result<Self> {
-        Ok(models::PlaylistTrack {
-            track_id: TrackId(entity.track_id),
+    fn try_from(entity: entities_v2::playlist_item::Model) -> Result<Self> {
+        let item_kind = match entity.item_type.as_str() {
+            "track" => models::PlaylistItemKind::Track,
+            "playlist" => models::PlaylistItemKind::Playlist,
+            _ => bail!("Unknown playlist item type: {}", entity.item_type),
+        };
+
+        Ok(models::PlaylistItem {
+            id: entity.id,
+            item_kind,
+            item_id: entity.item_id,
             position: entity.position as u32,
             added_at: timestamp_to_datetime(entity.added_at)?,
         })
-    }
-}
-
-impl From<models::PlaylistTrack> for entities_v2::playlist_track::Model {
-    fn from(track: models::PlaylistTrack) -> Self {
-        entities_v2::playlist_track::Model {
-            playlist_id: 0,
-            track_id: track.track_id.0,
-            position: track.position as i64,
-            added_at: datetime_to_timestamp(track.added_at),
-        }
     }
 }

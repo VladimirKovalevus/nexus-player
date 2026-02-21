@@ -27,6 +27,15 @@ export interface PlaylistDto {
   source?: TrackSourceDto | null;
 }
 
+export type PlaylistItemDto =
+  | { itemType: 'track'; itemId: number; track: TrackDto; position: number }
+  | { itemType: 'playlist'; itemId: number; playlist: PlaylistDto; position: number };
+
+export interface PlaylistWithItemsDto {
+  playlist: PlaylistDto;
+  items: PlaylistItemDto[];
+}
+
 export interface BufferedRange {
   start: number;
   end: number;

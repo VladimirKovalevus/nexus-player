@@ -37,6 +37,7 @@
           :artist="playlist.creator || 'Unknown'"
           :thumbnail="playlist.thumbnail || undefined"
           :track-count="playlist.trackCount"
+          :playlist-id="playlist.id"
           @click="handlePlaylistClick(playlist)"
           @play="handlePlaylistPlay(playlist)"
           @delete="handlePlaylistDelete(playlist)"
@@ -85,6 +86,10 @@ import MediaCard from '@/components/common/MediaCard.vue';
 import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
 import PlaylistCreateModal from '@/components/PlaylistCreateModal.vue';
 import type { PlaylistDto, TrackDto } from '@/types/types';
+
+const emit = defineEmits<{
+  'navigate-playlist': [playlistId: number];
+}>();
 
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
 
@@ -148,10 +153,8 @@ const showAllPlaylists = () => {
   
 };
 
-const handlePlaylistClick =async  (playlist: PlaylistDto) => {
-  console.log('Playlist clicked:', playlist);
-  await invoke('load_playlist_to_queue', { playlistId: playlist.id });
-  
+const handlePlaylistClick = (playlist: PlaylistDto) => {
+  emit('navigate-playlist', playlist.id);
 };
 
 const handlePlaylistPlay = async (playlist: PlaylistDto) => {

@@ -1,15 +1,16 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
     QueryOrder, TransactionTrait,
 };
+use std::collections::{HashSet, VecDeque};
 
-use crate::library::entities_v2::{playlist, playlist_track};
-use crate::library::models::{Playlist, PlaylistTrack, PlaylistWithTracks};
+use crate::library::entities_v2::{playlist, playlist_item};
+use crate::library::models::{Playlist, PlaylistItem, PlaylistItemKind, PlaylistWithItems};
 use crate::library::repository_v2::PlaylistRepositoryV2;
-use crate::library::types::{PlaylistId, TrackId};
+use crate::library::types::PlaylistId;
 
 pub struct SeaOrmPlaylistRepository {
     db: DatabaseConnection,
@@ -18,6 +19,44 @@ pub struct SeaOrmPlaylistRepository {
 impl SeaOrmPlaylistRepository {
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
+    }
+
+    /// BFS cycle detection: checks if adding child_playlist_id under playlist_id would create a cycle.
+    async fn has_cycle<C: sea_orm::ConnectionTrait>(
+        conn: &C,
+        playlist_id: i64,
+        child_playlist_id: i64,
+    ) -> Result<bool> {
+        if child_playlist_id == playlist_id {
+            return Ok(true);
+        }
+
+        // BFS: collect all descendant playlist IDs starting from child_playlist_id
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        queue.push_back(child_playlist_id);
+
+        while let Some(current) = queue.pop_front() {
+            if !visited.insert(current) {
+                continue;
+            }
+
+            let children = playlist_item::Entity::find()
+                .filter(playlist_item::Column::PlaylistId.eq(current))
+                .filter(playlist_item::Column::ItemType.eq("playlist"))
+                .all(conn)
+                .await
+                .context("Failed to query descendant playlists")?;
+
+            for child in children {
+                if child.item_id == playlist_id {
+                    return Ok(true);
+                }
+                queue.push_back(child.item_id);
+            }
+        }
+
+        Ok(false)
     }
 }
 
@@ -69,7 +108,7 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
         }
     }
 
-    async fn get_with_tracks(&self, id: PlaylistId) -> Result<Option<PlaylistWithTracks>> {
+    async fn get_with_items(&self, id: PlaylistId) -> Result<Option<PlaylistWithItems>> {
         let result = playlist::Entity::find_by_id(id.0)
             .find_also_related(crate::library::entities_v2::artwork::Entity)
             .one(&self.db)
@@ -85,21 +124,21 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
             domain_playlist.metadata.artwork = Some(art_entity.try_into()?);
         }
 
-        let track_entities = playlist_track::Entity::find()
-            .filter(playlist_track::Column::PlaylistId.eq(id.0))
-            .order_by_asc(playlist_track::Column::Position)
+        let item_entities = playlist_item::Entity::find()
+            .filter(playlist_item::Column::PlaylistId.eq(id.0))
+            .order_by_asc(playlist_item::Column::Position)
             .all(&self.db)
             .await
-            .context("Failed to fetch playlist tracks")?;
+            .context("Failed to fetch playlist items")?;
 
-        let tracks: Vec<PlaylistTrack> = track_entities
+        let items: Vec<PlaylistItem> = item_entities
             .into_iter()
             .map(|entity| entity.try_into())
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(Some(PlaylistWithTracks {
+        Ok(Some(PlaylistWithItems {
             playlist: domain_playlist,
-            tracks,
+            items,
         }))
     }
 
@@ -169,23 +208,37 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
         Ok(domain_playlists)
     }
 
-    async fn add_track(
+    async fn add_item(
         &self,
         playlist_id: PlaylistId,
-        track_id: TrackId,
+        item_kind: PlaylistItemKind,
+        item_id: i64,
         position: u32,
     ) -> Result<()> {
+        let item_type_str = match item_kind {
+            PlaylistItemKind::Track => "track",
+            PlaylistItemKind::Playlist => "playlist",
+        };
+
+        // Cycle detection for sub-playlists
+        if item_kind == PlaylistItemKind::Playlist {
+            if Self::has_cycle(&self.db, playlist_id.0, item_id).await? {
+                bail!("Cannot add playlist: would create a cycle");
+            }
+        }
+
         let now = Utc::now().timestamp();
 
-        let track_active = playlist_track::ActiveModel {
+        let item_active = playlist_item::ActiveModel {
+            id: ActiveValue::NotSet,
             playlist_id: ActiveValue::Set(playlist_id.0),
-            track_id: ActiveValue::Set(track_id.0),
+            item_type: ActiveValue::Set(item_type_str.to_string()),
+            item_id: ActiveValue::Set(item_id),
             position: ActiveValue::Set(position as i64),
             added_at: ActiveValue::Set(now),
         };
-        tracing::info!("ACTIVE TRACK {track_active:?}");
 
-        track_active.insert(&self.db).await?;
+        item_active.insert(&self.db).await?;
 
         let playlist_active = playlist::ActiveModel {
             id: ActiveValue::Unchanged(playlist_id.0),
@@ -201,13 +254,24 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
         Ok(())
     }
 
-    async fn remove_track(&self, playlist_id: PlaylistId, track_id: TrackId) -> Result<()> {
-        playlist_track::Entity::delete_many()
-            .filter(playlist_track::Column::PlaylistId.eq(playlist_id.0))
-            .filter(playlist_track::Column::TrackId.eq(track_id.0))
+    async fn remove_item(
+        &self,
+        playlist_id: PlaylistId,
+        item_kind: PlaylistItemKind,
+        item_id: i64,
+    ) -> Result<()> {
+        let item_type_str = match item_kind {
+            PlaylistItemKind::Track => "track",
+            PlaylistItemKind::Playlist => "playlist",
+        };
+
+        playlist_item::Entity::delete_many()
+            .filter(playlist_item::Column::PlaylistId.eq(playlist_id.0))
+            .filter(playlist_item::Column::ItemType.eq(item_type_str))
+            .filter(playlist_item::Column::ItemId.eq(item_id))
             .exec(&self.db)
             .await
-            .context("Failed to remove track from playlist")?;
+            .context("Failed to remove item from playlist")?;
 
         let now = Utc::now().timestamp();
         let playlist_active = playlist::ActiveModel {
@@ -224,23 +288,24 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
         Ok(())
     }
 
-    async fn reorder_tracks(&self, playlist_id: PlaylistId, track_ids: Vec<TrackId>) -> Result<()> {
+    async fn reorder_items(&self, playlist_id: PlaylistId, item_ids: Vec<i64>) -> Result<()> {
         let txn = self.db.begin().await?;
 
-        for (idx, track_id) in track_ids.iter().enumerate() {
+        for (idx, item_id) in item_ids.iter().enumerate() {
             let pos = idx as i64;
 
-            let entity = playlist_track::Entity::find()
-                .filter(playlist_track::Column::PlaylistId.eq(playlist_id.0))
-                .filter(playlist_track::Column::TrackId.eq(track_id.0))
+            let entity = playlist_item::Entity::find_by_id(*item_id)
+                .filter(playlist_item::Column::PlaylistId.eq(playlist_id.0))
                 .one(&txn)
                 .await
-                .context("Failed to find playlist track")?
-                .context("Playlist track not found")?;
+                .context("Failed to find playlist item")?
+                .context("Playlist item not found")?;
 
-            let active = playlist_track::ActiveModel {
+            let active = playlist_item::ActiveModel {
+                id: ActiveValue::Unchanged(entity.id),
                 playlist_id: ActiveValue::Unchanged(entity.playlist_id),
-                track_id: ActiveValue::Unchanged(entity.track_id),
+                item_type: ActiveValue::Unchanged(entity.item_type),
+                item_id: ActiveValue::Unchanged(entity.item_id),
                 position: ActiveValue::Set(pos),
                 added_at: ActiveValue::Unchanged(entity.added_at),
             };
@@ -248,7 +313,7 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
             active
                 .update(&txn)
                 .await
-                .context("Failed to update track position")?;
+                .context("Failed to update item position")?;
         }
 
         let now = Utc::now().timestamp();

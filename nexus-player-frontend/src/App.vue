@@ -6,6 +6,7 @@ import PlayerControl from './components/PlayerControl.vue';
 import TopBar from './components/layout/TopBar.vue';
 import Sidebar from './components/layout/Sidebar.vue';
 import HomeView from './views/HomeView.vue';
+import PlaylistDetailView from './views/PlaylistDetailView.vue';
 import VkView from './views/VkView.vue';
 import StreamingSearch from './components/StreamingSearch.vue';
 
@@ -13,6 +14,8 @@ const playbackQueueRef = ref<InstanceType<typeof PlaybackQueue> | null>(null);
 const playerControlRef = ref<InstanceType<typeof PlayerControl> | null>(null);
 const showQueue = ref(true);
 const currentView = ref('home');
+const selectedPlaylistId = ref<number | null>(null);
+const playlistHistory = ref<number[]>([]);
 
 const refreshQueue = () => {
   playbackQueueRef.value?.fetchQueue();
@@ -29,9 +32,28 @@ const toggleQueue = () => {
 
 const changeView = (view: string) => {
   currentView.value = view;
+  selectedPlaylistId.value = null;
+  playlistHistory.value = [];
+};
+
+const navigateToPlaylist = (playlistId: number) => {
+  if (selectedPlaylistId.value !== null) {
+    playlistHistory.value.push(selectedPlaylistId.value);
+  }
+  selectedPlaylistId.value = playlistId;
+  currentView.value = 'home';
+};
+
+const navigateBackFromPlaylist = () => {
+  if (playlistHistory.value.length > 0) {
+    selectedPlaylistId.value = playlistHistory.value.pop()!;
+  } else {
+    selectedPlaylistId.value = null;
+  }
 };
 
 provide('refreshQueue', refreshQueue);
+provide('navigateToPlaylist', navigateToPlaylist);
 </script>
 
 <template>
@@ -56,7 +78,17 @@ provide('refreshQueue', refreshQueue);
       <PlaybackQueue ref="playbackQueueRef" />
     </template>
 
-    <HomeView v-if="currentView === 'home'" />
+    <PlaylistDetailView
+      v-if="currentView === 'home' && selectedPlaylistId !== null"
+      :key="selectedPlaylistId"
+      :playlist-id="selectedPlaylistId"
+      @navigate="navigateToPlaylist"
+      @back="navigateBackFromPlaylist"
+    />
+    <HomeView
+      v-else-if="currentView === 'home'"
+      @navigate-playlist="navigateToPlaylist"
+    />
     <StreamingSearch v-else-if="currentView === 'search'" @refetch="handleSearchRefetch" />
     <VkView v-else-if="currentView === 'vk'" />
     <div v-else :style="{ padding: '40px', textAlign: 'center' }">

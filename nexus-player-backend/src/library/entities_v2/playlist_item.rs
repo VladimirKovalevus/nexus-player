@@ -1,14 +1,17 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "playlist_tracks_v2")]
+#[sea_orm(table_name = "playlist_items_v2")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(primary_key)]
+    pub id: i64,
+
     pub playlist_id: i64,
 
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub track_id: i64,
+    #[sea_orm(column_type = "Text")]
+    pub item_type: String,
 
+    pub item_id: i64,
     pub position: i64,
     pub added_at: i64,
 }
@@ -21,24 +24,11 @@ pub enum Relation {
         to = "super::playlist::Column::Id"
     )]
     Playlist,
-
-    #[sea_orm(
-        belongs_to = "super::track::Entity",
-        from = "Column::TrackId",
-        to = "super::track::Column::Id"
-    )]
-    Track,
 }
 
 impl Related<super::playlist::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Playlist.def()
-    }
-}
-
-impl Related<super::track::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Track.def()
     }
 }
 

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::library::models::{Playlist, PlaylistWithTracks, Track};
+use crate::library::models::{Playlist, PlaylistWithItems, Track};
 use crate::library::types::{PlaylistId, TrackId};
 
 #[async_trait]
@@ -31,7 +31,7 @@ pub trait PlaylistRepository: Send + Sync {
 
     async fn get(&self, id: PlaylistId) -> Result<Option<Playlist>>;
 
-    async fn get_with_tracks(&self, id: PlaylistId) -> Result<Option<PlaylistWithTracks>>;
+    async fn get_with_items(&self, id: PlaylistId) -> Result<Option<PlaylistWithItems>>;
 
     async fn update(&self, playlist: Playlist) -> Result<()>;
 

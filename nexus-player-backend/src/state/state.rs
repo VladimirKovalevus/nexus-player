@@ -687,11 +687,34 @@ impl AppState {
         self.library.get_all_playlists().await
     }
 
-    pub async fn get_playlist_with_tracks(
+    pub async fn get_playlist(
         &self,
         playlist_id: PlaylistId,
-    ) -> Result<Option<crate::library::models::PlaylistWithTracks>> {
-        self.library.get_playlist_with_tracks(playlist_id).await
+    ) -> Result<Option<crate::library::models::Playlist>> {
+        self.library.get_playlist(playlist_id).await
+    }
+
+    pub async fn get_playlist_with_items(
+        &self,
+        playlist_id: PlaylistId,
+    ) -> Result<Option<crate::library::models::PlaylistWithItems>> {
+        self.library.get_playlist_with_items(playlist_id).await
+    }
+
+    pub async fn add_playlist_to_playlist(
+        &self,
+        parent_id: PlaylistId,
+        child_id: PlaylistId,
+    ) -> Result<()> {
+        self.library.add_playlist_to_playlist(parent_id, child_id).await
+    }
+
+    pub async fn remove_playlist_from_playlist(
+        &self,
+        parent_id: PlaylistId,
+        child_id: PlaylistId,
+    ) -> Result<()> {
+        self.library.remove_playlist_from_playlist(parent_id, child_id).await
     }
 
     pub async fn add_track_to_playlist(

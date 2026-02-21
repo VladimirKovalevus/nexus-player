@@ -69,13 +69,13 @@
           </button>
           <div :class="$style.divider"></div>
           <button
-            v-for="playlist in playlists"
-            :key="playlist.id"
+            v-for="pl in filteredPlaylists"
+            :key="pl.id"
             :class="$style.dropdownItem"
-            @click="handleAddToPlaylist(playlist.id)"
+            @click="handleAddToPlaylist(pl.id)"
           >
             <span :class="$style.itemIcon">📋</span>
-            <span :class="$style.itemLabel">{{ playlist.title }}</span>
+            <span :class="$style.itemLabel">{{ pl.title }}</span>
           </button>
           <div v-if="playlists.length === 0" :class="$style.emptyPlaylist">
             Нет плейлистов
@@ -174,14 +174,24 @@ interface MenuOption {
 const menuOptions = computed<MenuOption[]>(() => {
   const options: MenuOption[] = [];
 
-  if (props.type !== 'track') return options;
+  if (props.type === 'track') {
+    options.push({
+      label: 'Добавить в плейлист',
+      icon: '📋',
+      action: handleShowPlaylistSubmenu,
+      hasSubmenu: true,
+    });
+  } else if (props.type === 'playlist') {
+    options.push({
+      label: 'Добавить в плейлист',
+      icon: '📋',
+      action: handleShowPlaylistSubmenu,
+      hasSubmenu: true,
+    });
+    return options;
+  }
 
-  options.push({
-    label: 'Добавить в плейлист',
-    icon: '📋',
-    action: handleShowPlaylistSubmenu,
-    hasSubmenu: true,
-  });
+  if (props.type !== 'track') return options;
 
   if (props.context === 'queue') {
     options.push({
@@ -220,6 +230,13 @@ const menuOptions = computed<MenuOption[]>(() => {
   }
 
   return options;
+});
+
+const filteredPlaylists = computed(() => {
+  if (props.type === 'playlist' && props.playlist) {
+    return playlists.value.filter(p => p.id !== props.playlist!.id);
+  }
+  return playlists.value;
 });
 
 const placeholderIcon = computed(() => {
@@ -283,17 +300,25 @@ const handleShowPlaylistSubmenu = () => {
 };
 
 const handleAddToPlaylist = async (playlistId: number) => {
-  if (props.type !== 'track' || !props.track) return;
-
   try {
-    console.log(props.track,'TRACK')
-    await invoke('add_track_to_playlist', {
-      playlistId,
-      track: props.track,
-    });
+    if (props.type === 'track' && props.track) {
+      await invoke('add_track_to_playlist', {
+        playlistId,
+        track: props.track,
+      });
+    } else if (props.type === 'playlist' && props.playlist) {
+      if (props.playlist.id === playlistId) {
+        console.warn('Cannot add playlist to itself');
+        return;
+      }
+      await invoke('add_playlist_to_playlist', {
+        parentPlaylistId: playlistId,
+        childPlaylistId: props.playlist.id,
+      });
+    }
     closeDropdown();
   } catch (e) {
-    console.error('Failed to add track to playlist:', e);
+    console.error('Failed to add to playlist:', e);
   }
 };
 

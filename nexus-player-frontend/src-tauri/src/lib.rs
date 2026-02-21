@@ -55,6 +55,8 @@ pub fn run() {
             commands::create_playlist_with_tracks,
             commands::add_track_to_playlist,
             commands::remove_track_from_playlist,
+            commands::add_playlist_to_playlist,
+            commands::remove_playlist_from_playlist,
             commands::add_to_queue,
             commands::remove_from_queue,
             commands::clear_queue,
