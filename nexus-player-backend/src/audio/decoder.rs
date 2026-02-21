@@ -198,7 +198,20 @@ impl AudioDecoder {
 
     pub fn waveforms(&self) -> Vec<crate::audio::types::Waveform> {
         if let Some(ref reader) = self.reader {
-            reader.get_waveforms()
+            let mut waveforms = reader.get_waveforms();
+            if let Some(duration) = self.duration() {
+                if let Some(total_bytes) = reader.byte_len() {
+                    if total_bytes > 0 {
+                        for w in waveforms.iter_mut() {
+                            if w.end_time == 0.0 && w.byte_end.is_some() {
+                                w.start_time = (w.byte_start.unwrap_or(0) as f64 / total_bytes as f64) * duration;
+                                w.end_time = (w.byte_end.unwrap() as f64 / total_bytes as f64) * duration;
+                            }
+                        }
+                    }
+                }
+            }
+            waveforms
         } else {
             vec![]
         }

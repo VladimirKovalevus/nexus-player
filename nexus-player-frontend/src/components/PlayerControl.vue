@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useAudioStore } from '../stores/audio';
+import WaveformBar from './common/WaveformBar.vue';
 
 const audioStore = useAudioStore();
 
@@ -14,8 +15,6 @@ withDefaults(defineProps<Props>(), {
   queueVisible: true,
 });
 
-const seeking = ref(false);
-const seekPosition = ref(0);
 const isLoading = ref(false);
 let updateInterval: number | null = null;
 let unlistenFn: (() => void) | null = null;
@@ -23,10 +22,6 @@ let unlistenFn: (() => void) | null = null;
 const emit = defineEmits<{
   toggleQueue: [];
 }>();
-
-const displayPosition = computed(() => {
-  return seeking.value ? seekPosition.value : audioStore.position;
-});
 
 const fetchAudioState = async () => {
   try {
@@ -89,65 +84,6 @@ const playPrevious = async () => {
   }
 };
 
-const onSeekStart = (event: Event) => {
-  seeking.value = true;
-  const target = event.target as HTMLInputElement;
-  seekPosition.value = parseFloat(target.value);
-  console.log('seekStart - locked position at:', seekPosition.value);
-};
-
-const onSeekChange = (event: Event) => {
-  if (seeking.value) {
-    const target = event.target as HTMLInputElement;
-    seekPosition.value = parseFloat(target.value);
-    console.log(
-      'seekChange - updating virtual position to:',
-      seekPosition.value,
-    );
-  }
-};
-
-const onSeekEnd = async (event: Event) => {
-  if (!seeking.value) {
-    console.log('onSeekEnd called but not seeking, ignoring');
-    return;
-  }
-
-  const target = event.target as HTMLInputElement;
-  const position = parseFloat(target.value);
-  seekPosition.value = position;
-
-  console.log('seekEnd - committing position:', position);
-
-  audioStore.setPosition(position);
-  seeking.value = false;
-
-  try {
-    await invoke('seek', { positionSecs: position });
-    console.log('seek successful');
-  } catch (e) {
-    console.error('Failed to seek:', e);
-    await fetchAudioState();
-  }
-};
-
-const handleGlobalMouseUp = () => {
-  if (seeking.value) {
-    const position = seekPosition.value;
-    console.log('Global mouseup - committing position:', position);
-
-    audioStore.setPosition(position);
-    seeking.value = false;
-
-    invoke('seek', { positionSecs: position })
-      .then(() => console.log('seek successful (global)'))
-      .catch((e) => {
-        console.error('Failed to seek (global):', e);
-        fetchAudioState();
-      });
-  }
-};
-
 const cycleRepeatMode = async () => {
   const modes: Array<'off' | 'all' | 'one'> = ['off', 'all', 'one'];
   const currentIndex = modes.indexOf(audioStore.repeatMode);
@@ -206,9 +142,6 @@ onMounted(async () => {
   } catch (e) {
     console.error('Failed to subscribe to audio events:', e);
   }
-
-  window.addEventListener('mouseup', handleGlobalMouseUp);
-  window.addEventListener('touchend', handleGlobalMouseUp);
 });
 
 onUnmounted(() => {
@@ -220,86 +153,83 @@ onUnmounted(() => {
   if (updateInterval !== null) {
     clearInterval(updateInterval);
   }
-
-  window.removeEventListener('mouseup', handleGlobalMouseUp);
-  window.removeEventListener('touchend', handleGlobalMouseUp);
 });
 </script>
 
 <template>
   <div class="player-control">
-    <div class="track-info">
-      <div v-if="audioStore.currentTrack" class="current-track">
-        {{ audioStore.currentTrack.title }}
+    <!-- Left: Track Info -->
+    <div class="left-section">
+      <div class="track-info">
+        <div v-if="audioStore.currentTrack" class="current-track">
+          {{ audioStore.currentTrack.title }}
+        </div>
+        <div v-else class="no-track">No track playing</div>
+        <div v-if="audioStore.currentTrack" class="track-artist">
+          {{ audioStore.currentTrack.artist || 'Unknown Artist' }}
+        </div>
       </div>
-      <div v-else class="no-track">No track playing</div>
     </div>
 
-    <div class="controls">
-      <button
-        class="control-btn small-btn"
-        @click="toggleShuffleMode"
-        :class="{ active: audioStore.shuffleEnabled }"
-        title="Shuffle"
-        :disabled="isLoading"
-      >
-        🔀
-      </button>
-      <button
-        class="control-btn"
-        @click="playPrevious"
-        title="Previous"
-        :disabled="isLoading"
-      >
-        ⏮
-      </button>
-      <button
-        class="control-btn play-btn"
-        @click="togglePlayPause"
-        title="Play/Pause"
-        :disabled="isLoading"
-      >
-        <span v-if="isLoading" class="loader">● ● ●</span>
-        <span v-else>{{ audioStore.isPlaying ? '⏸' : '▶' }}</span>
-      </button>
-      <button
-        class="control-btn"
-        @click="playNext"
-        title="Next"
-        :disabled="isLoading"
-      >
-        ⏭
-      </button>
-      <button
-        class="control-btn small-btn"
-        @click="cycleRepeatMode"
-        :class="{ active: audioStore.repeatMode !== 'off' }"
-        :title="`Repeat: ${audioStore.repeatMode}`"
-        :disabled="isLoading"
-      >
-        {{ audioStore.repeatIcon }}
-      </button>
-    </div>
-
-    <div class="bottom-section">
-      <div class="playback-bar">
-        <span class="time">{{ formatTime(displayPosition) }}</span>
-        <input
-          type="range"
-          class="seek-bar"
-          :value="displayPosition"
-          :max="audioStore.duration || 0"
-          step="0.1"
-          @mousedown="onSeekStart"
-          @touchstart="onSeekStart"
-          @input="onSeekChange"
-          @mouseup="onSeekEnd"
-          @touchend="onSeekEnd"
-          :disabled="isLoading"
-        />
+    <!-- Center: Waveform + Controls -->
+    <div class="center-section">
+      <div class="waveform-section">
+        <span class="time">{{ formatTime(audioStore.position) }}</span>
+        <div class="waveform-wrapper">
+          <WaveformBar />
+        </div>
         <span class="time">{{ formatTime(audioStore.duration) }}</span>
       </div>
 
+      <div class="controls">
+        <button
+          class="control-btn small-btn"
+          @click="toggleShuffleMode"
+          :class="{ active: audioStore.shuffleEnabled }"
+          title="Shuffle"
+          :disabled="isLoading"
+        >
+          🔀
+        </button>
+        <button
+          class="control-btn medium-btn"
+          @click="playPrevious"
+          title="Previous"
+          :disabled="isLoading"
+        >
+          ⏮
+        </button>
+        <button
+          class="control-btn play-btn"
+          @click="togglePlayPause"
+          title="Play/Pause"
+          :disabled="isLoading"
+        >
+          <span v-if="isLoading" class="loader">●●●</span>
+          <span v-else>{{ audioStore.isPlaying ? '⏸' : '▶' }}</span>
+        </button>
+        <button
+          class="control-btn medium-btn"
+          @click="playNext"
+          title="Next"
+          :disabled="isLoading"
+        >
+          ⏭
+        </button>
+        <button
+          class="control-btn small-btn"
+          @click="cycleRepeatMode"
+          :class="{ active: audioStore.repeatMode !== 'off' }"
+          :title="`Repeat: ${audioStore.repeatMode}`"
+          :disabled="isLoading"
+        >
+          {{ audioStore.repeatIcon }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: Volume + Queue -->
+    <div class="right-section">
       <div class="volume-control">
         <span class="volume-icon">🔊</span>
         <input
@@ -354,6 +284,208 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.player-control {
+  width: 100%;
+  height: 100px;
+  background-color: var(--color-bg-player);
+  border-top: 1px solid var(--color-border);
+  padding: 0.5rem 1.5rem;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.left-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.track-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.current-track {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-artist {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.no-track {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.center-section {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 50%;
+  gap: 4px;
+}
+
+.waveform-section {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.waveform-wrapper {
+  flex: 1;
+  height: 32px;
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.control-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: var(--color-text-primary);
+}
+
+.control-btn:hover:not(:disabled) {
+  background-color: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
+  color: white;
+  transform: scale(1.05);
+}
+
+.play-btn {
+  width: 40px;
+  height: 40px;
+  font-size: 1.1rem;
+  border-width: 2px;
+  border-color: var(--color-accent-primary);
+  color: var(--color-accent-primary);
+}
+
+.medium-btn {
+  width: 34px;
+  height: 34px;
+  font-size: 0.9rem;
+}
+
+.small-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 0.8rem;
+  border: none;
+  opacity: 0.7;
+}
+
+.control-btn.active {
+  color: var(--color-accent-primary);
+  opacity: 1;
+}
+
+.loader {
+  font-size: 0.6rem;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+.right-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1.5rem;
+}
+
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100px;
+}
+
+.volume-icon {
+  font-size: 1rem;
+  opacity: 0.7;
+}
+
+.volume-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--color-bg-secondary);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--color-accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.queue-toggle-btn {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--color-text-secondary);
+}
+
+.queue-toggle-btn.active, .queue-toggle-btn:hover {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
+}
+
+.time {
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  min-width: 35px;
+}
+</style>
 
 <style scoped>
 .player-control {
@@ -492,48 +624,6 @@ onUnmounted(() => {
   color: var(--color-text-secondary);
   min-width: 40px;
   text-align: center;
-}
-
-.seek-bar {
-  flex: 1;
-  height: 6px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--color-bg-secondary);
-  border-radius: 3px;
-  outline: none;
-  cursor: pointer;
-}
-
-.seek-bar::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  background: var(--color-accent-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.seek-bar::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-  background: var(--color-accent-hover);
-}
-
-.seek-bar::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  background: var(--color-accent-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-}
-
-.seek-bar::-moz-range-thumb:hover {
-  transform: scale(1.2);
-  background: var(--color-accent-hover);
 }
 
 .volume-control {

@@ -38,7 +38,6 @@ const draw = () => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  // Resize canvas if needed
   const dpr = window.devicePixelRatio || 1;
   const width = container.clientWidth;
   const height = container.clientHeight;
@@ -50,7 +49,7 @@ const draw = () => {
     canvas.style.height = `${height}px`;
   }
 
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
 
   const duration = audioStore.duration;
@@ -58,7 +57,10 @@ const draw = () => {
   const bufferedRanges = audioStore.bufferedRanges;
   const waveforms = audioStore.waveforms;
 
-  if (duration === 0) return;
+  if (duration === 0) {
+    animationFrame = requestAnimationFrame(draw);
+    return;
+  }
 
   const totalBars = Math.floor(width / (BAR_WIDTH + BAR_GAP));
   const timePerBar = duration / totalBars;
@@ -67,10 +69,8 @@ const draw = () => {
     const startTime = i * timePerBar;
     const endTime = (i + 1) * timePerBar;
     
-    // Determine bar height
-    let amplitude = 0.1; // Baseline height
+    let amplitude = 0.1;
     
-    // Find waveform data for this time range
     const relevantWaveform = waveforms.find(w => 
       (startTime >= w.startTime && startTime <= w.endTime) ||
       (endTime >= w.startTime && endTime <= w.endTime) ||
@@ -78,8 +78,6 @@ const draw = () => {
     );
 
     if (relevantWaveform && relevantWaveform.data.length > 0) {
-      // If we have data, use it. Since we might have multiple points per bar or one point per many bars,
-      // we'll try to pick a representative sample.
       const dataIdx = Math.floor(((startTime - relevantWaveform.startTime) / (relevantWaveform.endTime - relevantWaveform.startTime)) * relevantWaveform.data.length);
       const val = relevantWaveform.data[Math.max(0, Math.min(dataIdx, relevantWaveform.data.length - 1))];
       amplitude = Math.max(0.1, val * 0.8); 
@@ -89,8 +87,7 @@ const draw = () => {
     const x = i * (BAR_WIDTH + BAR_GAP);
     const y = (height - barHeight) / 2;
 
-    // Determine color
-    let color = '#333333'; // Default background bar color
+    let color = '#333333';
     
     const isBuffered = bufferedRanges.some(r => 
       (startTime >= r.start && startTime <= r.end) || 
@@ -99,16 +96,13 @@ const draw = () => {
     );
 
     if (startTime < position) {
-      color = '#f50'; // SoundCloud active orange
+      color = '#f50';
     } else if (isBuffered) {
-      color = '#777777'; // Buffered/Analyzed color
-    } else if (relevantWaveform) {
-      color = '#555555'; // Analyzed but not buffered (shouldn't happen with current logic but for safety)
+      color = '#777777';
     }
 
     ctx.fillStyle = color;
     
-    // Draw rounded rect
     const r = BAR_RADIUS;
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -134,9 +128,6 @@ onMounted(() => {
 onUnmounted(() => {
   if (animationFrame) cancelAnimationFrame(animationFrame);
 });
-
-// Watch for changes that should trigger immediate redraw if not using RAF
-// But since we use RAF, it's automatic.
 </script>
 
 <style module lang="scss">
