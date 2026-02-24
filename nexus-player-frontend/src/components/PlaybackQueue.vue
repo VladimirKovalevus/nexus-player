@@ -292,6 +292,7 @@ defineExpose({ fetchQueue });
 
 <template>
   <div :class="$style.playbackQueue">
+    <div :class="$style.dragHandle" aria-hidden="true" />
     <div :class="$style.queueHeader">
       <h2 :class="$style.title">В очереди</h2>
 
@@ -452,6 +453,20 @@ defineExpose({ fetchQueue });
   flex-direction: column;
   padding: $spacing-lg;
   overflow: hidden;
+}
+
+.dragHandle {
+  display: none;
+  width: 40px;
+  height: 4px;
+  background-color: var(--color-border-light);
+  border-radius: 2px;
+  margin: 0 auto $spacing-md;
+  flex-shrink: 0;
+
+  @media (max-width: 640px) {
+    display: block;
+  }
 }
 
 .queueHeader {

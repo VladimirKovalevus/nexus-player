@@ -91,7 +91,13 @@ $transition-slow: 350ms ease;
 $z-sidebar: 100;
 $z-topbar: 90;
 $z-player: 110;
+$z-queue-overlay: 120;
+$z-queue-backdrop: 115;
 $z-modal: 1000;
+
+// Breakpoints
+$mobile-breakpoint: 640px;
+$mobile-nav-height: 56px;
 
 // Shadows
 $shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);

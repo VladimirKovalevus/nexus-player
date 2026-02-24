@@ -16,8 +16,28 @@ withDefaults(defineProps<Props>(), {
 });
 
 const isLoading = ref(false);
+const volumePopupOpen = ref(false);
+const volumeWrapperRef = ref<HTMLElement | null>(null);
 let updateInterval: number | null = null;
 let unlistenFn: (() => void) | null = null;
+
+const volumeIcon = computed(() => {
+  const v = audioStore.volume;
+  if (v === 0) return '🔇';
+  if (v < 0.35) return '🔈';
+  if (v < 0.7) return '🔉';
+  return '🔊';
+});
+
+const toggleVolumePopup = () => {
+  volumePopupOpen.value = !volumePopupOpen.value;
+};
+
+const handleDocumentClick = (e: MouseEvent) => {
+  if (volumeWrapperRef.value && !volumeWrapperRef.value.contains(e.target as Node)) {
+    volumePopupOpen.value = false;
+  }
+};
 
 const emit = defineEmits<{
   toggleQueue: [];
@@ -126,6 +146,7 @@ const formatTime = (seconds: number): string => {
 onMounted(async () => {
   fetchAudioState();
   fetchQueueState();
+  document.addEventListener('click', handleDocumentClick);
 
   try {
     unlistenFn = await listen('audio-event', (event: any) => {
@@ -145,6 +166,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  document.removeEventListener('click', handleDocumentClick);
+
   if (unlistenFn) {
     unlistenFn();
     console.log('Unsubscribed from audio events');
@@ -161,12 +184,17 @@ onUnmounted(() => {
     <!-- Left: Track Info -->
     <div class="left-section">
       <div class="track-info">
+        <div v-if="audioStore.currentTrack?.artworkUrl" class="track-artist">
+            <img height="64" width="64" :src="audioStore.currentTrack?.artworkUrl">
+        </div>
+        <div style="display:flex; flex-direction: column;">
         <div v-if="audioStore.currentTrack" class="current-track">
           {{ audioStore.currentTrack.title }}
         </div>
         <div v-else class="no-track">No track playing</div>
         <div v-if="audioStore.currentTrack" class="track-artist">
           {{ audioStore.currentTrack.artist || 'Unknown Artist' }}
+        </div>
         </div>
       </div>
     </div>
@@ -182,15 +210,6 @@ onUnmounted(() => {
       </div>
 
       <div class="controls">
-        <button
-          class="control-btn small-btn"
-          @click="toggleShuffleMode"
-          :class="{ active: audioStore.shuffleEnabled }"
-          title="Shuffle"
-          :disabled="isLoading"
-        >
-          🔀
-        </button>
         <button
           class="control-btn medium-btn"
           @click="playPrevious"
@@ -216,31 +235,35 @@ onUnmounted(() => {
         >
           ⏭
         </button>
-        <button
-          class="control-btn small-btn"
-          @click="cycleRepeatMode"
-          :class="{ active: audioStore.repeatMode !== 'off' }"
-          :title="`Repeat: ${audioStore.repeatMode}`"
-          :disabled="isLoading"
-        >
-          {{ audioStore.repeatIcon }}
-        </button>
       </div>
     </div>
 
     <!-- Right: Volume + Queue -->
     <div class="right-section">
-      <div class="volume-control">
-        <span class="volume-icon">🔊</span>
-        <input
-          type="range"
-          class="volume-slider"
-          :value="audioStore.volume"
-          min="0"
-          max="1"
-          step="0.01"
-          @input="setVolume"
-        />
+      <div class="volume-wrapper" ref="volumeWrapperRef">
+        <button
+          class="volume-btn"
+          :class="{ active: volumePopupOpen }"
+          @click.stop="toggleVolumePopup"
+          :title="'Громкость: ' + Math.round(audioStore.volume * 100) + '%'"
+        >
+          {{ volumeIcon }}
+        </button>
+        <Transition name="volume-popup">
+          <div v-if="volumePopupOpen" class="volume-popup" @click.stop>
+            <span class="volume-percent">{{ Math.round(audioStore.volume * 100) }}%</span>
+            <input
+            style="padding:0 !important;"
+              type="range"
+              class="volume-slider-vertical"
+              :value="audioStore.volume"
+              min="0"
+              max="1"
+              step="0.01"
+              @input="setVolume"
+            />
+          </div>
+        </Transition>
       </div>
 
       <button
@@ -285,7 +308,7 @@ onUnmounted(() => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .player-control {
   width: 100%;
   height: 100px;
@@ -302,12 +325,14 @@ onUnmounted(() => {
 .left-section {
   flex: 1;
   min-width: 0;
+@media (max-width: 450px){
+        display:none;
+}
 }
 
 .track-info {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  gap: 8px;
 }
 
 .current-track {
@@ -333,11 +358,10 @@ onUnmounted(() => {
 }
 
 .center-section {
-  flex: 2;
+  flex: 4;
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 50%;
   gap: 4px;
 }
 
@@ -350,6 +374,7 @@ onUnmounted(() => {
 
 .waveform-wrapper {
   flex: 1;
+  min-width: 0;
   height: 32px;
 }
 
@@ -389,9 +414,9 @@ onUnmounted(() => {
 }
 
 .medium-btn {
-  width: 34px;
-  height: 34px;
-  font-size: 0.9rem;
+  width: 26px;
+  height: 26px;
+  font-size: 0.8rem;
 }
 
 .small-btn {
@@ -423,40 +448,80 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 1.5rem;
+  gap: 0.75rem;
 }
 
-.volume-control {
+/* Volume popup */
+.volume-wrapper {
+  position: relative;
+}
+
+.volume-btn {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  width: 100px;
-}
-
-.volume-icon {
+  justify-content: center;
+  cursor: pointer;
   font-size: 1rem;
-  opacity: 0.7;
+  color: var(--color-text-secondary);
+  transition: all 0.2s;
 }
 
-.volume-slider {
-  flex: 1;
-  height: 4px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--color-bg-secondary);
-  border-radius: 2px;
-  outline: none;
-  cursor: pointer;
+.volume-btn:hover,
+.volume-btn.active {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
 }
 
-.volume-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  background: var(--color-accent-primary);
-  border-radius: 50%;
+.volume-popup {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  min-width: 44px;
+}
+
+.volume-percent {
+  font-size: 0.65rem;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.volume-slider-vertical {
+  -webkit-appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 6px;
+  height: 100px;
   cursor: pointer;
+  accent-color: var(--color-accent-primary);
+  background: transparent;
+}
+
+/* Popup transition */
+.volume-popup-enter-active,
+.volume-popup-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.volume-popup-enter-from,
+.volume-popup-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 .queue-toggle-btn {
@@ -487,196 +552,3 @@ onUnmounted(() => {
 }
 </style>
 
-<style scoped>
-.player-control {
-  width: 100%;
-  height: 100%;
-  background-color: var(--color-bg-player);
-  border-top: 1px solid var(--color-border);
-  padding: 1rem 2rem;
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  gap: 0.75rem;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.track-info {
-  text-align: center;
-}
-
-.current-track {
-  font-weight: 600;
-  font-size: 1rem;
-  color: var(--color-text-primary);
-}
-
-.no-track {
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
-}
-
-.controls {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-}
-
-.control-btn {
-  background: none;
-  border: 2px solid var(--color-accent-primary);
-  border-radius: 50%;
-  width: 48px;
-  height: 48px;
-  font-size: 1.2rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  color: var(--color-accent-primary);
-}
-
-.control-btn:hover {
-  background-color: var(--color-accent-primary);
-  color: white;
-  transform: scale(1.05);
-}
-
-.play-btn {
-  width: 56px;
-  height: 56px;
-  font-size: 1.4rem;
-  border-width: 3px;
-}
-
-.small-btn {
-  width: 40px;
-  height: 40px;
-  font-size: 1rem;
-}
-
-.control-btn.active {
-  background-color: var(--color-accent-primary);
-  color: white;
-}
-
-.loader {
-  display: inline-block;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% { opacity: 0.5; }
-  50% { opacity: 1; }
-  100% { opacity: 0.5; }
-}
-
-.bottom-section {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.playback-bar {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.queue-toggle-btn {
-  flex-shrink: 0;
-  background: transparent;
-  border: 2px solid var(--color-border);
-  border-radius: 8px;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  color: var(--color-text-secondary);
-}
-
-.queue-toggle-btn:hover {
-  background-color: var(--color-accent-primary);
-  border-color: var(--color-accent-primary);
-  color: white;
-  transform: translateY(-2px);
-}
-
-.queue-toggle-btn:active {
-  transform: translateY(0);
-}
-
-.queue-toggle-btn.active {
-  background-color: var(--color-accent-primary);
-  border-color: var(--color-accent-primary);
-  color: white;
-}
-
-.time {
-  font-family: 'Courier New', monospace;
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
-  min-width: 40px;
-  text-align: center;
-}
-
-.volume-control {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 120px;
-}
-
-.volume-icon {
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.volume-slider {
-  flex: 1;
-  height: 6px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--color-bg-secondary);
-  border-radius: 3px;
-  outline: none;
-  cursor: pointer;
-}
-
-.volume-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  background: var(--color-accent-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.volume-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-  background: var(--color-accent-hover);
-}
-
-.volume-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  background: var(--color-accent-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-}
-
-.volume-slider::-moz-range-thumb:hover {
-  transform: scale(1.2);
-  background: var(--color-accent-hover);
-}
-</style>

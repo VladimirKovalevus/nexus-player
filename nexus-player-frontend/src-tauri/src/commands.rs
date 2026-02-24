@@ -7,9 +7,9 @@ use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
 use nexus_player_backend::library::types::{
     AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackSource,
 };
+use nexus_player_backend::playlist::cursor::ContainerContext;
 use nexus_player_backend::state::state::AppState;
 use nexus_player_backend::streaming::types::{ContentType, ResolvedContent, SearchResult};
-use nexus_player_backend::playlist::cursor::ContainerContext;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -148,7 +148,10 @@ pub async fn add_playlist_to_playlist(
     child_playlist_id: i64,
 ) -> Result<()> {
     state
-        .add_playlist_to_playlist(PlaylistId(parent_playlist_id), PlaylistId(child_playlist_id))
+        .add_playlist_to_playlist(
+            PlaylistId(parent_playlist_id),
+            PlaylistId(child_playlist_id),
+        )
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -161,7 +164,10 @@ pub async fn remove_playlist_from_playlist(
     child_playlist_id: i64,
 ) -> Result<()> {
     state
-        .remove_playlist_from_playlist(PlaylistId(parent_playlist_id), PlaylistId(child_playlist_id))
+        .remove_playlist_from_playlist(
+            PlaylistId(parent_playlist_id),
+            PlaylistId(child_playlist_id),
+        )
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -239,9 +245,9 @@ pub async fn add_to_queue(state: State<'_, Arc<AppState>>, track_id: i64) -> Res
         .await
         .map_err(|e| e.to_string())?;
 
-    // Return dummy index or calculate real one? 
+    // Return dummy index or calculate real one?
     // In async world, index might change before we return.
-    Ok(0) 
+    Ok(0)
 }
 
 #[tauri::command]
@@ -274,7 +280,10 @@ pub async fn get_queue(state: State<'_, Arc<AppState>>) -> Result<Vec<TrackDto>>
                     nexus_player_backend::playlist::playback_queue::QueueEntry::Track(t) => {
                         tracks.push(TrackDto::from(t));
                     }
-                    nexus_player_backend::playlist::playback_queue::QueueEntry::Container { tracks: Some(ts), .. } => {
+                    nexus_player_backend::playlist::playback_queue::QueueEntry::Container {
+                        tracks: Some(ts),
+                        ..
+                    } => {
                         for t in ts {
                             tracks.push(TrackDto::from(t));
                         }
@@ -420,8 +429,14 @@ fn build_queue_state_dto(
             let entries_dto: Vec<QueueEntryDto> = entries
                 .into_iter()
                 .map(|entry| match entry {
-                    QueueEntry::Track(track) => QueueEntryDto::Track { track: track.into() },
-                    QueueEntry::Container { info, tracks, play_index } => {
+                    QueueEntry::Track(track) => QueueEntryDto::Track {
+                        track: track.into(),
+                    },
+                    QueueEntry::Container {
+                        info,
+                        tracks,
+                        play_index,
+                    } => {
                         let kind_str = match info.kind {
                             ContainerKind::Album => "album",
                             ContainerKind::Playlist => "playlist",
@@ -498,7 +513,9 @@ pub async fn play_queue_item(
     item_index: usize,
     track_index_in_container: Option<usize>,
 ) -> Result<()> {
-    state.play_queue_item(item_index, track_index_in_container).await;
+    state
+        .play_queue_item(item_index, track_index_in_container)
+        .await;
     Ok(())
 }
 
@@ -568,7 +585,7 @@ pub async fn handle_streaming_track(
         "progressive" => DownloadStrategy::Progressive,
         _ => return Err("Invalid download strategy".into()),
     };
-    tracing::info!("SEARCH RESULT {:?}",search_result);
+    tracing::info!("SEARCH RESULT {:?}", search_result);
 
     match download_strategy {
         DownloadStrategy::Cache => {
@@ -582,9 +599,14 @@ pub async fn handle_streaming_track(
                         let target_id = audio_track.id;
                         let system = audio_track.source.system().to_string();
 
-                        state.load_search_to_queue(system, q, target_id).await.map_err(|e| e.to_string())?;
+                        state
+                            .load_search_to_queue(system, q, target_id)
+                            .await
+                            .map_err(|e| e.to_string())?;
                     } else {
-                        use nexus_player_backend::playlist::playback_queue::{ActiveQueue, CursorQueue};
+                        use nexus_player_backend::playlist::playback_queue::{
+                            ActiveQueue, CursorQueue,
+                        };
                         let mut queue = state.lock_queue().await;
                         match &mut *queue {
                             ActiveQueue::Cursor(cq) => {
@@ -600,16 +622,22 @@ pub async fn handle_streaming_track(
                     }
                 }
                 SearchResult::Playlist(playlist) => {
-                    state.load_context_to_queue(ContainerContext::ExternalPlaylist { 
-                        system: playlist.service.to_string(), 
-                        id: playlist.id 
-                    }).await.map_err(|e| e.to_string())?;
+                    state
+                        .load_context_to_queue(ContainerContext::ExternalPlaylist {
+                            system: playlist.service.to_string(),
+                            id: playlist.id,
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?;
                 }
                 SearchResult::Album(album) => {
-                     state.load_context_to_queue(ContainerContext::ExternalAlbum { 
-                        system: album.service.to_string(), 
-                        id: album.id 
-                    }).await.map_err(|e| e.to_string())?;
+                    state
+                        .load_context_to_queue(ContainerContext::ExternalAlbum {
+                            system: album.service.to_string(),
+                            id: album.id,
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?;
                 }
                 _ => todo!(),
             }
@@ -655,10 +683,33 @@ pub async fn open_vk_login(app: AppHandle) -> Result<()> {
 
     #[cfg(target_os = "android")]
     {
+        let url = vk_down::get_default_auth_url();
+        let app_handle = app.clone();
+
+        let _login_window = tauri::WebviewWindowBuilder::new(
+            &app,
+            "vk-login",
+            tauri::WebviewUrl::External(url.parse().expect("Failed to parse VK URL")),
+        )
+        .title("VK Авторизация")
+        .inner_size(500.0, 700.0)
+        .always_on_top(true)
+        .on_navigation(move |url: &tauri::Url| {
+            let url_str = url.as_str();
+            if url_str.contains("access_token=") {
+                let token = vk_down::extract_token_from_url(url_str);
+                let _ = app_handle.emit("vk-token-received", token);
+                if let Some(w) = app_handle.get_webview_window("vk-login") {
+                    let _ = w.destroy();
+                }
+                return false;
+            }
+            true
+        })
+        .build()
+        .map_err(|e: tauri::Error| e.to_string())?;
         return Err("VK login window is not supported on Android".into());
     }
-
-    Ok(())
 }
 
 #[tauri::command]
@@ -691,20 +742,21 @@ pub async fn get_vk_profile(
     state: State<'_, Arc<AppState>>,
 ) -> Result<(Vec<TrackDto>, Vec<PlaylistDto>)> {
     tracing::info!("get_vk_profile command called");
-    let vk_provider = state
-        .streaming()
-        .get_provider("vk")
-        .ok_or_else(|| {
-            tracing::error!("VK provider not found in streaming service");
-            "VK provider not found".to_string()
-        })?;
+    let vk_provider = state.streaming().get_provider("vk").ok_or_else(|| {
+        tracing::error!("VK provider not found in streaming service");
+        "VK provider not found".to_string()
+    })?;
 
     let (tracks, playlists) = vk_provider.get_profile_content().await.map_err(|e| {
         tracing::error!("Failed to get VK profile content from provider: {}", e);
         e.to_string()
     })?;
 
-    tracing::info!("Successfully retrieved VK profile data. Converting {} tracks and {} playlists to DTOs...", tracks.len(), playlists.len());
+    tracing::info!(
+        "Successfully retrieved VK profile data. Converting {} tracks and {} playlists to DTOs...",
+        tracks.len(),
+        playlists.len()
+    );
 
     let tracks_dto = tracks.into_iter().map(TrackDto::from).collect();
     let playlists_dto = playlists.into_iter().map(PlaylistDto::from).collect();
@@ -715,10 +767,7 @@ pub async fn get_vk_profile(
 }
 
 #[tauri::command]
-pub async fn save_track_to_file(
-    state: State<'_, Arc<AppState>>,
-    track_id: i64,
-) -> Result<()> {
+pub async fn save_track_to_file(state: State<'_, Arc<AppState>>, track_id: i64) -> Result<()> {
     let downloads_dir = Path::new("/home/syndafloden/.cache/downloads");
     std::fs::create_dir_all(downloads_dir).map_err(|e| e.to_string())?;
 

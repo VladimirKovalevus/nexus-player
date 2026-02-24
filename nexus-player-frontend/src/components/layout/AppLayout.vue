@@ -16,13 +16,28 @@
       <slot />
     </main>
 
-    <aside v-if="showQueue" :class="$style.rightSidebar">
-      <slot name="rightSidebar"> </slot>
-    </aside>
+    <!-- Mobile backdrop -->
+    <Transition name="fade">
+      <div
+        v-if="showQueue"
+        :class="$style.mobileBackdrop"
+        @click="$emit('closeQueue')"
+      />
+    </Transition>
+
+    <Transition name="slide-up">
+      <aside v-if="showQueue" :class="$style.rightSidebar">
+        <slot name="rightSidebar"> </slot>
+      </aside>
+    </Transition>
 
     <footer :class="$style.bottomPlayer">
       <slot name="bottomPlayer" />
     </footer>
+
+    <nav :class="$style.mobileNav">
+      <slot name="mobileNav" />
+    </nav>
   </div>
 </template>
 
@@ -37,6 +52,8 @@ interface Props {
 withDefaults(defineProps<Props>(), {
   showQueue: true,
 });
+
+defineEmits<{ closeQueue: [] }>();
 </script>
 
 <style module lang="scss">
@@ -100,5 +117,106 @@ withDefaults(defineProps<Props>(), {
   background-color: var(--color-bg-player);
   border-top: 1px solid var(--color-border);
   z-index: $z-player;
+}
+
+.mobileNav {
+  display: none;
+  grid-area: mobilenav;
+  background-color: var(--color-bg-sidebar);
+  border-top: 1px solid var(--color-border);
+  z-index: $z-player;
+}
+
+.mobileBackdrop {
+  display: none;
+}
+
+// Mobile: floating queue overlay
+@media (max-width: $mobile-breakpoint) {
+  .appLayout {
+    grid-template-areas:
+      'topbar'
+      'main'
+      'player'
+      'mobilenav';
+    grid-template-columns: 1fr;
+    grid-template-rows: $topbar-height 1fr $player-height $mobile-nav-height;
+  }
+
+  .hideQueue {
+    grid-template-areas:
+      'topbar'
+      'main'
+      'player'
+      'mobilenav';
+    grid-template-columns: 1fr;
+    grid-template-rows: $topbar-height 1fr $player-height $mobile-nav-height;
+  }
+
+  .leftSidebar {
+    display: none;
+  }
+
+  .mobileNav {
+    display: flex;
+  }
+
+  .rightSidebar {
+    grid-area: unset;
+    position: fixed;
+    bottom: $player-height + $mobile-nav-height;
+    left: 0;
+    right: 0;
+    height: 66.666vh;
+    z-index: $z-queue-overlay;
+    background-color: var(--color-bg-secondary);
+    border: none;
+    border-top: 1px solid var(--color-border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
+    overflow-y: auto;
+  }
+
+  .mobileBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: $z-queue-backdrop;
+  }
+}
+</style>
+
+<style>
+/* Transition: backdrop fade */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Transition: queue slides up */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: transform 0.3s ease;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateY(100%);
+}
+
+/* Only apply slide transition on mobile */
+@media (min-width: 641px) {
+  .slide-up-enter-from,
+  .slide-up-leave-to {
+    transform: none;
+  }
+  .slide-up-enter-active,
+  .slide-up-leave-active {
+    transition: none;
+  }
 }
 </style>

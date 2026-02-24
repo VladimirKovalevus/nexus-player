@@ -11,12 +11,12 @@
   },
   "app": {
     "windows": [
-      {
-        "title": "nexus-player-frontend",
-        "width": 800,
-        "height": 600
-      }
-    ],
+        {
+          "width": 390,
+          "height": 844,
+          "resizable":false 
+        }
+      ],
     "security": {
       "csp": null
     }

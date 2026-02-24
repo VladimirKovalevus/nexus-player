@@ -5,6 +5,7 @@ import PlaybackQueue from './components/PlaybackQueue.vue';
 import PlayerControl from './components/PlayerControl.vue';
 import TopBar from './components/layout/TopBar.vue';
 import Sidebar from './components/layout/Sidebar.vue';
+import MobileNav from './components/layout/MobileNav.vue';
 import HomeView from './views/HomeView.vue';
 import PlaylistDetailView from './views/PlaylistDetailView.vue';
 import VkView from './views/VkView.vue';
@@ -57,7 +58,7 @@ provide('navigateToPlaylist', navigateToPlaylist);
 </script>
 
 <template>
-  <AppLayout :show-queue="showQueue">
+  <AppLayout :show-queue="showQueue" @close-queue="toggleQueue">
     <template #topBar>
       <TopBar @refetch="handleSearchRefetch" />
     </template>
@@ -72,6 +73,10 @@ provide('navigateToPlaylist', navigateToPlaylist);
         :queue-visible="showQueue"
         @toggle-queue="toggleQueue"
       />
+    </template>
+
+    <template #mobileNav>
+      <MobileNav :active-view="currentView" @change-view="changeView" />
     </template>
 
     <template #rightSidebar>
