@@ -1,9 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Required on Android 14+ for media playback foreground service type -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
+
+    <!-- Required on Android 11+ to check if VK app is installed -->
+    <queries>
+        <package android:name="com.vkontakte.android" />
+    </queries>
 
     <application
         android:icon="@mipmap/ic_launcher"
@@ -22,7 +34,21 @@
                 <!-- AndroidTV support -->
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+            <!-- VK OAuth callback: vk2685278://authorize#access_token=...
+                 Works when Kate Mobile is not installed (no competing handler) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vk2685278" android:host="authorize" />
+            </intent-filter>
         </activity>
+
+        <!-- Foreground service for background audio playback -->
+        <service
+            android:name=".AudioForegroundService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
 
         <provider
           android:name="androidx.core.content.FileProvider"

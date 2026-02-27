@@ -464,7 +464,7 @@ defineExpose({ fetchQueue });
   margin: 0 auto $spacing-md;
   flex-shrink: 0;
 
-  @media (max-width: 640px) {
+  @media (max-width: 480px) {
     display: block;
   }
 }

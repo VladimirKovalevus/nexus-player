@@ -314,7 +314,7 @@ onUnmounted(() => {
   height: 100px;
   background-color: var(--color-bg-player);
   border-top: 1px solid var(--color-border);
-  padding: 0.5rem 1.5rem;
+  padding: 0.5rem 1rem;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -322,10 +322,16 @@ onUnmounted(() => {
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
 }
 
+@media (max-width: 480px) {
+  .player-control {
+    padding: 0.5rem 0.5rem;
+  }
+}
+
 .left-section {
   flex: 1;
   min-width: 0;
-@media (max-width: 450px){
+@media (max-width: 480px){
         display:none;
 }
 }

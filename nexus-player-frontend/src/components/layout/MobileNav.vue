@@ -4,6 +4,7 @@
       v-for="item in navItems"
       :key="item.view"
       :class="[$style.btn, { [$style.active]: activeView === item.view }]"
+      style="padding:8px"
       @click="$emit('changeView', item.view)"
       :title="item.label"
     >

@@ -10,6 +10,7 @@ import HomeView from './views/HomeView.vue';
 import PlaylistDetailView from './views/PlaylistDetailView.vue';
 import VkView from './views/VkView.vue';
 import StreamingSearch from './components/StreamingSearch.vue';
+import GlobalNotifications from './components/common/GlobalNotifications.vue';
 
 const playbackQueueRef = ref<InstanceType<typeof PlaybackQueue> | null>(null);
 const playerControlRef = ref<InstanceType<typeof PlayerControl> | null>(null);
@@ -101,5 +102,6 @@ provide('navigateToPlaylist', navigateToPlaylist);
       <p>Вы перешли в раздел: {{ currentView }}</p>
     </div>
   </AppLayout>
+  <GlobalNotifications />
 </template>
 <style lang="scss" scoped></style>

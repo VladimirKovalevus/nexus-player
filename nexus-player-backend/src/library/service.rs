@@ -67,10 +67,16 @@ impl LibraryService {
 
     /// Add a new track to the library
     pub async fn add_track(&self, mut track: models::Track) -> Result<TrackId> {
+        tracing::info!(
+            "Adding track to library: {} by {:?}",
+            track.metadata.title,
+            track.artist
+        );
         // Resolve artwork if present and ID is 0 (dummy from conversion)
         if let Some(art) = &track.metadata.artwork {
             if art.id.0 == 0 {
                 if let crate::library::types::ArtworkSource::Url { url } = &art.source {
+                    tracing::info!("Resolving artwork URL: {}", url);
                     let real_id = self.ensure_artwork(url, &self.db).await?;
                     if let Some(mut a) = track.metadata.artwork.take() {
                         a.id = crate::library::types::ArtworkId(real_id);
@@ -81,12 +87,15 @@ impl LibraryService {
         }
 
         let track_id = self.track_repo.insert(track).await?;
+        tracing::info!("Inserted track with ID: {:?}", track_id);
+
         if let Some(master_playlist) = self
             .playlist_repo
             .find_by_title("Liked Songs")
             .await
             .context("Failed to find master playlist")?
         {
+            tracing::info!("Adding track {:?} to Liked Songs playlist", track_id);
             self.add_track_to_playlist(master_playlist.id, track_id)
                 .await?;
         }
@@ -136,6 +145,7 @@ impl LibraryService {
     /// Find existing track by source or insert a new one
     pub async fn ensure_track(&self, track: models::Track) -> Result<TrackId> {
         if let Some(existing) = self.track_repo.find_by_source(&track.source).await? {
+            tracing::info!("Track already exists in library with ID: {:?}", existing.id);
             return Ok(existing.id);
         }
         self.add_track(track).await

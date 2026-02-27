@@ -174,10 +174,24 @@ const save = async () => {
 };
 
 const handleVkAuth = async () => {
-  try {
-    await invoke('open_vk_login');
-  } catch (e) {
-    alert(`Failed to start VK login: ${e}`);
+  if (/Android/.test(navigator.userAgent)) {
+    try {
+      const url = await invoke<string>('get_vk_auth_url');
+      const result = await invoke<{ token: string }>('plugin:vkLogin|open', { url });
+      if (config.value.providers.vk) {
+        config.value.providers.vk.credentials = result.token;
+      }
+    } catch (e) {
+      if (e !== 'cancelled') {
+        alert(`Ошибка авторизации VK: ${e}`);
+      }
+    }
+  } else {
+    try {
+      await invoke('open_vk_login');
+    } catch (e) {
+      alert(`Failed to start VK login: ${e}`);
+    }
   }
 };
 

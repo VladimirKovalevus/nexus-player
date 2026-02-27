@@ -2,9 +2,29 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
 import './styles/global.scss';
+import { useNotificationStore } from './stores/notifications';
 
 const app = createApp(App);
 const pinia = createPinia();
 
 app.use(pinia);
+
+// Global Error Handlers
+const notificationStore = useNotificationStore(pinia);
+
+app.config.errorHandler = (err, instance, info) => {
+  console.error('Vue Error:', err, info);
+  notificationStore.addNotification(`Vue Error: ${err}`, 'error');
+};
+
+window.addEventListener('error', (event) => {
+  console.error('Global Error:', event.error);
+  notificationStore.addNotification(`Global Error: ${event.message}`, 'error');
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Promise Rejection:', event.reason);
+  notificationStore.addNotification(`Promise Error: ${event.reason}`, 'error');
+});
+
 app.mount('#app');

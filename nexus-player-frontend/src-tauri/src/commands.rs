@@ -54,17 +54,35 @@ pub async fn search_tracks(
 pub async fn add_track_from_file(state: State<'_, Arc<AppState>>, path: String) -> Result<i64> {
     use nexus_player_backend::library::metadata::{create_track_from_parsed, parse_from_path};
 
+    tracing::info!("Adding track from file: {}", path);
+
     let file_path = PathBuf::from(&path);
 
-    let parsed =
-        parse_from_path(&file_path).map_err(|e| format!("Failed to parse metadata: {}", e))?;
+    let parsed = parse_from_path(&file_path).map_err(|e| {
+        tracing::error!("Failed to parse metadata for {}: {}", path, e);
+        format!("Failed to parse metadata: {}", e)
+    })?;
+
+    tracing::info!(
+        "Parsed metadata: title={}, artist={:?}, album={:?}",
+        parsed.title,
+        parsed.artist,
+        parsed.album
+    );
 
     let track = create_track_from_parsed(file_path, parsed);
+
+    tracing::info!("Created track object, adding to library...");
 
     let track_id = state
         .add_track_to_library(track)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            tracing::error!("Failed to add track to library: {}", e);
+            e.to_string()
+        })?;
+
+    tracing::info!("Successfully added track to library with ID: {:?}", track_id);
 
     Ok(track_id.0)
 }
@@ -679,42 +697,28 @@ pub async fn open_vk_login(app: AppHandle) -> Result<()> {
         })
         .build()
         .map_err(|e: tauri::Error| e.to_string())?;
+        Ok(())
     }
 
     #[cfg(target_os = "android")]
     {
-        let url = vk_down::get_default_auth_url();
-        let app_handle = app.clone();
-
-        let _login_window = tauri::WebviewWindowBuilder::new(
-            &app,
-            "vk-login",
-            tauri::WebviewUrl::External(url.parse().expect("Failed to parse VK URL")),
-        )
-        .title("VK Авторизация")
-        .inner_size(500.0, 700.0)
-        .always_on_top(true)
-        .on_navigation(move |url: &tauri::Url| {
-            let url_str = url.as_str();
-            if url_str.contains("access_token=") {
-                let token = vk_down::extract_token_from_url(url_str);
-                let _ = app_handle.emit("vk-token-received", token);
-                if let Some(w) = app_handle.get_webview_window("vk-login") {
-                    let _ = w.destroy();
-                }
-                return false;
-            }
-            true
-        })
-        .build()
-        .map_err(|e: tauri::Error| e.to_string())?;
         return Err("VK login window is not supported on Android".into());
     }
 }
 
 #[tauri::command]
 pub fn get_vk_auth_url() -> String {
-    vk_down::auth::get_oauth_url(&vk_down::auth::AuthConfig::default())
+    let url = vk_down::auth::get_oauth_url(&vk_down::auth::AuthConfig::default());
+    // On Android use our own scheme — no domain verification needed, always routes to our app
+    #[cfg(target_os = "android")]
+    {
+        url.replace(
+            "redirect_uri=https://oauth.vk.com/blank.html",
+            "redirect_uri=vk2685278://authorize",
+        )
+    }
+    #[cfg(not(target_os = "android"))]
+    url
 }
 
 #[tauri::command]

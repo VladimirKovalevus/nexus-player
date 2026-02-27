@@ -6,7 +6,7 @@
         <input
           type="text"
           :class="$style.searchInput"
-          placeholder="Поиск музыки (YouTube, SoundCloud, Bandcamp...)"
+          :placeholder="text"
           v-model="searchQuery"
           @keyup.enter="handleSearch"
           @focus="handleInputFocus"
@@ -118,11 +118,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { onClickOutside } from '@vueuse/core';
 import type { SearchResult } from '@/types/types';
 
+const text = computed(()=>(window.innerWidth+"-"+window.innerHeight)||'none')
 const searchQuery = ref('');
 const selectedProvider = ref('bandcamp');
 const selectedContentType = ref<string | null>(null);
@@ -227,9 +228,13 @@ const formatNumber = (num?: number): string => {
   height: $topbar-height;
   background-color: var(--color-bg-primary);
   border-bottom: 1px solid var(--color-border);
-  padding: 0 $spacing-xl;
+  padding: 0 $spacing-md;
   @include flex-between;
   position: relative;
+
+  @media (max-width: $mobile-breakpoint) {
+    padding: 0 $spacing-sm;
+  }
 }
 
 .searchContainer {
@@ -496,6 +501,10 @@ const formatNumber = (num?: number): string => {
 
   &:hover {
     background-color: var(--color-bg-hover);
+  }
+
+  @media (max-width: $mobile-breakpoint) {
+    padding: $spacing-sm;
   }
 }
 

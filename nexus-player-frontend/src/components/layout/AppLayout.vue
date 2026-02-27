@@ -35,7 +35,7 @@
       <slot name="bottomPlayer" />
     </footer>
 
-    <nav :class="$style.mobileNav">
+    <nav :class="$style.mobileNav" >
       <slot name="mobileNav" />
     </nav>
   </div>
@@ -65,7 +65,7 @@ defineEmits<{ closeQueue: [] }>();
     'sidebar topbar topbar'
     'sidebar main queue'
     'player player player';
-  grid-template-columns: $sidebar-width 1fr 400px;
+  grid-template-columns: $sidebar-width 1fr minmax(0, 400px);
   grid-template-rows: $topbar-height 1fr $player-height;
   height: 100vh;
   width: 100vw;
@@ -73,6 +73,8 @@ defineEmits<{ closeQueue: [] }>();
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
   transition: grid-template-columns 0.3s ease;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 .hideQueue {
@@ -88,6 +90,7 @@ defineEmits<{ closeQueue: [] }>();
   background-color: var(--color-bg-primary);
   border-bottom: 1px solid var(--color-border);
   z-index: $z-topbar;
+  padding-top: env(safe-area-inset-top);
 }
 
 .leftSidebar {
@@ -125,6 +128,7 @@ defineEmits<{ closeQueue: [] }>();
   background-color: var(--color-bg-sidebar);
   border-top: 1px solid var(--color-border);
   z-index: $z-player;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .mobileBackdrop {
@@ -140,7 +144,7 @@ defineEmits<{ closeQueue: [] }>();
       'player'
       'mobilenav';
     grid-template-columns: 1fr;
-    grid-template-rows: $topbar-height 1fr $player-height $mobile-nav-height;
+    grid-template-rows: auto 1fr $player-height auto;
   }
 
   .hideQueue {
@@ -150,7 +154,7 @@ defineEmits<{ closeQueue: [] }>();
       'player'
       'mobilenav';
     grid-template-columns: 1fr;
-    grid-template-rows: $topbar-height 1fr $player-height $mobile-nav-height;
+    grid-template-rows: auto 1fr $player-height auto;
   }
 
   .leftSidebar {
@@ -209,7 +213,7 @@ defineEmits<{ closeQueue: [] }>();
 }
 
 /* Only apply slide transition on mobile */
-@media (min-width: 641px) {
+@media (min-width: 480px) {
   .slide-up-enter-from,
   .slide-up-leave-to {
     transform: none;
