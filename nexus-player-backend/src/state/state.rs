@@ -706,7 +706,9 @@ impl AppState {
         parent_id: PlaylistId,
         child_id: PlaylistId,
     ) -> Result<()> {
-        self.library.add_playlist_to_playlist(parent_id, child_id).await
+        self.library
+            .add_playlist_to_playlist(parent_id, child_id)
+            .await
     }
 
     pub async fn remove_playlist_from_playlist(
@@ -714,7 +716,9 @@ impl AppState {
         parent_id: PlaylistId,
         child_id: PlaylistId,
     ) -> Result<()> {
-        self.library.remove_playlist_from_playlist(parent_id, child_id).await
+        self.library
+            .remove_playlist_from_playlist(parent_id, child_id)
+            .await
     }
 
     pub async fn add_track_to_playlist(

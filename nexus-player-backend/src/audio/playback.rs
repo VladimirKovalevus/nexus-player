@@ -212,9 +212,6 @@ impl PlaybackEngine {
         info!("Загрузка HLS потока");
 
         // Prepare source (wait for metadata/first segment)
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let _ = rt.block_on(hls_source.prepare());
-
         let decoder = HlsAudioDecoder::new(hls_source)?;
         let duration = decoder.duration().map(Duration::from_secs_f64);
         let sample_rate = decoder.sample_rate();

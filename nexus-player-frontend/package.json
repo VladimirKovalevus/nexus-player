@@ -15,7 +15,7 @@
     "android-deploy": "NO_STRIP=true tauri android build --target aarch64 && bash android-deploy.sh",
     "bld": "NO_STRIP=true tauri build",
     "install": "cp ../target/release/bundle/appimage/nexus-player-frontend_0.1.0_amd64.AppImage ~/nexus",
-    "start": "WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev"
+    "start": "tauri dev"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
