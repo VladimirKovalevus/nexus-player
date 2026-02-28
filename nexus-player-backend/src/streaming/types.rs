@@ -1,6 +1,6 @@
 use anyhow::Result;
-use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::hash::{Hash, Hasher};
 
 use crate::{audio::types::Track, library::TrackSource, playlist::playlist::Playlist};
 
@@ -262,9 +262,15 @@ impl From<PlaylistInfo> for Playlist {
         }
     }
 }
+fn track_id_from_source(source: &crate::audio::types::TrackSource) -> usize {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    source.as_str().hash(&mut hasher);
+    hasher.finish() as usize
+}
+
 impl From<TrackInfo> for Track {
     fn from(row: TrackInfo) -> Self {
-        let id = rand::thread_rng().gen_range(1..=100000);
+        let id = track_id_from_source(&row.source);
         Track {
             id,
             title: row.title,
@@ -280,7 +286,7 @@ impl From<TrackInfo> for Track {
 }
 impl From<&TrackInfo> for Track {
     fn from(row: &TrackInfo) -> Self {
-        let id = rand::thread_rng().gen_range(1..=100000);
+        let id = track_id_from_source(&row.source);
         Track {
             id,
             title: row.title.clone(),

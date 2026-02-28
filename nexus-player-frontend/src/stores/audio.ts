@@ -1,14 +1,19 @@
 import { defineStore } from 'pinia';
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import type { AudioState, QueueState, AudioEvent } from '@/types/types';
 import { invoke } from '@tauri-apps/api/core';
 import { useNotificationStore } from './notifications';
 
 export const useAudioStore = defineStore('audio', () => {
   const notificationStore = useNotificationStore();
+  
+  // High-frequency state isolated to prevent unnecessary re-renders of the whole app
+  const currentPositionSecs = ref(0);
+  let _lastPosUpdate = 0;
+
   const audioState = ref<AudioState>({
     state: 'stopped',
-    positionSecs: 0,
+    positionSecs: 0, // Keep for compatibility but we'll use currentPositionSecs mostly
     durationSecs: 0,
     volume: 1.0,
     currentTrack: null,
@@ -43,18 +48,16 @@ export const useAudioStore = defineStore('audio', () => {
         audioState.value.state === 'playing' ? 'playing' : 
         audioState.value.state === 'paused' ? 'paused' : 'none';
       
-      // Update position state for seek bar in notification
       if (audioState.value.durationSecs > 0) {
         navigator.mediaSession.setPositionState({
           duration: audioState.value.durationSecs,
           playbackRate: 1,
-          position: audioState.value.positionSecs
+          position: currentPositionSecs.value
         });
       }
     }
   }
 
-  // Setup Media Session action handlers once
   if ('mediaSession' in navigator) {
     navigator.mediaSession.setActionHandler('play', () => invoke('resume'));
     navigator.mediaSession.setActionHandler('pause', () => invoke('pause'));
@@ -67,7 +70,6 @@ export const useAudioStore = defineStore('audio', () => {
     });
   }
 
-  // Android native bridge: invoked by notification media buttons
   if (typeof window !== 'undefined') {
     (window as any).__nexusControl = (command: string) => invoke(command);
   }
@@ -89,7 +91,7 @@ export const useAudioStore = defineStore('audio', () => {
   const isStopped = computed(() => audioState.value.state === 'stopped');
   const isLoading = computed(() => audioState.value.state === 'loading');
   const currentTrack = computed(() => audioState.value.currentTrack);
-  const position = computed(() => audioState.value.positionSecs);
+  const position = computed(() => currentPositionSecs.value);
   const duration = computed(() => audioState.value.durationSecs);
   const bufferedRanges = computed(() => audioState.value.bufferedRanges);
   const waveforms = computed(() => audioState.value.waveforms);
@@ -101,7 +103,6 @@ export const useAudioStore = defineStore('audio', () => {
   const isSearchQueue = computed(() => queueState.value.searchContext !== null);
   const searchContext = computed(() => queueState.value.searchContext);
 
-  // Compatibility: flat list of tracks from entries
   const tracks = computed(() => {
     const result: import('@/types/types').TrackDto[] = [];
     for (const entry of queueState.value.entries) {
@@ -117,20 +118,18 @@ export const useAudioStore = defineStore('audio', () => {
 
   const repeatIcon = computed((): string => {
     switch (queueState.value.repeatMode) {
-      case 'off':
-        return '🔁';
-      case 'all':
-        return '🔁';
-      case 'one':
-        return '🔂';
-      default:
-        return '🔁';
+      case 'off': return '🔁';
+      case 'all': return '🔁';
+      case 'one': return '🔂';
+      default: return '🔁';
     }
   });
 
   function handleAudioEvent(event: AudioEvent) {
+      console.log(event,'EVENT')
     switch (event.type) {
       case 'PlaybackStarted':
+      case 'PlaybackResumed':
         audioState.value.state = 'playing';
         updateMediaSessionPlaybackState();
         syncNativeBridge();
@@ -140,23 +139,21 @@ export const useAudioStore = defineStore('audio', () => {
         updateMediaSessionPlaybackState();
         syncNativeBridge();
         break;
-      case 'PlaybackResumed':
-        audioState.value.state = 'playing';
-        updateMediaSessionPlaybackState();
-        syncNativeBridge();
-        break;
       case 'PlaybackStopped':
         audioState.value.state = 'stopped';
         audioState.value.currentTrack = null;
+        currentPositionSecs.value = 0;
         updateMediaSessionPlaybackState();
         syncNativeBridge();
         break;
       case 'PositionUpdated':
         if (event.payload?.positionSecs !== undefined) {
-          audioState.value.positionSecs = event.payload.positionSecs;
-          // Don't update MediaSession on every position tick to avoid overhead, 
-          // but maybe every few seconds or when explicitly asked.
-          // Mobile systems usually interpolate position themselves.
+          const now = Date.now();
+          // Throttle reactive updates to 20fps max, but allow big jumps
+          if (now - _lastPosUpdate > 50 || Math.abs(event.payload.positionSecs - currentPositionSecs.value) > 1) {
+            currentPositionSecs.value = event.payload.positionSecs;
+            _lastPosUpdate = now;
+          }
         }
         break;
       case 'DurationChanged':
@@ -182,7 +179,7 @@ export const useAudioStore = defineStore('audio', () => {
         break;
       case 'LoadingStarted':
         audioState.value.state = 'loading';
-        audioState.value.positionSecs = 0;
+        currentPositionSecs.value = 0;
         audioState.value.bufferedRanges = [];
         audioState.value.waveforms = [];
         if (event.payload?.track) {
@@ -194,7 +191,9 @@ export const useAudioStore = defineStore('audio', () => {
         break;
       case 'AudioStateUpdated':
         if (event.payload?.state) {
-          audioState.value = event.payload.state;
+          const { positionSecs, ...rest } = event.payload.state;
+          audioState.value = rest;
+          currentPositionSecs.value = positionSecs;
           updateMediaSessionMetadata();
           updateMediaSessionPlaybackState();
           syncNativeBridge();
@@ -211,7 +210,9 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   function updateAudioState(newState: AudioState) {
-    audioState.value = newState;
+    const { positionSecs, ...rest } = newState;
+    audioState.value = rest as any;
+    currentPositionSecs.value = positionSecs;
   }
 
   function updateQueueState(newState: QueueState) {
@@ -219,7 +220,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   function setPosition(positionSecs: number) {
-    audioState.value.positionSecs = positionSecs;
+    currentPositionSecs.value = positionSecs;
   }
 
   return {

@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import MediaCard from './common/MediaCard.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
+import VirtualList from './common/VirtualList.vue';
 import { useAudioStore } from '../stores/audio';
 import type { QueueEntryDto, TrackDto, PlaylistDto } from '@/types/types';
 
@@ -28,6 +29,19 @@ const queue = computed(() => {
     isCurrentItem: index === audioStore.currentPosition?.itemIndex,
   }));
 });
+
+const calculateItemHeight = (index: number) => {
+  const entry = audioStore.entries[index];
+  if (!entry) return 0;
+  if (entry.entryType === 'track') return 88;
+  if (entry.entryType === 'container') {
+    if (expandedContainers.value.has(index) && entry.tracks) {
+      return 88 + (entry.tracks.length * 44); // 88 header + tracks
+    }
+    return 88;
+  }
+  return 88;
+};
 
 const isEntryEmpty = computed(() => audioStore.entries.length === 0);
 
@@ -319,118 +333,124 @@ defineExpose({ fetchQueue });
       <div :class="$style.emptyHint">Добавьте треки для воспроизведения</div>
     </div>
 
-    <div v-else :class="$style.queueList">
-      <template v-for="item in queue" :key="item.index">
-        <!-- Track entry -->
-        <div
-          v-if="item.entry.entryType === 'track'"
-          :class="[
-            $style.trackWrapper,
-            { [$style.currentlyPlaying]: item.isCurrentItem && audioStore.currentPosition?.trackWithinContainer == null },
-          ]"
-        >
-          <MediaCard
-            type="track"
-            :track="item.entry.track"
-            :queue-index="item.index"
-            context="queue"
-            showAction
-            @click="playQueueItem(item.index)"
-            @play="playQueueItem(item.index)"
-            @refresh="fetchQueue"
-          />
-        </div>
-
-        <!-- Container entry -->
-        <div
-          v-else-if="item.entry.entryType === 'container'"
-          :class="[$style.containerWrapper, { [$style.currentlyPlaying]: item.isCurrentItem }]"
-        >
-          <div :class="$style.containerHeader">
+    <div v-else :class="[$style.queueList, 'queue-scroll-container']">
+      <VirtualList
+        :items="queue"
+        :item-height="calculateItemHeight"
+        container-selector=".queue-scroll-container"
+      >
+        <template #default="{ item }">
+          <!-- Track entry -->
+          <div
+            v-if="item.entry.entryType === 'track'"
+            :class="[
+              $style.trackWrapper,
+              { [$style.currentlyPlaying]: item.isCurrentItem && audioStore.currentPosition?.trackWithinContainer == null },
+            ]"
+          >
             <MediaCard
-              type="album"
-              :album="item.entry.meta"
-              :show-action="false"
+              type="track"
+              :track="item.entry.track"
+              :queue-index="item.index"
               context="queue"
-              @click="toggleContainer(item.index)"
+              showAction
+              @click="playQueueItem(item.index)"
+              @play="playQueueItem(item.index)"
+              @refresh="fetchQueue"
             />
-            <div :class="$style.containerActions">
-              <div :class="$style.containerMenuWrapper">
-                <button :class="$style.containerMenuBtn" @click.stop="toggleContainerMenu(item.index)">
-                  ⋯
+          </div>
+
+          <!-- Container entry -->
+          <div
+            v-else-if="item.entry.entryType === 'container'"
+            :class="[$style.containerWrapper, { [$style.currentlyPlaying]: item.isCurrentItem }]"
+          >
+            <div :class="$style.containerHeader">
+              <MediaCard
+                type="album"
+                :album="item.entry.meta"
+                :show-action="false"
+                context="queue"
+                @click="toggleContainer(item.index)"
+              />
+              <div :class="$style.containerActions">
+                <div :class="$style.containerMenuWrapper">
+                  <button :class="$style.containerMenuBtn" @click.stop="toggleContainerMenu(item.index)">
+                    ⋯
+                  </button>
+                  <div v-if="containerMenuOpen === item.index" :class="$style.containerDropdown" @click.stop>
+                    <template v-if="!containerSubmenu">
+                      <button :class="$style.containerMenuItem" @click="containerSubmenu = 'addToPlaylist'">
+                        Сохранить в плейлист ›
+                      </button>
+                      <button :class="$style.containerMenuItem" @click="handleContainerCreatePlaylist(item.index)">
+                        Сформировать плейлист
+                      </button>
+                      <button :class="[$style.containerMenuItem, $style.dangerItem]" @click="handleContainerRemove(item.index)">
+                        Удалить из очереди
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button :class="$style.containerMenuItem" @click="containerSubmenu = null">
+                        ‹ Назад
+                      </button>
+                      <div :class="$style.menuDivider"></div>
+                      <button
+                        v-for="pl in allPlaylists"
+                        :key="pl.id"
+                        :class="$style.containerMenuItem"
+                        @click="handleContainerAddToPlaylist(item.index, pl.id)"
+                      >
+                        {{ pl.title }}
+                      </button>
+                      <div v-if="allPlaylists.length === 0" :class="$style.menuEmpty">
+                        Нет плейлистов
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <button :class="$style.expandBtn" @click="toggleContainer(item.index)">
+                  {{ isContainerExpanded(item.index) ? '▲' : '▼' }}
                 </button>
-                <div v-if="containerMenuOpen === item.index" :class="$style.containerDropdown" @click.stop>
-                  <template v-if="!containerSubmenu">
-                    <button :class="$style.containerMenuItem" @click="containerSubmenu = 'addToPlaylist'">
-                      Сохранить в плейлист ›
-                    </button>
-                    <button :class="$style.containerMenuItem" @click="handleContainerCreatePlaylist(item.index)">
-                      Сформировать плейлист
-                    </button>
-                    <button :class="[$style.containerMenuItem, $style.dangerItem]" @click="handleContainerRemove(item.index)">
-                      Удалить из очереди
-                    </button>
-                  </template>
-                  <template v-else>
-                    <button :class="$style.containerMenuItem" @click="containerSubmenu = null">
-                      ‹ Назад
-                    </button>
-                    <div :class="$style.menuDivider"></div>
-                    <button
-                      v-for="pl in allPlaylists"
-                      :key="pl.id"
-                      :class="$style.containerMenuItem"
-                      @click="handleContainerAddToPlaylist(item.index, pl.id)"
-                    >
-                      {{ pl.title }}
-                    </button>
-                    <div v-if="allPlaylists.length === 0" :class="$style.menuEmpty">
-                      Нет плейлистов
-                    </div>
-                  </template>
+              </div>
+            </div>
+
+            <!-- Expanded tracks inside container -->
+            <div
+              v-if="isContainerExpanded(item.index) && item.entry.tracks"
+              :class="$style.containerTracks"
+            >
+              <div
+                v-for="(track, trackIdx) in item.entry.tracks"
+                :key="trackIdx"
+                :class="[
+                  $style.containerTrack,
+                  {
+                    [$style.currentlyPlaying]:
+                      item.isCurrentItem &&
+                      audioStore.currentPosition?.trackWithinContainer === trackIdx,
+                  },
+                ]"
+                @click="playQueueItem(item.index, trackIdx)"
+              >
+                <span :class="$style.trackNumber">{{ trackIdx + 1 }}</span>
+                <div :class="$style.trackInfo">
+                  <div :class="$style.trackTitle">{{ track.title }}</div>
+                  <div :class="$style.trackArtist">{{ track.artist }}</div>
                 </div>
               </div>
-              <button :class="$style.expandBtn" @click="toggleContainer(item.index)">
-                {{ isContainerExpanded(item.index) ? '▲' : '▼' }}
-              </button>
             </div>
-          </div>
 
-          <!-- Expanded tracks inside container -->
-          <div
-            v-if="isContainerExpanded(item.index) && item.entry.tracks"
-            :class="$style.containerTracks"
-          >
+            <!-- Not expanded and no tracks loaded yet -->
             <div
-              v-for="(track, trackIdx) in item.entry.tracks"
-              :key="trackIdx"
-              :class="[
-                $style.containerTrack,
-                {
-                  [$style.currentlyPlaying]:
-                    item.isCurrentItem &&
-                    audioStore.currentPosition?.trackWithinContainer === trackIdx,
-                },
-              ]"
-              @click="playQueueItem(item.index, trackIdx)"
+              v-else-if="isContainerExpanded(item.index) && !item.entry.tracks"
+              :class="$style.containerLoading"
             >
-              <span :class="$style.trackNumber">{{ trackIdx + 1 }}</span>
-              <div :class="$style.trackInfo">
-                <div :class="$style.trackTitle">{{ track.title }}</div>
-                <div :class="$style.trackArtist">{{ track.artist }}</div>
-              </div>
+              Loading tracks...
             </div>
           </div>
-
-          <!-- Not expanded and no tracks loaded yet -->
-          <div
-            v-else-if="isContainerExpanded(item.index) && !item.entry.tracks"
-            :class="$style.containerLoading"
-          >
-            Loading tracks...
-          </div>
-        </div>
-      </template>
+        </template>
+      </VirtualList>
     </div>
 
     <PlaylistCreateSimpleModal

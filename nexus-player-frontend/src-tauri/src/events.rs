@@ -12,7 +12,9 @@ use tauri::{AppHandle, Emitter, Manager};
 #[serde(tag = "type", content = "payload")]
 pub enum FrontendEvent {
     #[serde(rename_all = "camelCase")]
-    PlaybackStarted { track_id: usize },
+    PlaybackStarted {
+        track_id: usize,
+    },
 
     PlaybackPaused,
 
@@ -21,25 +23,39 @@ pub enum FrontendEvent {
     PlaybackStopped,
 
     #[serde(rename_all = "camelCase")]
-    TrackFinished { track_id: usize },
+    TrackFinished {
+        track_id: usize,
+    },
 
     #[serde(rename_all = "camelCase")]
-    PositionUpdated { position_secs: f64 },
+    PositionUpdated {
+        position_secs: f64,
+    },
 
     #[serde(rename_all = "camelCase")]
-    DurationChanged { duration_secs: f64 },
+    DurationChanged {
+        duration_secs: f64,
+    },
 
     #[serde(rename_all = "camelCase")]
-    VolumeChanged { volume: f32 },
+    VolumeChanged {
+        volume: f32,
+    },
 
     #[serde(rename_all = "camelCase")]
-    BufferUpdated { ranges: Vec<BufferedRangeDto> },
+    BufferUpdated {
+        ranges: Vec<BufferedRangeDto>,
+    },
 
     #[serde(rename_all = "camelCase")]
-    WaveformUpdated { waveforms: Vec<WaveformDto> },
+    WaveformUpdated {
+        waveforms: Vec<WaveformDto>,
+    },
 
     #[serde(rename_all = "camelCase")]
-    LoadingStarted { track: TrackDto },
+    LoadingStarted {
+        track: TrackDto,
+    },
 
     #[serde(rename_all = "camelCase")]
     AudioStateUpdated {
@@ -48,7 +64,9 @@ pub enum FrontendEvent {
     },
 
     #[serde(rename_all = "camelCase")]
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
@@ -58,17 +76,24 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
         loop {
             let events = state.poll_audio_events();
 
+            let mut emit_state_update = false;
+
             for event in events {
                 let frontend_event = match event {
                     AudioEvent::PlaybackStarted { track } => {
+                        emit_state_update = true;
                         FrontendEvent::PlaybackStarted { track_id: track.id }
                     }
                     AudioEvent::PlaybackPaused => FrontendEvent::PlaybackPaused,
                     AudioEvent::PlaybackResumed => FrontendEvent::PlaybackResumed,
-                    AudioEvent::PlaybackStopped => FrontendEvent::PlaybackStopped,
+                    AudioEvent::PlaybackStopped => {
+                        emit_state_update = true;
+                        FrontendEvent::PlaybackStopped
+                    }
                     AudioEvent::TrackFinished => {
                         let cl = state.clone();
                         cl.handle_track_finished(0).await;
+                        emit_state_update = true;
                         FrontendEvent::TrackFinished { track_id: 0 }
                     }
                     AudioEvent::PositionUpdated { position } => FrontendEvent::PositionUpdated {
@@ -85,9 +110,12 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                     AudioEvent::WaveformUpdated { waveforms } => FrontendEvent::WaveformUpdated {
                         waveforms: waveforms.into_iter().map(WaveformDto::from).collect(),
                     },
-                    AudioEvent::LoadingStarted { track } => FrontendEvent::LoadingStarted {
-                        track: TrackDto::from(track),
-                    },
+                    AudioEvent::LoadingStarted { track } => {
+                        emit_state_update = true;
+                        FrontendEvent::LoadingStarted {
+                            track: TrackDto::from(track),
+                        }
+                    }
                     AudioEvent::BufferingStarted => {
                         continue;
                     }
@@ -101,11 +129,20 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                 }
             }
 
+            if !emit_state_update {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                continue;
+            }
+
             let audio_state: AudioStateDto = state.audio_state().into();
 
             let queue_state = {
-                use nexus_player_backend::playlist::playback_queue::{ActiveQueue, ContainerKind, QueueEntry};
-                use crate::dto::{ContainerMetaDto, CurrentPositionDto, QueueEntryDto, SearchContextDto};
+                use crate::dto::{
+                    ContainerMetaDto, CurrentPositionDto, QueueEntryDto, SearchContextDto,
+                };
+                use nexus_player_backend::playlist::playback_queue::{
+                    ActiveQueue, ContainerKind, QueueEntry,
+                };
 
                 let queue = state.lock_queue().await;
                 match &*queue {
@@ -120,9 +157,15 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                             track_within_container: None,
                         });
                         let repeat_mode = match cq.repeat_mode {
-                            nexus_player_backend::playlist::playback_queue::RepeatMode::Off => "off",
-                            nexus_player_backend::playlist::playback_queue::RepeatMode::All => "all",
-                            nexus_player_backend::playlist::playback_queue::RepeatMode::One => "one",
+                            nexus_player_backend::playlist::playback_queue::RepeatMode::Off => {
+                                "off"
+                            }
+                            nexus_player_backend::playlist::playback_queue::RepeatMode::All => {
+                                "all"
+                            }
+                            nexus_player_backend::playlist::playback_queue::RepeatMode::One => {
+                                "one"
+                            }
                         };
                         QueueStateDto {
                             entries,
@@ -137,8 +180,14 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                         let entries_dto: Vec<QueueEntryDto> = entries
                             .into_iter()
                             .map(|entry| match entry {
-                                QueueEntry::Track(track) => QueueEntryDto::Track { track: track.into() },
-                                QueueEntry::Container { info, tracks, play_index } => {
+                                QueueEntry::Track(track) => QueueEntryDto::Track {
+                                    track: track.into(),
+                                },
+                                QueueEntry::Container {
+                                    info,
+                                    tracks,
+                                    play_index,
+                                } => {
                                     let kind_str = match info.kind {
                                         ContainerKind::Album => "album",
                                         ContainerKind::Playlist => "playlist",
@@ -153,7 +202,8 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                                             track_count: info.track_count,
                                             thumbnail: info.thumbnail,
                                         },
-                                        tracks: tracks.map(|ts| ts.into_iter().map(|t| t.into()).collect()),
+                                        tracks: tracks
+                                            .map(|ts| ts.into_iter().map(|t| t.into()).collect()),
                                         play_index,
                                     }
                                 }

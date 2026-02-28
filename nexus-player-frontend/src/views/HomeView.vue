@@ -1,5 +1,5 @@
 <template>
-  <div :class="$style.home">
+  <div :class="[$style.home, 'home-view-scroll-container']">
     <PlaylistCreateModal
       :is-open="isPlaylistModalOpen"
       @close="handleModalClose"
@@ -64,16 +64,22 @@
       </div>
 
       <div v-else :class="$style.trackList">
-        <MediaCard
-          v-for="track in tracks"
-          :key="track.id"
-          type="track"
-          show-action
-          :track="track"
-          @click="handleTrackClick(track)"
-          @play="handleTrackPlay(track)"
-          @more="handleTrackMore(track)"
-        />
+        <VirtualList
+          :items="tracks"
+          :item-height="96"
+          container-selector=".home-view-scroll-container"
+        >
+          <template #default="{ item: track }">
+            <MediaCard
+              type="track"
+              show-action
+              :track="track"
+              @click="handleTrackClick(track)"
+              @play="handleTrackPlay(track)"
+              @more="handleTrackMore(track)"
+            />
+          </template>
+        </VirtualList>
       </div>
     </section>
   </div>
@@ -85,6 +91,7 @@ import { invoke } from '@tauri-apps/api/core';
 import MediaCard from '@/components/common/MediaCard.vue';
 import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
 import PlaylistCreateModal from '@/components/PlaylistCreateModal.vue';
+import VirtualList from '@/components/common/VirtualList.vue';
 import type { PlaylistDto, TrackDto } from '@/types/types';
 
 const emit = defineEmits<{

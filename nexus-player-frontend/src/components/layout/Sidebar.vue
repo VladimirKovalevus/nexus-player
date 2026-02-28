@@ -67,7 +67,7 @@ const isSettingsOpen = ref(false);
 
 .sidebar {
   width: $sidebar-width;
-  height: 100vh;
+  height: 100%;
   background-color: $color-bg-sidebar;
   border-right: 1px solid $color-border;
   display: flex;

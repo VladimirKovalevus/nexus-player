@@ -258,9 +258,7 @@ const formatDuration = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-onClickOutside(dropdownRef, () => {
-  closeDropdown();
-});
+let stopClickOutside: (() => void) | null = null;
 
 const handleClick = () => {
   emit('click');
@@ -271,19 +269,35 @@ const handlePlay = () => {
 };
 
 const toggleDropdown = async () => {
-console.log(entity,"ENTITY")
-console.log(store.queueState,"QUQUE")
   dropdownOpen.value = !dropdownOpen.value;
   showPlaylistSubmenu.value = false;
 
-  if (dropdownOpen.value && playlists.value.length === 0) {
-    await fetchPlaylists();
+  if (dropdownOpen.value) {
+    if (playlists.value.length === 0) {
+      await fetchPlaylists();
+    }
+    // Start listening only when open
+    if (!stopClickOutside) {
+        stopClickOutside = onClickOutside(dropdownRef, () => {
+          closeDropdown();
+        });
+    }
+  } else {
+    // Stop listening when closed
+    if (stopClickOutside) {
+        stopClickOutside();
+        stopClickOutside = null;
+    }
   }
 };
 
 const closeDropdown = () => {
   dropdownOpen.value = false;
   showPlaylistSubmenu.value = false;
+  if (stopClickOutside) {
+    stopClickOutside();
+    stopClickOutside = null;
+  }
 };
 
 const fetchPlaylists = async () => {

@@ -168,7 +168,9 @@ impl AudioEngine {
                         }
                     }
 
-                    let _ = event_tx.send(AudioEvent::PositionUpdated { position });
+                    if playback.is_playing() {
+                        let _ = event_tx.send(AudioEvent::PositionUpdated { position });
+                    }
 
                     if let Some(duration) = playback.duration() {
                         let threshold = Duration::from_millis(100);

@@ -98,6 +98,18 @@ impl CursorQueue {
         }
     }
 
+    /// Jump to a specific index in the snapshot view, rearranging history/current/manual_queue.
+    pub fn jump_to(&mut self, index: usize) {
+        let (tracks, current_idx) = self.snapshot();
+        if index >= tracks.len() || Some(index) == current_idx {
+            return;
+        }
+        self.history = tracks[..index].to_vec();
+        self.current_track = Some(tracks[index].clone());
+        self.manual_queue = tracks[index + 1..].to_vec().into();
+        // cursor stays for future prefetching when manual_queue runs out
+    }
+
     pub fn set_cursor(&mut self, cursor: PlayerCursor) {
         tracing::info!("Setting cursor in queue");
         self.cursor = Some(cursor);

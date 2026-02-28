@@ -1,4 +1,5 @@
 <template>
+  <Teleport to="body">
   <div v-if="isOpen" :class="$style.overlay" @click="handleOverlayClick">
     <div :class="$style.modal" @click.stop>
       <div :class="$style.header">
@@ -111,6 +112,7 @@
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
