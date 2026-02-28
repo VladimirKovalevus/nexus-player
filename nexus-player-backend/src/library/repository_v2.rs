@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::library::models::{Playlist, PlaylistItemKind, PlaylistWithItems, Track};
+use crate::library::models::{PlayHistoryEntry, Playlist, PlaylistItemKind, PlaylistWithItems, Track};
 use crate::library::types::{PlaylistId, TrackId, TrackSource};
 
 #[async_trait]
@@ -59,4 +59,11 @@ pub trait PlaylistRepositoryV2: Send + Sync {
     ) -> Result<()>;
 
     async fn reorder_items(&self, playlist_id: PlaylistId, item_ids: Vec<i64>) -> Result<()>;
+}
+
+#[async_trait]
+pub trait PlayHistoryRepository: Send + Sync {
+    async fn add(&self, entry: PlayHistoryEntry) -> Result<()>;
+    async fn list_recent(&self, limit: usize, offset: usize) -> Result<Vec<PlayHistoryEntry>>;
+    async fn clear(&self) -> Result<()>;
 }

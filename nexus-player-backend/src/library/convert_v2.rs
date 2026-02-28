@@ -309,3 +309,25 @@ impl TryFrom<entities_v2::playlist_item::Model> for models::PlaylistItem {
         })
     }
 }
+
+impl TryFrom<entities_v2::play_history::Model> for models::PlayHistoryEntry {
+    type Error = anyhow::Error;
+
+    fn try_from(entity: entities_v2::play_history::Model) -> Result<Self> {
+        let source_data: TrackSourceData = serde_json::from_str(&entity.source_data)?;
+        let source = match source_data {
+            TrackSourceData::Local { path } => TrackSource::Local(path.into()),
+            TrackSourceData::Http { url } => TrackSource::Http(url),
+            TrackSourceData::External { system, id } => TrackSource::External { system, id },
+        };
+
+        Ok(models::PlayHistoryEntry {
+            id: entity.id,
+            title: entity.title,
+            artist: entity.artist,
+            source,
+            artwork_url: entity.artwork_url,
+            played_at: entity.played_at,
+        })
+    }
+}

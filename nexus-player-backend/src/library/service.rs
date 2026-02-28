@@ -14,6 +14,7 @@ use super::{
     SeaOrmTrackRepository, TrackId, TrackRepositoryV2,
 };
 use crate::db;
+use crate::library::repository_v2::PlayHistoryRepository;
 use chrono::Utc;
 
 /// Service for managing music library (tracks and playlists)
@@ -22,6 +23,7 @@ pub struct LibraryService {
     db: DatabaseConnection,
     track_repo: Arc<dyn TrackRepositoryV2>,
     playlist_repo: Arc<dyn PlaylistRepositoryV2>,
+    history_repo: Arc<dyn PlayHistoryRepository>,
 }
 
 impl LibraryService {
@@ -36,6 +38,8 @@ impl LibraryService {
             Arc::new(SeaOrmTrackRepository::new(db.clone()));
         let playlist_repo: Arc<dyn PlaylistRepositoryV2> =
             Arc::new(SeaOrmPlaylistRepository::new(db.clone()));
+        let history_repo: Arc<dyn PlayHistoryRepository> =
+            Arc::new(db_v2::SeaOrmHistoryRepository::new(db.clone()));
 
         if playlist_repo.find_by_title("Liked Songs").await?.is_none() {
             let now = Utc::now();
@@ -58,6 +62,7 @@ impl LibraryService {
             db,
             track_repo,
             playlist_repo,
+            history_repo,
         })
     }
 
@@ -436,6 +441,22 @@ impl LibraryService {
             playlist,
             items: playlist_items,
         })
+    }
+
+    // ========================================================================
+    // Play History Operations
+    // ========================================================================
+
+    pub async fn add_play_history(&self, entry: models::PlayHistoryEntry) -> Result<()> {
+        self.history_repo.add(entry).await
+    }
+
+    pub async fn get_play_history(
+        &self,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<models::PlayHistoryEntry>> {
+        self.history_repo.list_recent(limit, offset).await
     }
 
     async fn ensure_artwork<C>(&self, url: &str, db: &C) -> Result<i64>

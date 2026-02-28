@@ -4,6 +4,16 @@ use serde::{Deserialize, Serialize};
 use crate::library::types::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayHistoryEntry {
+    pub id: i64,
+    pub title: String,
+    pub artist: Option<String>,
+    pub source: TrackSource,
+    pub artwork_url: Option<String>,
+    pub played_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
     pub title: String,
     pub description: Option<String>,

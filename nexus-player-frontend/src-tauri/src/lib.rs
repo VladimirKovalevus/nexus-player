@@ -91,6 +91,7 @@ pub fn run() {
             commands::extract_vk_token,
             commands::open_vk_login,
             commands::get_vk_profile,
+            commands::get_play_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

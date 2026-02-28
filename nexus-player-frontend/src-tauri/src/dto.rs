@@ -226,6 +226,30 @@ impl TrackDto {
 use nexus_player_backend::audio::types::{self as audio};
 use nexus_player_backend::library::models;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayHistoryEntryDto {
+    pub id: i64,
+    pub title: String,
+    pub artist: Option<String>,
+    pub source: TrackSourceDto,
+    pub artwork_url: Option<String>,
+    pub played_at: i64,
+}
+
+impl From<models::PlayHistoryEntry> for PlayHistoryEntryDto {
+    fn from(entry: models::PlayHistoryEntry) -> Self {
+        Self {
+            id: entry.id,
+            title: entry.title,
+            artist: entry.artist,
+            source: entry.source.into(),
+            artwork_url: entry.artwork_url,
+            played_at: entry.played_at,
+        }
+    }
+}
+
 impl From<models::Track> for TrackDto {
     fn from(track: models::Track) -> Self {
         let artwork_url = track.metadata.artwork.as_ref().and_then(|art| match &art.source {
@@ -596,6 +620,13 @@ impl From<SearchResultDto> for streaming::SearchResult {
     }
 }
 
+fn hash_str_to_i64(s: &str) -> i64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut hasher);
+    (hasher.finish() & i64::MAX as u64) as i64
+}
+
 impl From<nexus_player_backend::streaming::types::TrackInfo> for TrackDto {
     fn from(track: nexus_player_backend::streaming::types::TrackInfo) -> Self {
         let (url, system) = match &track.source {
@@ -606,7 +637,7 @@ impl From<nexus_player_backend::streaming::types::TrackInfo> for TrackDto {
         };
 
         Self {
-            id: (rand::random::<u64>() as i64).abs(),
+            id: hash_str_to_i64(&track.source.as_str()),
             title: track.title,
             artist: Some(track.artist),
             album: None,
@@ -622,7 +653,7 @@ impl From<nexus_player_backend::streaming::types::TrackInfo> for TrackDto {
 impl From<nexus_player_backend::streaming::types::PlaylistInfo> for PlaylistDto {
     fn from(playlist: nexus_player_backend::streaming::types::PlaylistInfo) -> Self {
         Self {
-            id: (rand::random::<u64>() as i64).abs(),
+            id: hash_str_to_i64(&playlist.id),
             title: playlist.title,
             description: playlist.description,
             creator: Some(playlist.creator),

@@ -3,7 +3,7 @@ use crate::audio::engine::AudioEngine;
 use crate::audio::types::Track;
 use crate::audio::types::Track as AudioTrack;
 use crate::config::{AppConfig, ConfigManager};
-use crate::library::models::{Metadata, Playlist as LibraryPlaylist, Track as LibraryTrack};
+use crate::library::models::{Metadata, PlayHistoryEntry, Playlist as LibraryPlaylist, Track as LibraryTrack};
 use crate::library::{LibraryService, PlaylistId, TrackId};
 use crate::playlist::cursor::{AppCursorResolver, ContainerContext, PlayerCursor};
 use crate::playlist::playback_queue::{
@@ -186,6 +186,21 @@ impl AppState {
         if let Some(track) = track {
             // МГНОВЕННО переключаем контекст в движке, чтобы остановить старый звук
             self.audio_engine().set_loading(track.clone());
+
+            // Record play history without blocking the playback path
+            let lib = self.library.clone();
+            let track_for_history = track.clone();
+            tokio::spawn(async move {
+                let entry = PlayHistoryEntry {
+                    id: 0,
+                    title: track_for_history.title.clone(),
+                    artist: track_for_history.artist.clone(),
+                    source: track_for_history.source.clone(),
+                    artwork_url: track_for_history.artwork_url.clone(),
+                    played_at: chrono::Utc::now().timestamp(),
+                };
+                let _ = lib.add_play_history(entry).await;
+            });
 
             // Get next track for preloading context
             let next_track = {
@@ -762,6 +777,16 @@ impl AppState {
         Ok(result.playlist.id)
     }
 
+    // --- Play History ---
+
+    pub async fn get_play_history(
+        &self,
+        limit: usize,
+        offset: usize,
+    ) -> anyhow::Result<Vec<PlayHistoryEntry>> {
+        self.library.get_play_history(limit, offset).await
+    }
+
     // --- Legacy / Missing Methods Stub ---
     // These might need to be re-implemented in CursorQueue or removed if not used by new frontend
 
@@ -830,8 +855,8 @@ impl AppState {
             let mut queue = self.queue.lock().await;
             match &mut *queue {
                 ActiveQueue::Cursor(cq) => {
-                    let (tracks, _) = cq.snapshot();
-                    tracks.get(index).cloned()
+                    cq.jump_to(index);
+                    cq.current_track.clone()
                 }
                 ActiveQueue::Search(sq) => {
                     sq.jump_to(index);
@@ -874,13 +899,9 @@ impl AppState {
                             }
                         }
                     }
-                    ActiveQueue::Cursor(_) => {
-                        // Fallback for cursor queue
-                        let (tracks, _) = match &*queue {
-                            ActiveQueue::Cursor(cq) => cq.snapshot(),
-                            _ => unreachable!(),
-                        };
-                        match tracks.get(item_index).cloned() {
+                    ActiveQueue::Cursor(cq) => {
+                        cq.jump_to(item_index);
+                        match cq.current_track.clone() {
                             Some(track) => NextResult::Track(track),
                             None => NextResult::End,
                         }

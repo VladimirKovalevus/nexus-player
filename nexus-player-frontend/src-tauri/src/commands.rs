@@ -1,7 +1,8 @@
 use crate::dto::{
     AudioStateDto, ContainerMetaDto, CreatePlaylistRequest, CreatePlaylistWithTracksRequest,
-    CurrentPositionDto, PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, PlaylistWithTracksDto,
-    QueueEntryDto, QueueStateDto, SearchContextDto, SearchResultDto, TrackDto,
+    CurrentPositionDto, PlayHistoryEntryDto, PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto,
+    PlaylistWithTracksDto, QueueEntryDto, QueueStateDto, SearchContextDto, SearchResultDto,
+    TrackDto,
 };
 use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
 use nexus_player_backend::library::types::{
@@ -783,4 +784,17 @@ pub async fn save_track_to_file(state: State<'_, Arc<AppState>>, track_id: i64) 
 
     tracing::info!("Track saved to {:?}", file_path);
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_play_history(
+    state: State<'_, Arc<AppState>>,
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> Result<Vec<PlayHistoryEntryDto>> {
+    let entries = state
+        .get_play_history(limit.unwrap_or(50), offset.unwrap_or(0))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(entries.into_iter().map(Into::into).collect())
 }
