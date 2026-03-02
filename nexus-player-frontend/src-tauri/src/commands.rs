@@ -71,7 +71,8 @@ pub async fn add_track_from_file(state: State<'_, Arc<AppState>>, path: String) 
         parsed.album
     );
 
-    let track = create_track_from_parsed(file_path, parsed);
+    let mut track = create_track_from_parsed(file_path, parsed);
+    track.liked = true;
 
     tracing::info!("Created track object, adding to library...");
 
@@ -797,4 +798,36 @@ pub async fn get_play_history(
         .await
         .map_err(|e| e.to_string())?;
     Ok(entries.into_iter().map(Into::into).collect())
+}
+
+#[tauri::command]
+pub async fn toggle_liked(state: State<'_, Arc<AppState>>, track_id: i64) -> Result<()> {
+    state
+        .toggle_liked(TrackId(track_id))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn reorder_liked_tracks(
+    state: State<'_, Arc<AppState>>,
+    track_ids: Vec<i64>,
+) -> Result<()> {
+    let ids: Vec<TrackId> = track_ids.into_iter().map(TrackId).collect();
+    state
+        .reorder_liked_tracks(ids)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn reorder_playlist_items(
+    state: State<'_, Arc<AppState>>,
+    playlist_id: i64,
+    item_ids: Vec<i64>,
+) -> Result<()> {
+    state
+        .reorder_playlist_items(PlaylistId(playlist_id), item_ids)
+        .await
+        .map_err(|e| e.to_string())
 }

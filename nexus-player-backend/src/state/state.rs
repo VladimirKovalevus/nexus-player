@@ -777,6 +777,24 @@ impl AppState {
         Ok(result.playlist.id)
     }
 
+    // --- Liked Tracks ---
+
+    pub async fn toggle_liked(&self, track_id: TrackId) -> Result<()> {
+        self.library.toggle_liked(track_id).await
+    }
+
+    pub async fn reorder_liked_tracks(&self, track_ids: Vec<TrackId>) -> Result<()> {
+        self.library.reorder_liked_tracks(track_ids).await
+    }
+
+    pub async fn reorder_playlist_items(
+        &self,
+        playlist_id: PlaylistId,
+        item_ids: Vec<i64>,
+    ) -> Result<()> {
+        self.library.reorder_playlist_items(playlist_id, item_ids).await
+    }
+
     // --- Play History ---
 
     pub async fn get_play_history(

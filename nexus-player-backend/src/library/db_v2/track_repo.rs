@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait, sea_query,
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, QueryTrait, TransactionTrait, sea_query,
 };
 
 use crate::library::entities_v2::{playlist_item, track};
@@ -29,6 +29,15 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
             chrono::DateTime::from_timestamp(now, 0).context("Invalid timestamp")?;
         domain_track.updated_at =
             chrono::DateTime::from_timestamp(now, 0).context("Invalid timestamp")?;
+
+        if domain_track.liked && domain_track.liked_position.is_none() {
+            let count = track::Entity::find()
+                .filter(track::Column::Liked.eq(1))
+                .count(&self.db)
+                .await
+                .context("Failed to count liked tracks")?;
+            domain_track.liked_position = Some(count as i64);
+        }
 
         let entity_model: track::Model = domain_track.into();
 
@@ -56,6 +65,8 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
             last_played: ActiveValue::Set(entity_model.last_played),
             added_at: ActiveValue::Set(entity_model.added_at),
             updated_at: ActiveValue::Set(entity_model.updated_at),
+            liked: ActiveValue::Set(entity_model.liked),
+            liked_position: ActiveValue::Set(entity_model.liked_position),
         };
 
         let result = active_model
@@ -113,6 +124,8 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
             last_played: ActiveValue::Set(entity_model.last_played),
             added_at: ActiveValue::Set(entity_model.added_at),
             updated_at: ActiveValue::Set(entity_model.updated_at),
+            liked: ActiveValue::Set(entity_model.liked),
+            liked_position: ActiveValue::Set(entity_model.liked_position),
         };
 
         active_model
@@ -263,6 +276,79 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
             }
             None => Ok(None),
         }
+    }
+
+    async fn list_liked(&self) -> Result<Vec<Track>> {
+        let results = track::Entity::find()
+            .filter(track::Column::Liked.eq(1))
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
+            .order_by_asc(track::Column::LikedPosition)
+            .all(&self.db)
+            .await
+            .context("Failed to list liked tracks with artwork")?;
+
+        let mut domain_tracks = Vec::new();
+        for (entity, artwork_entity) in results {
+            let mut domain_track: Track = entity.try_into()?;
+            if let Some(art_entity) = artwork_entity {
+                domain_track.metadata.artwork = Some(art_entity.try_into()?);
+            }
+            domain_tracks.push(domain_track);
+        }
+        Ok(domain_tracks)
+    }
+
+    async fn set_liked(&self, id: TrackId, liked: bool) -> Result<()> {
+        if liked {
+            let count = track::Entity::find()
+                .filter(track::Column::Liked.eq(1))
+                .count(&self.db)
+                .await
+                .context("Failed to count liked tracks")?;
+            let position = count as i64;
+
+            let active_model = track::ActiveModel {
+                id: ActiveValue::Unchanged(id.0),
+                liked: ActiveValue::Set(1),
+                liked_position: ActiveValue::Set(Some(position)),
+                ..Default::default()
+            };
+            active_model
+                .update(&self.db)
+                .await
+                .context("Failed to set liked=true")?;
+        } else {
+            let active_model = track::ActiveModel {
+                id: ActiveValue::Unchanged(id.0),
+                liked: ActiveValue::Set(0),
+                liked_position: ActiveValue::Set(None),
+                ..Default::default()
+            };
+            active_model
+                .update(&self.db)
+                .await
+                .context("Failed to set liked=false")?;
+        }
+        Ok(())
+    }
+
+    async fn reorder_liked(&self, track_ids: Vec<TrackId>) -> Result<()> {
+        let txn = self.db.begin().await?;
+
+        for (idx, track_id) in track_ids.iter().enumerate() {
+            let active_model = track::ActiveModel {
+                id: ActiveValue::Unchanged(track_id.0),
+                liked_position: ActiveValue::Set(Some(idx as i64)),
+                ..Default::default()
+            };
+            active_model
+                .update(&txn)
+                .await
+                .context("Failed to update liked_position")?;
+        }
+
+        txn.commit().await?;
+        Ok(())
     }
 
     async fn increment_play_count(&self, id: TrackId) -> Result<()> {

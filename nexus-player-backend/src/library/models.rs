@@ -43,6 +43,9 @@ pub struct Track {
 
     pub added_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+
+    pub liked: bool,
+    pub liked_position: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -14,6 +14,7 @@ pub struct TrackDto {
     pub duration_secs: Option<f64>,
     pub artwork_url: Option<String>,
     pub play_count: u64,
+    pub liked: bool,
     pub state: TrackStateDto,
     pub source: Option<TrackSourceDto>,
 }
@@ -268,6 +269,7 @@ impl From<models::Track> for TrackDto {
                 .and_then(|info| info.duration_secs),
             artwork_url,
             play_count: track.play_count,
+            liked: track.liked,
             state: TrackStateDto::Saved,
             source: Some(track.source.into()),
         }
@@ -284,6 +286,7 @@ impl From<audio::Track> for TrackDto {
             duration_secs: track.duration.map(|d| d.as_secs_f64()),
             artwork_url: track.artwork_url,
             play_count: 0,
+            liked: false,
             state: track.state.into(),
             source: Some(track.source.into()),
         }
@@ -300,6 +303,7 @@ impl From<&audio::Track> for TrackDto {
             duration_secs: track.duration.map(|d| d.as_secs_f64()),
             artwork_url: track.artwork_url.clone(),
             play_count: 0,
+            liked: false,
             state: track.state.clone().into(),
             source: Some(track.source.clone().into()),
         }
@@ -644,6 +648,7 @@ impl From<nexus_player_backend::streaming::types::TrackInfo> for TrackDto {
             duration_secs: track.duration.map(|d| d.as_secs_f64()),
             artwork_url: track.thumbnail,
             play_count: 0,
+            liked: false,
             state: TrackStateDto::Streaming,
             source: Some(TrackSourceDto { url, system }),
         }

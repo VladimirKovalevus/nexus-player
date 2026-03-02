@@ -41,22 +41,6 @@ impl LibraryService {
         let history_repo: Arc<dyn PlayHistoryRepository> =
             Arc::new(db_v2::SeaOrmHistoryRepository::new(db.clone()));
 
-        if playlist_repo.find_by_title("Liked Songs").await?.is_none() {
-            let now = Utc::now();
-            let liked_songs_playlist = models::Playlist {
-                id: PlaylistId(0),
-                metadata: models::Metadata {
-                    title: "Liked Songs".to_string(),
-                    description: Some("Your favorite tracks".to_string()),
-                    artwork: None,
-                },
-                creator: None,
-                created_at: now,
-                updated_at: now,
-            };
-            playlist_repo.create(liked_songs_playlist).await?;
-        }
-
         Ok(Self {
             pool,
             db,
@@ -93,17 +77,6 @@ impl LibraryService {
 
         let track_id = self.track_repo.insert(track).await?;
         tracing::info!("Inserted track with ID: {:?}", track_id);
-
-        if let Some(master_playlist) = self
-            .playlist_repo
-            .find_by_title("Liked Songs")
-            .await
-            .context("Failed to find master playlist")?
-        {
-            tracing::info!("Adding track {:?} to Liked Songs playlist", track_id);
-            self.add_track_to_playlist(master_playlist.id, track_id)
-                .await?;
-        }
         Ok(track_id)
     }
 
@@ -112,9 +85,9 @@ impl LibraryService {
         self.track_repo.get(id).await
     }
 
-    /// Get all tracks
+    /// Get all liked tracks ordered by liked_position
     pub async fn get_all_tracks(&self) -> Result<Vec<models::Track>> {
-        self.track_repo.list_all().await
+        self.track_repo.list_liked().await
     }
 
     /// Search tracks by query
@@ -145,6 +118,21 @@ impl LibraryService {
     /// Increment play count
     pub async fn increment_play_count(&self, id: TrackId) -> Result<()> {
         self.track_repo.increment_play_count(id).await
+    }
+
+    /// Toggle liked state for a track
+    pub async fn toggle_liked(&self, id: TrackId) -> Result<()> {
+        let track = self
+            .track_repo
+            .get(id)
+            .await?
+            .context("Track not found")?;
+        self.track_repo.set_liked(id, !track.liked).await
+    }
+
+    /// Reorder liked tracks by providing ordered list of track IDs
+    pub async fn reorder_liked_tracks(&self, track_ids: Vec<TrackId>) -> Result<()> {
+        self.track_repo.reorder_liked(track_ids).await
     }
 
     /// Find existing track by source or insert a new one
@@ -326,6 +314,8 @@ impl LibraryService {
                 last_played: ActiveValue::Set(entity_track.last_played),
                 added_at: ActiveValue::Set(entity_track.added_at),
                 updated_at: ActiveValue::Set(entity_track.updated_at),
+                liked: ActiveValue::Set(entity_track.liked),
+                liked_position: ActiveValue::Set(entity_track.liked_position),
             };
 
             let result = active_track

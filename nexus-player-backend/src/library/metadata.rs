@@ -152,5 +152,7 @@ pub fn create_track_from_parsed(path: std::path::PathBuf, parsed: ParsedMetadata
         last_played: None,
         added_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
+        liked: false,
+        liked_position: None,
     }
 }

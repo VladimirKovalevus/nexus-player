@@ -25,6 +25,12 @@ pub trait TrackRepositoryV2: Send + Sync {
     async fn find_by_source(&self, source: &TrackSource) -> Result<Option<Track>>;
 
     async fn increment_play_count(&self, id: TrackId) -> Result<()>;
+
+    async fn list_liked(&self) -> Result<Vec<Track>>;
+
+    async fn set_liked(&self, id: TrackId, liked: bool) -> Result<()>;
+
+    async fn reorder_liked(&self, track_ids: Vec<TrackId>) -> Result<()>;
 }
 
 #[async_trait]

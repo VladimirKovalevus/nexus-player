@@ -92,6 +92,9 @@ pub fn run() {
             commands::open_vk_login,
             commands::get_vk_profile,
             commands::get_play_history,
+            commands::toggle_liked,
+            commands::reorder_liked_tracks,
+            commands::reorder_playlist_items,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

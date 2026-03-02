@@ -55,6 +55,9 @@ pub struct Model {
 
     pub added_at: i64,
     pub updated_at: i64,
+
+    pub liked: i32,
+    pub liked_position: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
