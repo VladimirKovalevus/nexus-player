@@ -126,7 +126,6 @@ export const useAudioStore = defineStore('audio', () => {
   });
 
   function handleAudioEvent(event: AudioEvent) {
-      console.log(event,'EVENT')
     switch (event.type) {
       case 'PlaybackStarted':
       case 'PlaybackResumed':

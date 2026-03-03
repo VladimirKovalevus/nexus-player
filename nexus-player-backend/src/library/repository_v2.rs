@@ -31,6 +31,8 @@ pub trait TrackRepositoryV2: Send + Sync {
     async fn set_liked(&self, id: TrackId, liked: bool) -> Result<()>;
 
     async fn reorder_liked(&self, track_ids: Vec<TrackId>) -> Result<()>;
+
+    async fn find_liked_by_sources(&self, sources: &[TrackSource]) -> Result<std::collections::HashSet<TrackSource>>;
 }
 
 #[async_trait]
@@ -65,6 +67,8 @@ pub trait PlaylistRepositoryV2: Send + Sync {
     ) -> Result<()>;
 
     async fn reorder_items(&self, playlist_id: PlaylistId, item_ids: Vec<i64>) -> Result<()>;
+
+    async fn is_track_in_any_playlist(&self, track_id: TrackId) -> Result<bool>;
 }
 
 #[async_trait]

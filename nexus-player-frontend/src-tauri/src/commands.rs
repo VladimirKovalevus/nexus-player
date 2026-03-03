@@ -587,7 +587,29 @@ pub async fn search_streaming(
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(results.into_iter().map(|r| r.into()).collect())
+    let mut dtos: Vec<SearchResultDto> = Vec::new();
+    let mut tracks_to_enrich: Vec<nexus_player_backend::audio::types::Track> = Vec::new();
+    let mut track_indices = Vec::new();
+
+    for (i, r) in results.into_iter().enumerate() {
+        let dto = SearchResultDto::from(r);
+        if let SearchResultDto::Track(ref t) = dto {
+            tracks_to_enrich.push(t.to_audio_track());
+            track_indices.push(i);
+        }
+        dtos.push(dto);
+    }
+
+    if !tracks_to_enrich.is_empty() {
+        let enriched = state.enrich_tracks(tracks_to_enrich).await.map_err(|e| e.to_string())?;
+        for (i, track) in track_indices.into_iter().zip(enriched) {
+            if let SearchResultDto::Track(ref mut t) = dtos[i] {
+                t.liked = track.liked;
+            }
+        }
+    }
+
+    Ok(dtos)
 }
 
 #[tauri::command]
@@ -764,7 +786,10 @@ pub async fn get_vk_profile(
         playlists.len()
     );
 
-    let tracks_dto = tracks.into_iter().map(TrackDto::from).collect();
+    let audio_tracks: Vec<nexus_player_backend::audio::types::Track> = tracks.into_iter().map(Into::into).collect();
+    let enriched_tracks = state.enrich_tracks(audio_tracks).await.map_err(|e| e.to_string())?;
+
+    let tracks_dto = enriched_tracks.into_iter().map(TrackDto::from).collect();
     let playlists_dto = playlists.into_iter().map(PlaylistDto::from).collect();
 
     tracing::info!("Conversion complete.");
@@ -801,9 +826,9 @@ pub async fn get_play_history(
 }
 
 #[tauri::command]
-pub async fn toggle_liked(state: State<'_, Arc<AppState>>, track_id: i64) -> Result<()> {
+pub async fn toggle_liked(state: State<'_, Arc<AppState>>, track: TrackDto) -> Result<()> {
     state
-        .toggle_liked(TrackId(track_id))
+        .toggle_liked(track.to_audio_track())
         .await
         .map_err(|e| e.to_string())
 }

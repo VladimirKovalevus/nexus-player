@@ -465,7 +465,7 @@ watch(
 }
 
 .buttonPrimary {
-  background: linear-gradient(135deg, var(--color-accent-primary) 0%, var(--color-accent-purple) 100%);
+  background: black;
   color: white;
 
   &:hover {

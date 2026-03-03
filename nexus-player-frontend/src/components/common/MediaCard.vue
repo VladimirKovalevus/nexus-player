@@ -9,7 +9,6 @@
         :class="$style.image"
       />
       <div v-else :class="$style.placeholder">
-        <span :class="$style.placeholderIcon">{{ placeholderIcon }}</span>
       </div>
 
       <div v-if="type === 'track'" :class="$style.playOverlay">
@@ -46,6 +45,15 @@
     </div>
 
     <div v-if="true" :class="$style.actions" ref="dropdownRef">
+      <button
+        v-if="type === 'track'"
+        :class="[$style.likeButton, { [$style.isLiked]: props.track?.liked }]"
+        @click.stop="handleToggleLike"
+        :title="props.track?.liked ? 'Удалить из любимых' : 'Добавить в любимые'"
+      >
+        <div v-if="props.track?.liked" :class="$style.heartFilled"></div>
+        <div v-else :class="$style.heartOutline"></div>
+      </button>
       <button :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
 
       <div v-if="dropdownOpen" :class="$style.dropdown" @click.stop>
@@ -271,6 +279,7 @@ const handlePlay = () => {
 const toggleDropdown = async () => {
   dropdownOpen.value = !dropdownOpen.value;
   showPlaylistSubmenu.value = false;
+  console.log(props.track,'TRACK')
 
   if (dropdownOpen.value) {
     if (playlists.value.length === 0) {
@@ -379,6 +388,18 @@ const handleAddToLibrary = async () => {
   console.log('Add to library:', entity.value.id);
   closeDropdown();
 };
+
+const handleToggleLike = async () => {
+  if (props.type !== 'track' || !props.track) return;
+  
+  try {
+    props.track.liked =  !props.track.liked
+    await invoke('toggle_liked', { track: props.track });
+    emit('refresh');
+  } catch (e) {
+    console.error('Failed to toggle like:', e);
+  }
+};
 </script>
 
 <style module lang="scss">
@@ -388,14 +409,13 @@ const handleAddToLibrary = async () => {
 .mediaCard {
   display: flex;
   gap: $spacing-md;
-  padding: $spacing-md;
-  background-color: var(--color-bg-secondary);
-  border-radius: $radius-md;
+  padding: 0 $spacing-md 0 $spacing-md;
+  background-color: var(--color-bg-primary);
   transition: all $transition-fast;
   position: relative;
 
   &:hover {
-    background-color: var(--color-bg-hover);
+    background-color: var(--color-bg-secondary);
 
     .playOverlay {
       opacity: 1;
@@ -429,6 +449,7 @@ const handleAddToLibrary = async () => {
 
 .thumbnail {
   position: relative;
+  margin-top: 1rem;
   width: 56px;
   height: 56px;
   flex-shrink: 0;
@@ -447,12 +468,7 @@ const handleAddToLibrary = async () => {
   width: 100%;
   height: 100%;
   @include flex-center;
-  background: linear-gradient(
-    135deg,
-    var(--color-accent-primary) 0%,
-    var(--color-accent-purple) 100%
-  );
-}
+  background: black;}
 
 .placeholderIcon {
   font-size: $font-size-2xl;
@@ -514,6 +530,7 @@ const handleAddToLibrary = async () => {
 }
 
 .artist {
+    color: black;
   @include text-ellipsis;
 }
 
@@ -551,6 +568,59 @@ const handleAddToLibrary = async () => {
     color: var(--color-text-primary);
   }
 }
+
+.likeButton {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  @include flex-center;
+  transition: all $transition-fast;
+  color: var(--color-text-muted);
+  opacity: 0.5;
+
+  &:hover {
+    background-color: var(--color-bg-primary);
+    transform: scale(1.1);
+    opacity: 1;
+    color: var(--color-text-secondary);
+  }
+
+  &.isLiked {
+    color: #ef4444;
+    opacity: 1;
+
+    &:hover {
+        color: #f87171;
+    }
+  }
+}
+
+.heartFilled,
+.heartOutline {
+  width: 32px;
+  height: 32px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.heartFilled {
+  -webkit-mask-image: url('/icon/heart-filled.svg');
+  mask-image: url('/icon/heart-filled.svg');
+}
+
+.heartOutline {
+  -webkit-mask-image: url('/icon/heart-outline.svg');
+  mask-image: url('/icon/heart-outline.svg');
+}
+
 
 .dropdown {
   position: absolute;

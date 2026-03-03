@@ -220,6 +220,7 @@ impl TrackDto {
             format: None,
             source,
             state,
+            liked: self.liked,
         }
     }
 }
@@ -286,7 +287,7 @@ impl From<audio::Track> for TrackDto {
             duration_secs: track.duration.map(|d| d.as_secs_f64()),
             artwork_url: track.artwork_url,
             play_count: 0,
-            liked: false,
+            liked: track.liked,
             state: track.state.into(),
             source: Some(track.source.into()),
         }
@@ -303,7 +304,7 @@ impl From<&audio::Track> for TrackDto {
             duration_secs: track.duration.map(|d| d.as_secs_f64()),
             artwork_url: track.artwork_url.clone(),
             play_count: 0,
-            liked: false,
+            liked: track.liked,
             state: track.state.clone().into(),
             source: Some(track.source.clone().into()),
         }
@@ -406,6 +407,29 @@ pub struct StreamingTrackDto {
     pub thumbnail: Option<String>,
     pub source: TrackSourceDto,
     pub state: TrackStateDto,
+    pub liked: bool,
+}
+
+impl StreamingTrackDto {
+    pub fn to_audio_track(&self) -> nexus_player_backend::audio::types::Track {
+        use nexus_player_backend::audio::types::{Track, TrackSource, TrackState};
+
+        Track {
+            id: hash_str_to_i64(&self.source.url) as usize,
+            title: self.title.clone(),
+            artist: Some(self.artist.clone()),
+            album: None,
+            duration: self.duration_secs.map(std::time::Duration::from_secs_f64),
+            artwork_url: self.thumbnail.clone(),
+            format: None,
+            source: TrackSource::External {
+                id: self.source.url.clone(),
+                system: self.source.system.clone(),
+            },
+            state: TrackState::Streaming,
+            liked: self.liked,
+        }
+    }
 }
 
 impl From<nexus_player_backend::audio::types::TrackSource> for TrackSourceDto {
@@ -478,6 +502,7 @@ impl From<streaming::SearchResult> for SearchResultDto {
                     thumbnail: track.thumbnail,
                     source: TrackSourceDto { url, system },
                     state: TrackStateDto::Streaming,
+                    liked: false,
                 })
             }
             streaming::SearchResult::Playlist(playlist) => {
@@ -532,6 +557,7 @@ impl From<streaming::TrackInfo> for StreamingTrackDto {
             thumbnail: track.thumbnail,
             source: TrackSourceDto { url, system },
             state: TrackStateDto::Streaming,
+            liked: false,
         }
     }
 }

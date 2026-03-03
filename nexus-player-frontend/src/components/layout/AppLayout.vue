@@ -1,10 +1,5 @@
 <template>
   <div :class="[$style.appLayout, { [$style.hideQueue]: !showQueue }]">
-    <header :class="$style.topBar">
-      <slot name="topBar">
-        <TopBar />
-      </slot>
-    </header>
 
     <aside :class="$style.leftSidebar">
       <slot name="leftSidebar">

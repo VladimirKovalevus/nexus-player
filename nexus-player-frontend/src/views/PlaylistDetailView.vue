@@ -41,6 +41,7 @@
           :track="item.track"
           @click="handleTrackClick(item.track)"
           @play="handleTrackPlay(item.track)"
+          @refresh="fetchPlaylist"
         />
 
         <!-- Sub-playlist item -->
@@ -82,6 +83,7 @@
                   :track="subItem.track"
                   @click="handleTrackClick(subItem.track)"
                   @play="handleTrackPlay(subItem.track)"
+                  @refresh="fetchPlaylist"
                 />
                 <div
                   v-else
@@ -271,7 +273,7 @@ onMounted(() => {
   height: 100%;
   @include flex-center;
   font-size: 48px;
-  background: linear-gradient(135deg, var(--color-accent-primary) 0%, var(--color-accent-purple) 100%);
+  background: black; 
 }
 
 .details {
@@ -301,7 +303,7 @@ onMounted(() => {
   padding: $spacing-md $spacing-xl;
   font-size: $font-size-base;
   font-weight: $font-weight-semibold;
-  background: linear-gradient(135deg, var(--color-accent-primary) 0%, var(--color-accent-purple) 100%);
+  background: black;
   color: white;
   border: none;
   border-radius: $radius-lg;

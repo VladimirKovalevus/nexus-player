@@ -37,6 +37,7 @@
           show-action
           @click="handleTrackClick(track)"
           @play="handleTrackPlay(track)"
+          @refresh="fetchContent"
         />
       </div>
     </section>

@@ -175,9 +175,11 @@ pub struct Track {
     pub format: Option<AudioFormat>,
     pub source: TrackSource,
     pub state: TrackState,
+    #[serde(default)]
+    pub liked: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum TrackState {
     Saved,
@@ -191,7 +193,7 @@ pub struct EngineTrack {
     pub audio_source: AudioSource,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(tag = "type", content = "value")]
 #[serde(rename_all = "camelCase")]
 pub enum TrackSource {
@@ -277,6 +279,7 @@ impl From<crate::library::models::Track> for Track {
             }),
             source: track.source,
             state: TrackState::Saved,
+            liked: track.liked,
         }
     }
 }

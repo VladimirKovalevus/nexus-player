@@ -1,0 +1,25 @@
+<svg width="32.348" xmlns="http://www.w3.org/2000/svg" height="24" viewBox="-3.174 0 32.348 24" fill="none" version="1.1">
+  <g fill="black">
+    <rect x="16.999" y="0" width="4" height="2.086"/>
+    <rect x="4.999" y="0" width="4" height="2.086" transform="matrix(-1, 0, 0, 1, 14, 0)"/>
+    <rect x="20.999" y="2.086" width="4" height="2.086"/>
+    <rect x="0.999" y="2.086" width="4" height="2.086" transform="matrix(-1, 0, 0, 1, 6, 0)"/>
+    <rect x="21.999" y="12.521" width="3" height="2.086"/>
+    <rect x="0.999" y="12.521" width="3" height="2.086" transform="matrix(-1, 0, 0, 1, 5, 0)"/>
+    <rect x="19.999" y="14.608" width="2" height="2.086"/>
+    <rect x="3.999" y="14.608" width="3" height="2.086" transform="matrix(-1, 0, 0, 1, 11, 0)"/>
+    <rect x="16.999" y="16.695" width="3" height="3.130"/>
+    <rect x="5.999" y="16.695" width="3" height="3.130" transform="matrix(-1, 0, 0, 1, 15, 0)"/>
+    <rect x="14.999" y="19.826" width="2" height="2.086"/>
+    <rect x="8.999" y="19.826" width="2" height="2.086" transform="matrix(-1, 0, 0, 1, 20, 0)"/>
+    <rect x="11.999" y="21.913" width="3" height="2.086"/>
+    <rect x="10.999" y="21.913" width="3" height="2.086" transform="matrix(-1, 0, 0, 1, 25, 0)"/>
+    <rect x="20.826" y="7.347" width="8.347" height="1.999" transform="matrix(0, 1, -1, 0, 33.347, -16.652)"/>
+    <rect x="-3.173" y="7.347" width="8.347" height="1.999" transform="matrix(0, 1, 1, 0, -7.347, 7.347)"/>
+    <!-- Top internal gap connectors for outline -->
+    <rect x="14.999" y="2.086" width="2" height="2.086"/>
+    <rect x="8.999" y="2.086" width="2" height="2.086" transform="matrix(-1, 0, 0, 1, 20, 0)"/>
+    <rect x="11.999" y="4.173" width="3" height="3.130"/>
+    <rect x="10.999" y="4.173" width="3" height="3.130" transform="matrix(-1, 0, 0, 1, 25, 0)"/>
+  </g>
+</svg>

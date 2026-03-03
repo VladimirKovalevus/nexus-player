@@ -11,6 +11,7 @@ export interface TrackDto {
   durationSecs: number | null;
   artworkUrl: string | null;
   playCount: number;
+  liked: boolean;
   state: string;
   source?: TrackSourceDto | null;
 }
@@ -103,6 +104,7 @@ export interface StreamingTrack {
   durationSecs?: number;
   thumbnail?: string;
   url: string;
+  liked: boolean;
 }
 
 export interface StreamingPlaylist {
@@ -167,4 +169,13 @@ export interface AppConfig {
   providers: ProviderConfig;
   audio: AudioConfig;
   network: NetworkConfig;
+}
+
+export interface PlayHistoryEntryDto {
+  id: number;
+  title: string;
+  artist: string | null;
+  source: TrackSourceDto;
+  artworkUrl: string | null;
+  playedAt: number;
 }

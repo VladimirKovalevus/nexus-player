@@ -9,9 +9,14 @@
     </div>
 
     <nav :class="$style.nav">
+        <div :class="$style.card">
       <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'home' }]" @click.prevent="$emit('changeView', 'home')">
         <span :class="$style.icon">🏠</span>
         <span>Главная</span>
+      </a>
+      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'vk' }]" @click.prevent="$emit('changeView', 'vk')">
+        <span :class="$style.icon">VK</span>
+        <span>VK Музыка</span>
       </a>
       <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'search' }]" @click.prevent="$emit('changeView', 'search')">
         <span :class="$style.icon">🔍</span>
@@ -21,26 +26,24 @@
         <span :class="$style.icon">🎵</span>
         <span>Музыка</span>
       </a>
+        </div>
+        <div :class="$style.card">
       <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'playlists' }]" @click.prevent="$emit('changeView', 'playlists')">
         <span :class="$style.icon">📋</span>
         <span>Плейлисты</span>
       </a>
-      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'vk' }]" @click.prevent="$emit('changeView', 'vk')">
-        <span :class="$style.icon">VK</span>
-        <span>VK Музыка</span>
+      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'history' }]" @click.prevent="$emit('changeView', 'history')">
+        <span :class="$style.icon">🕒</span>
+        <span>История</span>
       </a>
-    </nav>
-
-    <div :class="$style.library">
-      <h3 :class="$style.libraryTitle">Моя библиотека</h3>
-    </div>
-
-    <div :class="$style.footer">
       <button :class="$style.settingsButton" @click="isSettingsOpen = true">
         <span :class="$style.icon">⚙️</span>
         <span>Настройки</span>
       </button>
-    </div>
+        </div>
+    </nav>
+
+
 
     <SettingsModal :is-open="isSettingsOpen" @close="isSettingsOpen = false" />
   </aside>
@@ -86,7 +89,7 @@ const isSettingsOpen = ref(false);
 .logoIcon {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, $color-accent-primary 0%, #764ba2 100%);
+  background: black;
   border-radius: $radius-md;
 }
 
@@ -122,7 +125,7 @@ const isSettingsOpen = ref(false);
 
   &.active {
     color: $color-text-primary;
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: #151515;
   }
 }
 
@@ -166,5 +169,10 @@ const isSettingsOpen = ref(false);
     background-color: rgba(255, 255, 255, 0.05);
     color: $color-text-primary;
   }
+}
+.card {
+  background-color: #474747;
+  margin: $spacing-md;
+  border: 1px solid rgba(255, 255, 255, 0.03);
 }
 </style>

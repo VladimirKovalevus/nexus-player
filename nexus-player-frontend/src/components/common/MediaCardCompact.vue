@@ -9,6 +9,8 @@
         :src="thumbnail"
         :alt="title"
         :class="$style.image"
+        decoding="async"
+        loading="lazy"
       />
       <div v-else :class="$style.placeholder">
         <span :class="$style.placeholderIcon">{{ placeholderIcon }}</span>
@@ -18,9 +20,6 @@
         <button :class="$style.playButton" @click.stop="handlePlay">▶</button>
       </div>
 
-      <div v-if="type !== 'track'" :class="$style.typeBadge">
-        {{ typeBadgeText }}
-      </div>
 
       <button
         v-if="type === 'playlist'"
@@ -175,7 +174,7 @@ const handlePlay = () => {
   flex-direction: column;
   gap: $spacing-sm;
   cursor: pointer;
-  transition: all $transition-fast;
+  transition: background-color $transition-fast, transform $transition-fast;
   border-radius: $radius-md;
   padding: $spacing-sm;
   background-color: transparent;
@@ -220,11 +219,7 @@ const handlePlay = () => {
   width: 100%;
   height: 100%;
   @include flex-center;
-  background: linear-gradient(
-    135deg,
-    var(--color-accent-primary) 0%,
-    var(--color-accent-purple) 100%
-  );
+  background: black;
 }
 
 .placeholderIcon {
@@ -307,7 +302,7 @@ const handlePlay = () => {
 
 .dots {
   font-weight: bold;
-  line-height: 1;
+  font-size: 16px;
 }
 
 .dropdownMenu {

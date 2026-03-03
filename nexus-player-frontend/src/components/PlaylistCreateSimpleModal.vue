@@ -188,7 +188,7 @@ const handleClose = () => {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--color-accent-primary) 0%, var(--color-accent-purple) 100%);
+  background: black;
   color: white;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }

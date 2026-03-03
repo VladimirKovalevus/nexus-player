@@ -9,6 +9,7 @@ import MobileNav from './components/layout/MobileNav.vue';
 import HomeView from './views/HomeView.vue';
 import PlaylistDetailView from './views/PlaylistDetailView.vue';
 import VkView from './views/VkView.vue';
+import HistoryView from './views/HistoryView.vue';
 import StreamingSearch from './components/StreamingSearch.vue';
 import GlobalNotifications from './components/common/GlobalNotifications.vue';
 
@@ -60,9 +61,6 @@ provide('navigateToPlaylist', navigateToPlaylist);
 
 <template>
   <AppLayout :show-queue="showQueue" @close-queue="toggleQueue">
-    <template #topBar>
-      <TopBar @refetch="handleSearchRefetch" />
-    </template>
 
     <template #leftSidebar>
       <Sidebar :active-view="currentView" @change-view="changeView" />
@@ -97,6 +95,7 @@ provide('navigateToPlaylist', navigateToPlaylist);
     />
     <StreamingSearch v-else-if="currentView === 'search'" @refetch="handleSearchRefetch" />
     <VkView v-else-if="currentView === 'vk'" />
+    <HistoryView v-else-if="currentView === 'history'" />
     <div v-else :style="{ padding: '40px', textAlign: 'center' }">
       <h2>Раздел в разработке</h2>
       <p>Вы перешли в раздел: {{ currentView }}</p>

@@ -39,6 +39,7 @@ const navItems = [
   { view: 'library', icon: '🎵', label: 'Музыка' },
   { view: 'playlists', icon: '📋', label: 'Плейлисты' },
   { view: 'vk', icon: 'VK', label: 'VK Музыка' },
+  { view: 'history', icon: '🕒', label: 'История' },
 ];
 </script>
 

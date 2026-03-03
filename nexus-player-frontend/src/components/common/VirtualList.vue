@@ -3,11 +3,12 @@
     ref="listRef"
     :class="[$style.container, { [$style.isManaged]: managed }]"
   >
-    <div :style="spacerStyle" :class="$style.spacer">
-      <div :style="contentStyle" :class="$style.content">
+    <div :style="spacerStyle">
+      <div ref="contentRef" :style="contentStyle">
         <div
           v-for="item in visibleItems"
           :key="item.index"
+          :class="$style.item"
           :style="{ height: `${getItemHeight(item.index)}px` }"
         >
           <slot :item="item.data" :index="item.index"></slot>
@@ -28,20 +29,25 @@ const props = defineProps<{
 }>();
 
 const listRef = ref<HTMLElement | null>(null);
-const scrollTop = ref(0);
-const containerHeight = ref(window.innerHeight);
-const overscan = props.overscan ?? 5;
+const contentRef = ref<HTMLElement | null>(null);
+const containerHeight = ref(0);
+// Cached offset of list top relative to scroll container — updated on mount/resize,
+// NOT on every scroll event. Avoids getBoundingClientRect() causing forced reflow each frame.
+const listOffset = ref(0);
+
 const managed = computed(() => !!props.containerSelector);
+const overscan = props.overscan ?? 3;
 
 let scrollContainer: HTMLElement | Window | null = null;
 let resizeObserver: ResizeObserver | null = null;
+let rafId: number | null = null;
 
-const getItemHeight = (index: number) => {
-  if (typeof props.itemHeight === 'function') {
-    return props.itemHeight(index);
-  }
-  return props.itemHeight;
-};
+// Plain refs — Vue re-renders only when the virtual window changes, not every scroll frame
+const startIndex = ref(0);
+const endIndex = ref(0);
+
+const getItemHeight = (index: number) =>
+  typeof props.itemHeight === 'function' ? props.itemHeight(index) : props.itemHeight;
 
 const offsets = computed(() => {
   const result = [0];
@@ -51,17 +57,27 @@ const offsets = computed(() => {
   return result;
 });
 
-const totalHeight = computed(() => offsets.value[offsets.value.length - 1]);
+const totalHeight = computed(() => offsets.value[offsets.value.length - 1] ?? 0);
 
-const onScroll = () => {
+const getCurrentScrollTop = (): number => {
+  if (scrollContainer instanceof Window) return window.scrollY;
+  return (scrollContainer as HTMLElement)?.scrollTop ?? 0;
+};
+
+// Called rarely (mount, resize) — safe to use getBoundingClientRect here
+const updateListOffset = () => {
+  if (!listRef.value || !scrollContainer) return;
   if (scrollContainer instanceof Window) {
-    scrollTop.value = window.scrollY;
-  } else if (scrollContainer) {
-    scrollTop.value = scrollContainer.scrollTop;
+    listOffset.value = listRef.value.getBoundingClientRect().top + window.scrollY;
+  } else {
+    const containerEl = scrollContainer as HTMLElement;
+    const containerRect = containerEl.getBoundingClientRect();
+    const listRect = listRef.value.getBoundingClientRect();
+    listOffset.value = listRect.top - containerRect.top + containerEl.scrollTop;
   }
 };
 
-const updateDimensions = () => {
+const updateContainerHeight = () => {
   if (scrollContainer instanceof Window) {
     containerHeight.value = window.innerHeight;
   } else if (scrollContainer) {
@@ -69,105 +85,114 @@ const updateDimensions = () => {
   }
 };
 
+const bsearch = (arr: number[], target: number): number => {
+  let lo = 0, hi = arr.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid] <= target) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return lo;
+};
+
+const applyFrame = (scrollTop: number) => {
+  const offs = offsets.value;
+  const adjusted = Math.max(0, scrollTop - listOffset.value);
+  const newStart = Math.max(0, bsearch(offs, adjusted) - 1 - overscan);
+  const newEnd = Math.min(props.items.length, bsearch(offs, adjusted + containerHeight.value) + overscan);
+
+  // Direct DOM write — no Vue reactive overhead every frame
+  if (contentRef.value) {
+    contentRef.value.style.transform = `translateY(${offs[newStart] ?? 0}px)`;
+  }
+
+  // Vue re-render only when the virtual window actually changes
+  if (newStart !== startIndex.value || newEnd !== endIndex.value) {
+    startIndex.value = newStart;
+    endIndex.value = newEnd;
+  }
+};
+
+const onScroll = () => {
+  if (rafId !== null) return;
+  rafId = requestAnimationFrame(() => {
+    applyFrame(getCurrentScrollTop());
+    rafId = null;
+  });
+};
+
+const updateDimensions = () => {
+  updateContainerHeight();
+  updateListOffset();
+  applyFrame(getCurrentScrollTop());
+};
+
 onMounted(async () => {
   await nextTick();
-  
+
   if (props.containerSelector) {
-    scrollContainer = document.querySelector(props.containerSelector);
-    if (!scrollContainer) {
-        scrollContainer = window;
-    }
+    scrollContainer = document.querySelector(props.containerSelector) ?? window;
   } else {
     scrollContainer = listRef.value;
   }
 
-  updateDimensions();
-  
-  if (scrollContainer) {
-    scrollContainer.addEventListener('scroll', onScroll, { passive: true });
-    if (scrollContainer === window) {
-      window.addEventListener('resize', updateDimensions);
-    } else {
-      resizeObserver = new ResizeObserver(updateDimensions);
-      resizeObserver.observe(scrollContainer as HTMLElement);
-    }
+  updateContainerHeight();
+  updateListOffset();
+
+  const sl = getCurrentScrollTop();
+  applyFrame(sl);
+
+  scrollContainer?.addEventListener('scroll', onScroll, { passive: true });
+
+  if (scrollContainer === window) {
+    window.addEventListener('resize', updateDimensions);
+  } else {
+    resizeObserver = new ResizeObserver(updateDimensions);
+    resizeObserver.observe(scrollContainer as HTMLElement);
   }
 });
 
 onUnmounted(() => {
-  if (scrollContainer) {
-    scrollContainer.removeEventListener('scroll', onScroll);
-    if (scrollContainer === window) {
-      window.removeEventListener('resize', updateDimensions);
-    } else if (resizeObserver) {
-      resizeObserver.disconnect();
-    }
+  scrollContainer?.removeEventListener('scroll', onScroll);
+  if (scrollContainer === window) {
+    window.removeEventListener('resize', updateDimensions);
   }
+  resizeObserver?.disconnect();
+  if (rafId !== null) cancelAnimationFrame(rafId);
 });
 
-const getListOffset = () => {
-    if (!listRef.value || !scrollContainer) return 0;
-    if (scrollContainer === window) {
-        return listRef.value.getBoundingClientRect().top + window.scrollY;
-    }
-    const containerRect = (scrollContainer as HTMLElement).getBoundingClientRect();
-    const listRect = listRef.value.getBoundingClientRect();
-    return listRect.top - containerRect.top + (scrollContainer as HTMLElement).scrollTop;
-};
+// Recalculate when items list changes
+watch(
+  () => props.items,
+  () => {
+    nextTick(() => {
+      updateListOffset();
+      applyFrame(getCurrentScrollTop());
+    });
+  },
+  { flush: 'post' }
+);
 
-const startIndex = computed(() => {
-  const offset = getListOffset();
-  const adjustedScroll = Math.max(0, scrollTop.value - offset);
-  
-  let low = 0;
-  let high = offsets.value.length - 1;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (offsets.value[mid] <= adjustedScroll) {
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-  return Math.max(0, low - 1 - overscan);
-});
-
-const endIndex = computed(() => {
-  const offset = getListOffset();
-  const adjustedScroll = Math.max(0, scrollTop.value - offset) + containerHeight.value;
-  
-  let low = 0;
-  let high = offsets.value.length - 1;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (offsets.value[mid] <= adjustedScroll) {
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-  return Math.min(props.items.length, low + overscan);
-});
-
-const visibleItems = computed(() => {
-  return props.items.slice(startIndex.value, endIndex.value).map((data, idx) => ({
+const visibleItems = computed(() =>
+  props.items.slice(startIndex.value, endIndex.value).map((data, idx) => ({
     data,
     index: startIndex.value + idx,
-  }));
-});
+  }))
+);
 
 const spacerStyle = computed(() => ({
   height: `${totalHeight.value}px`,
   position: 'relative' as const,
 }));
 
-const contentStyle = computed(() => ({
+// No transform — set imperatively via contentRef.style.transform
+const contentStyle = {
   position: 'absolute' as const,
   top: 0,
   left: 0,
   right: 0,
-  transform: `translateY(${offsets.value[startIndex.value]}px)`,
-}));
+  willChange: 'transform',
+};
 </script>
 
 <style module lang="scss">
@@ -175,7 +200,6 @@ const contentStyle = computed(() => ({
   height: 100%;
   overflow-y: auto;
   position: relative;
-  will-change: transform;
 
   &.isManaged {
     overflow-y: visible;
@@ -183,11 +207,7 @@ const contentStyle = computed(() => ({
   }
 }
 
-.spacer {
-  width: 100%;
-}
-
-.content {
-  width: 100%;
+.item {
+  contain: layout style;
 }
 </style>

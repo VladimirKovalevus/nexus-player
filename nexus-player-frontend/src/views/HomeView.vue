@@ -28,20 +28,26 @@
         </button>
       </div>
 
-      <div v-else :class="$style.trackGrid">
-        <MediaCardCompact
-          v-for="playlist in playlists"
-          :key="playlist.id"
-          type="playlist"
-          :title="playlist.title"
-          :artist="playlist.creator || 'Unknown'"
-          :thumbnail="playlist.thumbnail || undefined"
-          :track-count="playlist.trackCount"
-          :playlist-id="playlist.id"
-          @click="handlePlaylistClick(playlist)"
-          @play="handlePlaylistPlay(playlist)"
-          @delete="handlePlaylistDelete(playlist)"
-        />
+      <div v-else :class="$style.playlistList">
+        <VirtualHorizontalList
+          :items="playlists"
+          :item-width="180"
+          :height="300"
+        >
+          <template #default="{ item: playlist }">
+            <MediaCardCompact
+              type="playlist"
+              :title="playlist.title"
+              :artist="playlist.creator || 'Unknown'"
+              :thumbnail="playlist.thumbnail || undefined"
+              :track-count="playlist.trackCount"
+              :playlist-id="playlist.id"
+              @click="handlePlaylistClick(playlist)"
+              @play="handlePlaylistPlay(playlist)"
+              @delete="handlePlaylistDelete(playlist)"
+            />
+          </template>
+        </VirtualHorizontalList>
       </div>
     </section>
 
@@ -77,6 +83,7 @@
               @click="handleTrackClick(track)"
               @play="handleTrackPlay(track)"
               @more="handleTrackMore(track)"
+              @refresh="fetchTracks"
             />
           </template>
         </VirtualList>
@@ -92,6 +99,7 @@ import MediaCard from '@/components/common/MediaCard.vue';
 import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
 import PlaylistCreateModal from '@/components/PlaylistCreateModal.vue';
 import VirtualList from '@/components/common/VirtualList.vue';
+import VirtualHorizontalList from '@/components/common/VirtualHorizontalList.vue';
 import type { PlaylistDto, TrackDto } from '@/types/types';
 
 const emit = defineEmits<{
@@ -232,6 +240,7 @@ const handleTrackMore = (track: TrackDto) => {
 .home {
   padding: $spacing-xl;
   overflow-y: auto;
+  overflow-x: hidden;
   height: 100%;
 }
 
@@ -276,6 +285,11 @@ const handleTrackMore = (track: TrackDto) => {
     color: var(--color-text-primary);
     background-color: var(--color-bg-hover);
   }
+}
+
+.playlistList {
+  margin: 0 (-$spacing-xl);
+  padding: 0 $spacing-xl;
 }
 
 .trackGrid {
@@ -325,11 +339,7 @@ const handleTrackMore = (track: TrackDto) => {
   padding: $spacing-md $spacing-xl;
   font-size: $font-size-base;
   font-weight: $font-weight-semibold;
-  background: linear-gradient(
-    135deg,
-    var(--color-accent-primary) 0%,
-    var(--color-accent-purple) 100%
-  );
+  background: black;
   color: white;
   border: none;
   border-radius: $radius-lg;

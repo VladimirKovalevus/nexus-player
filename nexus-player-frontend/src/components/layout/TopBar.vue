@@ -512,11 +512,7 @@ const formatNumber = (num?: number): string => {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(
-    135deg,
-    var(--color-accent-primary) 0%,
-    var(--color-accent-purple) 100%
-  );
+  background: black;
   @include flex-center;
   font-size: $font-size-lg;
 }

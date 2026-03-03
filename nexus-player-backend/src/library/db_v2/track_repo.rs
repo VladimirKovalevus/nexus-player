@@ -374,4 +374,72 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
 
         Ok(())
     }
+
+    async fn find_liked_by_sources(
+        &self,
+        sources: &[crate::library::types::TrackSource],
+    ) -> Result<std::collections::HashSet<crate::library::types::TrackSource>> {
+        use sea_orm::Condition;
+        use serde::{Deserialize, Serialize};
+
+        #[derive(Debug, Serialize, Deserialize)]
+        #[serde(tag = "type", rename_all = "snake_case")]
+        enum TrackSourceData {
+            Local { path: String },
+            Http { url: String },
+            External { system: String, id: String },
+        }
+
+        if sources.is_empty() {
+            return Ok(std::collections::HashSet::new());
+        }
+
+        let mut condition = Condition::any();
+
+        for source in sources {
+            let (source_type, source_data) = match source {
+                crate::library::types::TrackSource::Local(path) => {
+                    let data = TrackSourceData::Local {
+                        path: path.display().to_string(),
+                    };
+                    ("local".to_string(), serde_json::to_string(&data).ok())
+                }
+                crate::library::types::TrackSource::Http(url) => {
+                    let data = TrackSourceData::Http { url: url.clone() };
+                    ("http".to_string(), serde_json::to_string(&data).ok())
+                }
+                crate::library::types::TrackSource::External { system, id } => {
+                    let data = TrackSourceData::External {
+                        system: system.clone(),
+                        id: id.clone(),
+                    };
+                    ("external".to_string(), serde_json::to_string(&data).ok())
+                }
+                _ => continue,
+            };
+
+            condition = condition.add(
+                Condition::all()
+                    .add(track::Column::SourceType.eq(source_type))
+                    .add(track::Column::SourceData.eq(source_data)),
+            );
+        }
+
+        let results = track::Entity::find()
+            .filter(condition)
+            .filter(track::Column::Liked.eq(1))
+            .all(&self.db)
+            .await
+            .context("Failed to find liked tracks by sources")?;
+
+        let liked_sources: std::collections::HashSet<_> = results
+            .into_iter()
+            .map(|entity| {
+                let track_domain: Track = entity.try_into()?;
+                Ok(track_domain.source)
+            })
+            .collect::<Result<std::collections::HashSet<_>>>()?;
+
+        Ok(liked_sources)
+    }
 }

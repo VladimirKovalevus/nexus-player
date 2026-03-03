@@ -44,7 +44,7 @@ class MainActivity : TauriActivity() {
         }
         ContextCompat.registerReceiver(
             this, mediaControlReceiver, filter,
-            ContextCompat.RECEIVER_NOT_EXPORTED
+            ContextCompat.RECEIVER_EXPORTED
         )
     }
 

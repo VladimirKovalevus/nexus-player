@@ -281,6 +281,7 @@ impl From<TrackInfo> for Track {
             format: None,
             source: row.source,
             state: crate::audio::types::TrackState::Streaming,
+            liked: false,
         }
     }
 }
@@ -297,6 +298,7 @@ impl From<&TrackInfo> for Track {
             format: None,
             source: row.source.clone(),
             state: crate::audio::types::TrackState::Streaming,
+            liked: false,
         }
     }
 }

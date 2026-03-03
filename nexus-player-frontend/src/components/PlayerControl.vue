@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useAudioStore } from '../stores/audio';
 import WaveformBar from './common/WaveformBar.vue';
 
 const audioStore = useAudioStore();
+const localVolume = ref(audioStore.volume);
+
+// Keep local volume in sync with store (e.g. if changed elsewhere)
+watch(() => audioStore.volume, (newVol) => {
+  localVolume.value = newVol;
+});
 
 interface Props {
   queueVisible?: boolean;
@@ -129,6 +135,7 @@ const toggleShuffleMode = async () => {
 const setVolume = async (event: Event) => {
   const target = event.target as HTMLInputElement;
   const volume = parseFloat(target.value);
+  localVolume.value = volume; // Immediate UI update
   try {
     await invoke('set_volume', { volume });
   } catch (e) {
@@ -247,16 +254,18 @@ onUnmounted(() => {
           @click.stop="toggleVolumePopup"
           :title="'Громкость: ' + Math.round(audioStore.volume * 100) + '%'"
         >
-          {{ volumeIcon }}
+        <img src="/icon/volume.svg">
         </button>
         <Transition name="volume-popup">
           <div v-if="volumePopupOpen" class="volume-popup" @click.stop>
             <span class="volume-percent">{{ Math.round(audioStore.volume * 100) }}%</span>
             <input
-            style="padding:0 !important;"
               type="range"
               class="volume-slider-vertical"
-              :value="audioStore.volume"
+              :style="{
+                background: `linear-gradient(to right, white ${localVolume * 100}%, black ${localVolume * 100}%)`
+              }"
+              :value="localVolume"
               min="0"
               max="1"
               step="0.01"
@@ -272,37 +281,7 @@ onUnmounted(() => {
         @click="emit('toggleQueue')"
         :title="queueVisible ? 'Скрыть очередь' : 'Показать очередь'"
       >
-        <svg
-          v-if="queueVisible"
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <polyline points="9 18 15 12 9 6"></polyline>
-        </svg>
-        <svg
-          v-else
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <line x1="8" y1="6" x2="21" y2="6"></line>
-          <line x1="8" y1="12" x2="21" y2="12"></line>
-          <line x1="8" y1="18" x2="21" y2="18"></line>
-          <line x1="3" y1="6" x2="3.01" y2="6"></line>
-          <line x1="3" y1="12" x2="3.01" y2="12"></line>
-          <line x1="3" y1="18" x2="3.01" y2="18"></line>
-        </svg>
+      <img src="/icon/queue.svg">
       </button>
     </div>
   </div>
@@ -434,7 +413,7 @@ onUnmounted(() => {
 }
 
 .control-btn.active {
-  color: var(--color-accent-primary);
+  // color: var(--color-accent-primary);
   opacity: 1;
 }
 
@@ -464,8 +443,6 @@ onUnmounted(() => {
 
 .volume-btn {
   background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
   width: 32px;
   height: 32px;
   display: flex;
@@ -479,16 +456,15 @@ onUnmounted(() => {
 
 .volume-btn:hover,
 .volume-btn.active {
-  background-color: var(--color-bg-secondary);
-  color: var(--color-accent-primary);
-  border-color: var(--color-accent-primary);
+  color: black;
+  border-color: var(--color-bg-hover);
 }
 
 .volume-popup {
   position: absolute;
   bottom: calc(100% + 8px);
   right: 0;
-  background-color: var(--color-bg-secondary);
+  background-color: var(--color-bg-sidebar);
   border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 12px 10px;
@@ -502,21 +478,72 @@ onUnmounted(() => {
 }
 
 .volume-percent {
-  font-size: 0.65rem;
-  color: var(--color-text-secondary);
-  font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  color: white;
+  background-color: none;
   white-space: nowrap;
 }
 
 .volume-slider-vertical {
-  -webkit-appearance: slider-vertical;
-  writing-mode: vertical-lr;
-  direction: rtl;
-  width: 6px;
-  height: 100px;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100px; /* Длина ползунка (станет высотой после поворота) */
+  height: 4px;   /* Толщина линии */
+  outline: none;
   cursor: pointer;
-  accent-color: var(--color-accent-primary);
-  background: transparent;
+  padding: 0;
+  margin: 45px -48px;
+  display: block;
+  
+  /* Поворачиваем горизонтальный слайдер вертикально */
+  transform: rotate(-90deg);
+
+  &::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+  }
+
+  &::-moz-range-track {
+    width: 100%;
+    height: 100%;
+    background: black;
+  }
+
+  &::-moz-range-progress {
+    background: white;
+    height: 4px;
+  }
+
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: white;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    box-shadow: none;
+    /* Выравнивание по центру линии 4px: (12 - 4) / 2 = 4 */
+    margin-top: -5px; 
+  }
+
+  &::-moz-range-track {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+  }
+
+  &::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: white;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+  }
 }
 
 /* Popup transition */
@@ -532,7 +559,6 @@ onUnmounted(() => {
 
 .queue-toggle-btn {
   background: transparent;
-  border: 1px solid var(--color-border);
   border-radius: 6px;
   width: 32px;
   height: 32px;

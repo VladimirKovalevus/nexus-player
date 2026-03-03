@@ -127,12 +127,33 @@ impl LibraryService {
             .get(id)
             .await?
             .context("Track not found")?;
-        self.track_repo.set_liked(id, !track.liked).await
+        
+        let new_liked_state = !track.liked;
+        self.track_repo.set_liked(id, new_liked_state).await?;
+
+        // If we unliked the track, check if it's in any playlist.
+        // If not, delete it from library entirely.
+        if !new_liked_state {
+            let in_playlists = self.playlist_repo.is_track_in_any_playlist(id).await?;
+            if !in_playlists {
+                tracing::info!("Track {:?} is no longer liked and not in any playlist. Deleting from library.", id);
+                self.track_repo.delete(id).await?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Reorder liked tracks by providing ordered list of track IDs
     pub async fn reorder_liked_tracks(&self, track_ids: Vec<TrackId>) -> Result<()> {
         self.track_repo.reorder_liked(track_ids).await
+    }
+
+    pub async fn find_liked_by_sources(
+        &self,
+        sources: &[crate::library::types::TrackSource],
+    ) -> Result<std::collections::HashSet<crate::library::types::TrackSource>> {
+        self.track_repo.find_liked_by_sources(sources).await
     }
 
     /// Find existing track by source or insert a new one

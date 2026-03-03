@@ -95,6 +95,21 @@ impl AppState {
         &self.streaming
     }
 
+    /// Enrich tracks with 'liked' status from library using batch lookup
+    pub async fn enrich_tracks(&self, mut tracks: Vec<Track>) -> Result<Vec<Track>> {
+        let sources: Vec<_> = tracks.iter().map(|t| t.source.clone()).collect();
+        let liked_sources = self.library.find_liked_by_sources(&sources).await?;
+
+        for track in &mut tracks {
+            if liked_sources.contains(&track.source) {
+                track.liked = true;
+            } else {
+                track.liked = false;
+            }
+        }
+        Ok(tracks)
+    }
+
     // --- Playback Control ---
 
     pub async fn play_next(&self) {
@@ -457,6 +472,7 @@ impl AppState {
                         format: None,
                         source: crate::audio::types::TrackSource::local("".to_string()),
                         state: crate::audio::types::TrackState::Streaming,
+                        liked: false,
                     })
                 }
             })
@@ -609,6 +625,7 @@ impl AppState {
                     format: None,
                     source: crate::audio::types::TrackSource::local("".to_string()),
                     state: crate::audio::types::TrackState::Streaming,
+                    liked: false,
                 }),
             })
             .collect();
@@ -779,7 +796,9 @@ impl AppState {
 
     // --- Liked Tracks ---
 
-    pub async fn toggle_liked(&self, track_id: TrackId) -> Result<()> {
+    pub async fn toggle_liked(&self, track: AudioTrack) -> Result<()> {
+        let library_track: LibraryTrack = track.into();
+        let track_id = self.library.ensure_track(library_track).await?;
         self.library.toggle_liked(track_id).await
     }
 

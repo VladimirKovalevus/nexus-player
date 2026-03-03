@@ -2,6 +2,13 @@
 @import './variables.scss';
 @import './themes.scss';
 
+@font-face {
+  font-family: 'Pixelzone';
+  src: url('../assets/fonts/Pixelzone.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 // CSS Reset и базовые стили
 *,
 *::before,

@@ -666,11 +666,7 @@ defineExpose({ fetchQueue });
     right: 0;
     bottom: 0;
     border-radius: $radius-md;
-    background: linear-gradient(
-      135deg,
-      rgba(102, 126, 234, 0.1) 0%,
-      rgba(118, 75, 162, 0.1) 100%
-    );
+    background: black;
     border: 2px solid var(--color-accent-primary);
     pointer-events: none;
     animation: pulse 2s ease-in-out infinite;

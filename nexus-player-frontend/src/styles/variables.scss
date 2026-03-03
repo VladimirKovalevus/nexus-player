@@ -1,13 +1,13 @@
 // Design Tokens - Nexus Audio Player
 
 // Dark Theme Colors (default, from Penpot design)
-$dark-bg-primary: #141414;         // Основной фон (из дизайна)
-$dark-bg-secondary: #1e1e1e;       // Фон карточек
-$dark-bg-sidebar: #2a2a2a;         // Фон левого сайдбара (серый)
-$dark-bg-player: #0a0a0a;          // Фон плеера (самый темный)
+$dark-bg-primary: #bcbcbc;         // Основной фон (из дизайна)
+$dark-bg-secondary: #d9d9d9;       // Фон карточек
+$dark-bg-sidebar: #737373;         // Фон левого сайдбара (серый)
+$dark-bg-player: #474747;          // Фон плеера (самый темный)
 $dark-bg-hover: #2f2f2f;           // Hover состояние
 
-$dark-text-primary: #f6f6f6;       // Основной текст
+$dark-text-primary: #000000;       // Основной текст
 $dark-text-secondary: #a0a0a0;     // Вторичный текст
 $dark-text-muted: #666666;         // Приглушенный текст
 
@@ -47,14 +47,14 @@ $color-border: $dark-border;
 $color-border-light: $dark-border-light;
 
 // Typography
-$font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-$font-size-xs: 0.75rem;      // 12px
-$font-size-sm: 0.875rem;     // 14px
-$font-size-base: 1rem;       // 16px
-$font-size-lg: 1.125rem;     // 18px
-$font-size-xl: 1.25rem;      // 20px
-$font-size-2xl: 1.5rem;      // 24px
-$font-size-3xl: 1.75rem;      // 24px
+$font-family-primary: 'Pixelzone', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+$font-size-xs: 1.5rem;      // 24px
+$font-size-sm: 1.75rem;     // 28px
+$font-size-base: 2rem;       // 32px
+$font-size-lg: 2.25rem;     // 36px
+$font-size-xl: 2.5rem;      // 40px
+$font-size-2xl: 3rem;      // 48px
+$font-size-3xl: 3.5rem;      // 56px
 
 $font-weight-normal: 400;
 $font-weight-medium: 500;

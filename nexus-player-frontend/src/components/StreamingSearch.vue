@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { SearchResult } from '@/types/types';
+import MediaCard from '@/components/common/MediaCard.vue';
 
 const query = ref('');
 const selectedProvider = ref('bandcamp');
@@ -91,6 +92,12 @@ const handleResultClick = async (result: SearchResult, index: number) => {
   }
   emit('refetch');
 };
+
+const handleResultPlay = async (result: SearchResult, index: number) => {
+  await invoke('clear_queue');
+  await handleResultClick(result, index);
+  // Current handle_search plays the track automatically
+};
 </script>
 
 <template>
@@ -163,54 +170,18 @@ const handleResultClick = async (result: SearchResult, index: number) => {
     <div v-if="searchResults.length > 0" class="results">
       <h3>Results ({{ searchResults.length }})</h3>
       <div class="results-list">
-        <div
+        <MediaCard
           v-for="(result, index) in searchResults"
           :key="index"
-          class="result-item"
-          :class="`result-${result.type}`"
+          :type="result.type === 'track' ? 'track' : result.type === 'playlist' ? 'playlist' : 'album'"
+          :track="result.type === 'track' ? result : undefined"
+          :playlist="result.type === 'playlist' ? result : undefined"
+          :album="result.type === 'album' ? result : undefined"
+          show-action
           @click="handleResultClick(result, index)"
-        >
-          <div class="result-thumbnail">
-            <img
-              v-if="result.thumbnail"
-              :src="result.thumbnail"
-              :alt="result.type === 'channel' ? result.name : result.title"
-            />
-            <div v-else class="thumbnail-placeholder">
-              {{ result.type === 'channel' ? '👤' : '🎵' }}
-            </div>
-          </div>
-
-          <div v-if="result.type === 'track'" class="result-content">
-            <div class="result-title">{{ result.title }}</div>
-            <div class="result-meta">{{ result.artist }}</div>
-            <div class="result-meta">
-              {{ formatDuration(result.durationSecs) }}
-            </div>
-          </div>
-
-          <div v-else-if="result.type === 'playlist'" class="result-content">
-            <div class="result-title">📂 {{ result.title }}</div>
-            <div class="result-meta">by {{ result.creator }}</div>
-            <div class="result-meta">{{ result.trackCount }} tracks</div>
-          </div>
-
-          <div v-else-if="result.type === 'album'" class="result-content">
-            <div class="result-title">💿 {{ result.title }}</div>
-            <div class="result-meta">{{ result.artist }}</div>
-            <div class="result-meta">
-              {{ result.trackCount }} tracks
-              <span v-if="result.year"> • {{ result.year }}</span>
-            </div>
-          </div>
-
-          <div v-else-if="result.type === 'channel'" class="result-content">
-            <div class="result-title">📺 {{ result.name }}</div>
-            <div class="result-meta" v-if="result.subscriberCount">
-              {{ formatNumber(result.subscriberCount) }} subscribers
-            </div>
-          </div>
-        </div>
+          @play="handleResultPlay(result, index)"
+          @refresh="search"
+        />
       </div>
     </div>
 

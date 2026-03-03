@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat as MediaNotificationCompat
 
@@ -35,11 +37,37 @@ class AudioForegroundService : Service() {
     }
 
     private lateinit var notificationManager: NotificationManager
+    private var mediaSession: MediaSessionCompat? = null
 
     override fun onCreate() {
         super.onCreate()
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
+
+        mediaSession = MediaSessionCompat(this, "NexusPlayerMediaSession").apply {
+            setCallback(object : MediaSessionCompat.Callback() {
+                override fun onPlay() {
+                    sendBroadcast(Intent(ACTION_PLAY).setPackage(packageName))
+                }
+
+                override fun onPause() {
+                    sendBroadcast(Intent(ACTION_PAUSE).setPackage(packageName))
+                }
+
+                override fun onSkipToNext() {
+                    sendBroadcast(Intent(ACTION_NEXT).setPackage(packageName))
+                }
+
+                override fun onSkipToPrevious() {
+                    sendBroadcast(Intent(ACTION_PREV).setPackage(packageName))
+                }
+
+                override fun onStop() {
+                    sendBroadcast(Intent(ACTION_STOP_SERVICE).setPackage(packageName))
+                }
+            })
+            isActive = true
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -48,10 +76,12 @@ class AudioForegroundService : Service() {
                 currentTitle = intent.getStringExtra(EXTRA_TITLE) ?: currentTitle
                 currentArtist = intent.getStringExtra(EXTRA_ARTIST) ?: currentArtist
                 currentIsPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, currentIsPlaying)
+                updateMediaSessionState()
                 startForegroundCompat()
                 notificationManager.notify(NOTIFICATION_ID, buildNotification())
             }
             ACTION_STOP_SERVICE -> {
+                mediaSession?.isActive = false
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                 } else {
@@ -66,6 +96,28 @@ class AudioForegroundService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    private fun updateMediaSessionState() {
+        val state = if (currentIsPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+        val playbackState = PlaybackStateCompat.Builder()
+            .setActions(
+                PlaybackStateCompat.ACTION_PLAY or
+                PlaybackStateCompat.ACTION_PAUSE or
+                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                PlaybackStateCompat.ACTION_STOP
+            )
+            .setState(state, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1.0f)
+            .build()
+        mediaSession?.setPlaybackState(playbackState)
+        
+        // Optionally set metadata here if needed for lock screen
+        val metadata = android.support.v4.media.MediaMetadataCompat.Builder()
+            .putString(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
+            .putString(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
+            .build()
+        mediaSession?.setMetadata(metadata)
     }
 
     private fun startForegroundCompat() {
@@ -141,11 +193,17 @@ class AudioForegroundService : Service() {
             )
             .setStyle(
                 MediaNotificationCompat.MediaStyle()
+                    .setMediaSession(mediaSession?.sessionToken)
                     .setShowActionsInCompactView(0, 1, 2)
             )
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        mediaSession?.release()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

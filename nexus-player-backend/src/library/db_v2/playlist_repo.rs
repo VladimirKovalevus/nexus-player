@@ -2,8 +2,8 @@ use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, TransactionTrait,
 };
 use std::collections::{HashSet, VecDeque};
 
@@ -331,5 +331,19 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
         txn.commit().await?;
 
         Ok(())
+    }
+
+    async fn is_track_in_any_playlist(
+        &self,
+        track_id: crate::library::types::TrackId,
+    ) -> Result<bool> {
+        let count = playlist_item::Entity::find()
+            .filter(playlist_item::Column::ItemType.eq("track"))
+            .filter(playlist_item::Column::ItemId.eq(track_id.0))
+            .count(&self.db)
+            .await
+            .context("Failed to count track occurrences in playlists")?;
+
+        Ok(count > 0)
     }
 }
