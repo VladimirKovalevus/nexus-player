@@ -39,7 +39,7 @@ const store = useNotificationStore();
   max-width: 300px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 28px;
   word-break: break-word;
 
   &.error { background-color: #f44336; }

@@ -97,7 +97,7 @@ onUnmounted(() => resizeObserver?.disconnect());
 .hideQueue {
   grid-template-areas:
     'sidebar topbar topbar'
-    'sidebar main main'
+    'sidebar main queue'
     'player player player';
   grid-template-columns: $sidebar-width 1fr 0px;
 }
@@ -180,6 +180,7 @@ onUnmounted(() => resizeObserver?.disconnect());
 
   .mobileNav {
     display: flex;
+    z-index: $z-mobile-nav;
   }
 
   .rightSidebar {

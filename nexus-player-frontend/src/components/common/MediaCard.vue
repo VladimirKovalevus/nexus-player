@@ -110,7 +110,7 @@ const store = useAudioStore()
 
 interface Props {
   type: 'track' | 'playlist' | 'album';
-  track?: TrackDto;
+  track?: TrackDto&{thumbnail:string};
   playlist?: PlaylistDto;
   album?: ContainerMetaDto;
   showAction: boolean;
@@ -154,7 +154,7 @@ const entity = computed(() => {
       id: props.track.id,
       title: props.track.title,
       artist: props.track.artist || 'Unknown Artist',
-      thumbnail: props.track.artworkUrl,
+      thumbnail: props.track.artworkUrl||props.track.thumbnail,
       duration: props.track.durationSecs,
       trackCount: undefined,
       year: undefined,
@@ -381,6 +381,7 @@ const handleAddToPlaylist = async (playlistId: number) => {
   }
   try {
     if (props.type === 'track' && props.track) {
+    console.log(props.track,'TRACK???')
       await invoke('add_track_to_playlist', {
         playlistId,
         track: props.track,

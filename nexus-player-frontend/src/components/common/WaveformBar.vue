@@ -128,7 +128,7 @@ const draw = () => {
       (startTime <= r.start && endTime >= r.end)
     );
 
-    ctx.fillStyle = startTime < position ? '#f50' : isBuffered ? '#777777' : '#333333';
+    ctx.fillStyle = startTime < position ? '#fff' : isBuffered ? '#777777' : '#333333';
 
     const r = BAR_RADIUS;
     ctx.beginPath();

@@ -3,15 +3,18 @@ import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { SearchResult } from '@/types/types';
 import MediaCard from '@/components/common/MediaCard.vue';
+import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
+import { storeToRefs } from 'pinia';
+import { useStreamingStore } from '@/stores/streaming';
 
-const query = ref('');
-const selectedProvider = ref('bandcamp');
-const selectedContentType = ref<string | null>(null);
-const limit = ref(10);
+const store = useStreamingStore();
+const { query, selectedProvider, selectedContentType, limit, searchResults, error } = storeToRefs(store);
 
-const searchResults = ref<SearchResult[]>([]);
 const loading = ref(false);
-const error = ref<string | null>(null);
+const isModalOpen = ref(false);
+const isSavingPlaylist = ref(false);
+const modalTargetIndex = ref<number | null>(null);
+const expandedContainers = ref<Set<number>>(new Set());
 
 const providers = [
   { value: 'bandcamp', label: 'Bandcamp' },
@@ -26,6 +29,10 @@ const contentTypes = [
   { value: 'album', label: 'Album' },
   { value: 'channel', label: 'Channel' },
 ];
+
+const emit = defineEmits<{
+  refetch: [];
+}>();
 
 const search = async () => {
   if (!query.value.trim()) {
@@ -45,6 +52,7 @@ const search = async () => {
     });
 
     searchResults.value = results;
+    expandedContainers.value.clear();
   } catch (e) {
     error.value = `Search failed: ${e}`;
     console.error('Search error:', e);
@@ -53,34 +61,25 @@ const search = async () => {
   }
 };
 
-const formatDuration = (seconds?: number): string => {
-  if (!seconds) return '--:--';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+const isContainerExpanded = (index: number) => expandedContainers.value.has(index);
+
+const toggleContainer = (index: number) => {
+  if (expandedContainers.value.has(index)) {
+    expandedContainers.value.delete(index);
+  } else {
+    expandedContainers.value.add(index);
+  }
 };
 
-const formatNumber = (num?: number): string => {
-  if (!num) return 'N/A';
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toString();
-};
-
-const emit = defineEmits<{
-  refetch: [];
-}>();
 const handleResultClick = async (result: SearchResult, index: number) => {
   console.log('Clicked result:', result, 'at index:', index);
   try {
-    // Use the new handle_search for search context queue
     await invoke('handle_search', {
       system: selectedProvider.value,
       query: query.value,
       selectedIndex: index,
     });
   } catch (e) {
-    // Fallback to old behavior
     console.warn('handle_search failed, falling back:', e);
     await invoke('handle_streaming_track', {
       searchResult: result,
@@ -94,7 +93,89 @@ const handleResultClick = async (result: SearchResult, index: number) => {
 const handleResultPlay = async (result: SearchResult, index: number) => {
   await invoke('clear_queue');
   await handleResultClick(result, index);
-  // Current handle_search plays the track automatically
+};
+
+// Loads a streaming container into queue and expands it to get its tracks.
+// Side effect: replaces the current playback queue.
+const getContainerTracks = async (result: SearchResult): Promise<any[] | null> => {
+  try {
+    await invoke('handle_streaming_track', { searchResult: result, strategy: 'cache' });
+    const queueState = await invoke<any>('get_queue_state');
+    const entry = queueState.entries?.[0];
+    if (!entry) return null;
+    if (entry.entryType === 'container' && !entry.tracks) {
+      const expanded = await invoke<any>('expand_queue_container', { itemIndex: 0 });
+      return expanded.entries?.[0]?.tracks ?? null;
+    }
+    return entry.tracks ?? null;
+  } catch (e) {
+    console.error('Failed to get container tracks:', e);
+    return null;
+  }
+};
+
+const handleContainerCreatePlaylist = (index: number) => {
+  modalTargetIndex.value = index;
+  isModalOpen.value = true;
+};
+
+const handleContainerAddToPlaylist = async (index: number, playlistId: number) => {
+  const result = searchResults.value[index];
+  if (!result || result.type === 'track' || result.type === 'channel') return;
+
+  try {
+    const tracks = await getContainerTracks(result);
+    if (!tracks) return;
+
+    const title = result.title;
+    const description = result.type === 'album' ? result.artist : result.creator;
+
+    const childId = await invoke<number>('create_playlist_with_tracks', {
+      request: { title, description, tracks },
+    });
+    await invoke('add_playlist_to_playlist', {
+      parentPlaylistId: playlistId,
+      childPlaylistId: childId,
+    });
+    emit('refetch');
+  } catch (e) {
+    console.error('Failed to add container to playlist:', e);
+  }
+};
+
+const handleContainerRemove = (index: number) => {
+  searchResults.value.splice(index, 1);
+};
+
+const handleCreatePlaylist = async (name: string) => {
+  if (isSavingPlaylist.value || modalTargetIndex.value === null) return;
+
+  const result = searchResults.value[modalTargetIndex.value];
+  if (!result || result.type === 'track' || result.type === 'channel') return;
+
+  isSavingPlaylist.value = true;
+  error.value = null;
+  try {
+    const tracks = await getContainerTracks(result);
+    if (!tracks) {
+      error.value = 'Не удалось загрузить треки';
+      return;
+    }
+
+    const description = result.type === 'album' ? result.artist : result.creator;
+
+    await invoke<number>('create_playlist_with_tracks', {
+      request: { title: name, description, tracks },
+    });
+    isModalOpen.value = false;
+    emit('refetch');
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    error.value = `Ошибка: ${errorMessage}`;
+    console.error('Failed to create playlist:', e);
+  } finally {
+    isSavingPlaylist.value = false;
+  }
 };
 </script>
 
@@ -174,11 +255,17 @@ const handleResultPlay = async (result: SearchResult, index: number) => {
           :type="result.type === 'track' ? 'track' : result.type === 'playlist' ? 'playlist' : 'album'"
           :track="result.type === 'track' ? result : undefined"
           :playlist="result.type === 'playlist' ? result : undefined"
-          :album="result.type === 'album' ? result : undefined"
+          :album="result.type === 'album' || result.type === 'channel' ? result : undefined"
           show-action
-          @click="handleResultClick(result, index)"
+          :container-mode="result.type !== 'track'"
+          :is-expanded="isContainerExpanded(index)"
+          @click="result.type === 'track' ? handleResultClick(result, index) : toggleContainer(index)"
           @play="handleResultPlay(result, index)"
           @refresh="search"
+          @toggle-expand="toggleContainer(index)"
+          @container-create-playlist="handleContainerCreatePlaylist(index)"
+          @container-add-to-playlist="(plId) => handleContainerAddToPlaylist(index, plId)"
+          @container-remove="handleContainerRemove(index)"
         />
       </div>
     </div>
@@ -189,6 +276,13 @@ const handleResultPlay = async (result: SearchResult, index: number) => {
     >
       No results found for "{{ query }}"
     </div>
+
+    <PlaylistCreateSimpleModal
+      :is-open="isModalOpen"
+      :is-loading="isSavingPlaylist"
+      @close="isModalOpen = false"
+      @save="handleCreatePlaylist"
+    />
   </div>
 </template>
 
@@ -297,78 +391,6 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.result-item {
-  display: flex;
-  gap: 15px;
-  padding: 15px;
-  background-color: #f5f5f5;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.result-item:hover {
-  background-color: #e8f5e9;
-  transform: translateX(5px);
-}
-
-.result-thumbnail {
-  width: 80px;
-  height: 80px;
-  flex-shrink: 0;
-  border-radius: 6px;
-  overflow: hidden;
-  background-color: #ddd;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.result-thumbnail img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.thumbnail-placeholder {
-  font-size: 32px;
-}
-
-.result-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-}
-
-.result-title {
-  font-weight: 600;
-  font-size: 16px;
-  color: #333;
-}
-
-.result-meta {
-  font-size: 14px;
-  color: #666;
-}
-
-.result-track {
-  border-left: 4px solid #4caf50;
-}
-
-.result-playlist {
-  border-left: 4px solid #2196f3;
-}
-
-.result-album {
-  border-left: 4px solid #ff9800;
-}
-
-.result-channel {
-  border-left: 4px solid #9c27b0;
 }
 
 .no-results {
