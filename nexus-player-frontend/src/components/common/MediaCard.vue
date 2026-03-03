@@ -381,11 +381,20 @@ const handleAddToPlaylist = async (playlistId: number) => {
   }
   try {
     if (props.type === 'track' && props.track) {
-    console.log(props.track,'TRACK???')
-      await invoke('add_track_to_playlist', {
-        playlistId,
-        track: props.track,
-      });
+      const t = props.track as any;
+      const track = {
+        id: t.id ?? 0,
+        title: t.title,
+        artist: t.artist ?? null,
+        album: t.album ?? null,
+        durationSecs: t.durationSecs ?? null,
+        artworkUrl: t.artworkUrl ?? t.thumbnail ?? null,
+        playCount: t.playCount ?? 0,
+        liked: t.liked ?? false,
+        state: t.state ?? { type: 'streaming' },
+        source: t.source ?? null,
+      };
+      await invoke('add_track_to_playlist', { playlistId, track });
     } else if (props.type === 'playlist' && props.playlist) {
       if (props.playlist.id === playlistId) {
         console.warn('Cannot add playlist to itself');

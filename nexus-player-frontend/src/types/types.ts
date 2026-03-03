@@ -99,11 +99,13 @@ export interface AudioEvent {
 
 export interface StreamingTrack {
   type: 'track';
+  id: number;
   title: string;
   artist: string;
   durationSecs?: number;
   thumbnail?: string;
-  url: string;
+  source?: TrackSourceDto;
+  state?: { type: string };
   liked: boolean;
 }
 

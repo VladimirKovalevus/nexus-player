@@ -41,6 +41,7 @@
               <div :class="$style.system">{{ entry.source.system }}</div>
               <div :class="$style.playedAt">{{ formatTime(entry.playedAt) }}</div>
             </div>
+
           </div>
         </template>
       </VirtualList>
@@ -57,8 +58,10 @@ import { ref, onMounted, inject } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import VirtualList from '@/components/common/VirtualList.vue';
 import type { PlayHistoryEntryDto } from '@/types/types';
+import { useNotificationStore } from '@/stores/notifications';
 
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
+const notifications = useNotificationStore();
 
 const historyEntries = ref<PlayHistoryEntryDto[]>([]);
 const loading = ref(false);
@@ -79,26 +82,23 @@ const fetchHistory = async () => {
 };
 
 const handleEntryClick = async (entry: PlayHistoryEntryDto) => {
-  // Construct SearchResultDto for handle_streaming_track
   const searchResult = {
     type: 'track',
     title: entry.title,
     artist: entry.artist || '',
     thumbnail: entry.artworkUrl,
     source: entry.source,
-    state: 'streaming', // Assume streaming for simplicity, backend will handle it
+    state: { type: 'streaming' },
+    liked: false,
   };
 
   try {
-    await invoke('handle_streaming_track', {
-      searchResult,
-      strategy: 'cache',
-    });
-    // For history, maybe we want to play it immediately?
-    await invoke('play_at_index', { index: 0 });
+    await invoke('handle_streaming_track', { searchResult, strategy: 'cache' });
     refreshQueue();
+    notifications.addNotification(`Добавлено: ${entry.title}`, 'success');
   } catch (e) {
-    console.error('Failed to play from history:', e);
+    console.error('Failed to add to queue:', e);
+    notifications.addNotification('Не удалось добавить в очередь', 'error');
   }
 };
 
@@ -216,6 +216,7 @@ onMounted(fetchHistory);
   font-size: $font-size-xs;
   color: var(--color-text-secondary);
 }
+
 
 .error {
   color: #ef4444;
