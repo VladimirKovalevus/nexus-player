@@ -232,7 +232,10 @@ onUnmounted(() => {
           :disabled="isLoading"
         >
           <span v-if="isLoading" class="loader">●●●</span>
-          <span v-else>{{ audioStore.isPlaying ? '⏸' : '▶' }}</span>
+          <span v-else>
+            <img v-if="!audioStore.isPlaying" src="/icon/play.svg" alt="Play">
+            <span v-else>⏸</span>
+          </span>
         </button>
         <button
           class="control-btn medium-btn"

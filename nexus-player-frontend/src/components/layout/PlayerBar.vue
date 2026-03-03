@@ -17,7 +17,10 @@
         <button :class="$style.controlButton" @click="playPrevious">⏮</button>
         <button :class="[$style.controlButton, $style.playButton]" @click="togglePlay" :disabled="isLoading">
           <div v-if="isLoading" :class="$style.spinner"></div>
-          <template v-else>{{ isPlaying ? '⏸' : '▶' }}</template>
+          <template v-else>
+            <img v-if="!isPlaying" src="/icon/play.svg" alt="Play">
+            <span v-else>⏸</span>
+          </template>
         </button>
         <button :class="$style.controlButton" @click="playNext">⏭</button>
       </div>

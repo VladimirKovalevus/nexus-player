@@ -12,7 +12,9 @@
       </div>
 
       <div v-if="type === 'track'" :class="$style.playOverlay">
-        <button :class="$style.playButton" @click.stop="handlePlay">▶</button>
+        <button :class="$style.playButton" @click.stop="handlePlay">
+          <img src="/icon/play.svg" alt="Play">
+        </button>
       </div>
     </div>
 
@@ -54,50 +56,54 @@
         <div v-if="props.track?.liked" :class="$style.heartFilled"></div>
         <div v-else :class="$style.heartOutline"></div>
       </button>
-      <button :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
+      <button v-if="showAction" ref="actionButtonRef" :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
+      <button v-if="props.containerMode" :class="$style.expandBtn" @click.stop="emit('toggleExpand')">
+        {{ props.isExpanded ? '▲' : '▼' }}
+      </button>
+    </div>
+  </div>
 
-      <div v-if="dropdownOpen" :class="$style.dropdown" @click.stop>
-        <div v-if="!showPlaylistSubmenu">
-          <button
-            v-for="option in menuOptions"
-            :key="option.label"
-            :class="$style.dropdownItem"
-            @click="option.action"
-          >
-            <span :class="$style.itemIcon">{{ option.icon }}</span>
-            <span :class="$style.itemLabel">{{ option.label }}</span>
-            <span v-if="option.hasSubmenu" :class="$style.itemArrow">›</span>
-          </button>
-        </div>
+  <Teleport to="body">
+    <div v-if="dropdownOpen" ref="dropdownPortalRef" :class="$style.dropdown" :style="dropdownStyle" @click.stop>
+      <div v-if="!showPlaylistSubmenu">
+        <button
+          v-for="option in menuOptions"
+          :key="option.label"
+          :class="[$style.dropdownItem, { [$style.dangerItem]: option.isDanger }]"
+          @click="option.action"
+        >
+          <span :class="$style.itemIcon">{{ option.icon }}</span>
+          <span :class="$style.itemLabel">{{ option.label }}</span>
+          <span v-if="option.hasSubmenu" :class="$style.itemArrow">›</span>
+        </button>
+      </div>
 
-        <div v-else :class="$style.submenu">
-          <button :class="$style.dropdownItem" @click="showPlaylistSubmenu = false">
-            <span :class="$style.itemIcon">‹</span>
-            <span :class="$style.itemLabel">Назад</span>
-          </button>
-          <div :class="$style.divider"></div>
-          <button
-            v-for="pl in filteredPlaylists"
-            :key="pl.id"
-            :class="$style.dropdownItem"
-            @click="handleAddToPlaylist(pl.id)"
-          >
-            <span :class="$style.itemIcon">📋</span>
-            <span :class="$style.itemLabel">{{ pl.title }}</span>
-          </button>
-          <div v-if="playlists.length === 0" :class="$style.emptyPlaylist">
-            Нет плейлистов
-          </div>
+      <div v-else :class="$style.submenu">
+        <button :class="$style.dropdownItem" @click="showPlaylistSubmenu = false">
+          <span :class="$style.itemIcon">‹</span>
+          <span :class="$style.itemLabel">Назад</span>
+        </button>
+        <div :class="$style.divider"></div>
+        <button
+          v-for="pl in filteredPlaylists"
+          :key="pl.id"
+          :class="$style.dropdownItem"
+          @click="handleAddToPlaylist(pl.id)"
+        >
+          <span :class="$style.itemIcon">📋</span>
+          <span :class="$style.itemLabel">{{ pl.title }}</span>
+        </button>
+        <div v-if="playlists.length === 0" :class="$style.emptyPlaylist">
+          Нет плейлистов
         </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { onClickOutside } from '@vueuse/core';
 import type { TrackDto, PlaylistDto, ContainerMetaDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
 const store = useAudioStore()
@@ -112,6 +118,8 @@ interface Props {
   isLocal?: boolean;
   isInLibrary?: boolean;
   queueIndex?: number;
+  containerMode?: boolean;
+  isExpanded?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -120,12 +128,24 @@ const emit = defineEmits<{
   click: [];
   play: [];
   refresh: [];
+  toggleExpand: [];
+  containerCreatePlaylist: [];
+  containerAddToPlaylist: [playlistId: number];
+  containerRemove: [];
 }>();
 
 const dropdownOpen = ref(false);
 const dropdownRef = ref<HTMLElement | null>(null);
+const actionButtonRef = ref<HTMLElement | null>(null);
+const dropdownPortalRef = ref<HTMLElement | null>(null);
+const dropdownPos = ref({ top: 0, right: 0 });
 const playlists = ref<Array<{ id: number; title: string }>>([]);
 const showPlaylistSubmenu = ref(false);
+
+const dropdownStyle = computed(() => ({
+  top: `${dropdownPos.value.top}px`,
+  right: `${dropdownPos.value.right}px`,
+}));
 
 const entity = computed(() => {
 
@@ -177,10 +197,39 @@ interface MenuOption {
   icon: string;
   action: () => void | Promise<void>;
   hasSubmenu?: boolean;
+  isDanger?: boolean;
 }
 
 const menuOptions = computed<MenuOption[]>(() => {
   const options: MenuOption[] = [];
+
+  if (props.containerMode) {
+    return [
+      {
+        label: 'Сохранить в плейлист',
+        icon: '📋',
+        action: handleShowPlaylistSubmenu,
+        hasSubmenu: true,
+      },
+      {
+        label: 'Сформировать плейлист',
+        icon: '🎵',
+        action: () => {
+          closeDropdown();
+          emit('containerCreatePlaylist');
+        },
+      },
+      {
+        label: 'Удалить из очереди',
+        icon: '🗑️',
+        isDanger: true,
+        action: () => {
+          closeDropdown();
+          emit('containerRemove');
+        },
+      },
+    ];
+  }
 
   if (props.type === 'track') {
     options.push({
@@ -266,7 +315,14 @@ const formatDuration = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-let stopClickOutside: (() => void) | null = null;
+const handleDocumentClick = (e: MouseEvent) => {
+  const target = e.target as Node;
+  const insideActions = dropdownRef.value?.contains(target) ?? false;
+  const insidePortal = dropdownPortalRef.value?.contains(target) ?? false;
+  if (!insideActions && !insidePortal) {
+    closeDropdown();
+  }
+};
 
 const handleClick = () => {
   emit('click');
@@ -279,34 +335,29 @@ const handlePlay = () => {
 const toggleDropdown = async () => {
   dropdownOpen.value = !dropdownOpen.value;
   showPlaylistSubmenu.value = false;
-  console.log(props.track,'TRACK')
 
   if (dropdownOpen.value) {
+    if (actionButtonRef.value) {
+      const rect = actionButtonRef.value.getBoundingClientRect();
+      dropdownPos.value = {
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      };
+    }
     if (playlists.value.length === 0) {
       await fetchPlaylists();
     }
-    // Start listening only when open
-    if (!stopClickOutside) {
-        stopClickOutside = onClickOutside(dropdownRef, () => {
-          closeDropdown();
-        });
-    }
+    await nextTick();
+    document.addEventListener('mousedown', handleDocumentClick);
   } else {
-    // Stop listening when closed
-    if (stopClickOutside) {
-        stopClickOutside();
-        stopClickOutside = null;
-    }
+    document.removeEventListener('mousedown', handleDocumentClick);
   }
 };
 
 const closeDropdown = () => {
   dropdownOpen.value = false;
   showPlaylistSubmenu.value = false;
-  if (stopClickOutside) {
-    stopClickOutside();
-    stopClickOutside = null;
-  }
+  document.removeEventListener('mousedown', handleDocumentClick);
 };
 
 const fetchPlaylists = async () => {
@@ -323,6 +374,11 @@ const handleShowPlaylistSubmenu = () => {
 };
 
 const handleAddToPlaylist = async (playlistId: number) => {
+  if (props.containerMode) {
+    emit('containerAddToPlaylist', playlistId);
+    closeDropdown();
+    return;
+  }
   try {
     if (props.type === 'track' && props.track) {
       await invoke('add_track_to_playlist', {
@@ -623,16 +679,13 @@ const handleToggleLike = async () => {
 
 
 .dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: $spacing-xs;
+  position: fixed;
   background-color: var(--color-bg-primary);
   border: 1px solid var(--color-border);
   border-radius: $radius-md;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   min-width: 200px;
-  z-index: 1000;
+  z-index: 9999;
   overflow: hidden;
 }
 
@@ -673,6 +726,31 @@ const handleToggleLike = async () => {
   height: 1px;
   background-color: var(--color-border);
   margin: $spacing-xs 0;
+}
+
+.dangerItem {
+  color: #e74c3c;
+
+  &:hover {
+    background-color: rgba(231, 76, 60, 0.1);
+  }
+}
+
+.expandBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: $spacing-xs $spacing-md $spacing-xs $spacing-xs;
+  font-size: $font-size-sm;
+  flex-shrink: 0;
+  @include flex-center;
+  width: 32px;
+  height: 32px;
+
+  &:hover {
+    color: var(--color-text-primary);
+  }
 }
 
 .submenu {

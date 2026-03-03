@@ -17,7 +17,9 @@
       </div>
 
       <div :class="$style.playOverlay">
-        <button :class="$style.playButton" @click.stop="handlePlay">▶</button>
+        <button :class="$style.playButton" @click.stop="handlePlay">
+          <img src="/icon/play.svg" alt="Play">
+        </button>
       </div>
 
 

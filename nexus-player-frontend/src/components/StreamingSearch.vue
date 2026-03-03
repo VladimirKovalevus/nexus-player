@@ -15,10 +15,8 @@ const error = ref<string | null>(null);
 
 const providers = [
   { value: 'bandcamp', label: 'Bandcamp' },
-  { value: 'youtube', label: 'YouTube' },
   { value: 'soundcloud', label: 'SoundCloud' },
   { value: 'vk', label: 'VK' },
-  { value: 'ytdlp', label: 'YT-DLP (All)' },
 ];
 
 const contentTypes = [
@@ -224,7 +222,7 @@ h3 {
 .search-input {
   flex: 1;
   padding: 12px 16px;
-  font-size: 16px;
+  font-size: 36px;
   border: 2px solid #ddd;
   border-radius: 8px;
   outline: none;
@@ -237,7 +235,7 @@ h3 {
 
 .search-btn {
   padding: 12px 32px;
-  font-size: 16px;
+  font-size: 36px;
   background-color: #4caf50;
   color: white;
   border: none;

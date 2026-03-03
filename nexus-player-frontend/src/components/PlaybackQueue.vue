@@ -5,7 +5,7 @@ import MediaCard from './common/MediaCard.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import VirtualList from './common/VirtualList.vue';
 import { useAudioStore } from '../stores/audio';
-import type { QueueEntryDto, TrackDto, PlaylistDto } from '@/types/types';
+import type { QueueEntryDto } from '@/types/types';
 
 const audioStore = useAudioStore();
 const loading = ref(true);
@@ -14,10 +14,6 @@ const isModalOpen = ref(false);
 const isSavingPlaylist = ref(false);
 const expandedContainers = ref<Set<number>>(new Set());
 
-// Container context menu state
-const containerMenuOpen = ref<number | null>(null);
-const containerSubmenu = ref<'addToPlaylist' | null>(null);
-const allPlaylists = ref<PlaylistDto[]>([]);
 
 // Modal mode: 'queue' for whole queue, or {index, entry} for single container
 const modalTarget = ref<'queue' | { index: number } >('queue');
@@ -36,7 +32,7 @@ const calculateItemHeight = (index: number) => {
   if (entry.entryType === 'track') return 88;
   if (entry.entryType === 'container') {
     if (expandedContainers.value.has(index) && entry.tracks) {
-      return 88 + (entry.tracks.length * 44); // 88 header + tracks
+      return 88 + (entry.tracks.length * 88); // 88 header + tracks
     }
     return 88;
   }
@@ -227,31 +223,7 @@ const handleCreatePlaylist = async (name: string) => {
   }
 };
 
-// Container context menu
-const toggleContainerMenu = async (itemIndex: number) => {
-  if (containerMenuOpen.value === itemIndex) {
-    containerMenuOpen.value = null;
-    containerSubmenu.value = null;
-  } else {
-    containerMenuOpen.value = itemIndex;
-    containerSubmenu.value = null;
-    if (allPlaylists.value.length === 0) {
-      try {
-        allPlaylists.value = await invoke<PlaylistDto[]>('get_all_playlists');
-      } catch (e) {
-        console.error('Failed to fetch playlists:', e);
-      }
-    }
-  }
-};
-
-const closeContainerMenu = () => {
-  containerMenuOpen.value = null;
-  containerSubmenu.value = null;
-};
-
 const handleContainerCreatePlaylist = (itemIndex: number) => {
-  closeContainerMenu();
   modalTarget.value = { index: itemIndex };
   isModalOpen.value = true;
 };
@@ -261,14 +233,12 @@ const handleContainerAddToPlaylist = async (itemIndex: number, playlistId: numbe
   if (entry?.entryType !== 'container') return;
 
   try {
-    // Ensure tracks are loaded
     if (!entry.tracks) {
       const result = await invoke<any>('expand_queue_container', { itemIndex });
       audioStore.updateQueueState(result);
     }
     const freshEntry = audioStore.entries[itemIndex];
     if (freshEntry?.entryType === 'container' && freshEntry.tracks) {
-      // Create sub-playlist from container, then nest it
       const childId = await invoke<number>('create_playlist_with_tracks', {
         request: {
           title: freshEntry.meta.title,
@@ -284,7 +254,6 @@ const handleContainerAddToPlaylist = async (itemIndex: number, playlistId: numbe
   } catch (e) {
     console.error('Failed to add container to playlist:', e);
   }
-  closeContainerMenu();
 };
 
 const handleContainerRemove = async (itemIndex: number) => {
@@ -294,7 +263,6 @@ const handleContainerRemove = async (itemIndex: number) => {
   } catch (e) {
     console.error('Failed to remove container from queue:', e);
   }
-  closeContainerMenu();
 };
 
 onMounted(() => {
@@ -363,57 +331,21 @@ defineExpose({ fetchQueue });
           <!-- Container entry -->
           <div
             v-else-if="item.entry.entryType === 'container'"
-            :class="[$style.containerWrapper, { [$style.currentlyPlaying]: item.isCurrentItem }]"
+            :class="[$style.containerWrapper, { [$style.currentlyPlayingList]: item.isCurrentItem }]"
           >
-            <div :class="$style.containerHeader">
-              <MediaCard
-                type="album"
-                :album="item.entry.meta"
-                :show-action="false"
-                context="queue"
-                @click="toggleContainer(item.index)"
-              />
-              <div :class="$style.containerActions">
-                <div :class="$style.containerMenuWrapper">
-                  <button :class="$style.containerMenuBtn" @click.stop="toggleContainerMenu(item.index)">
-                    ⋯
-                  </button>
-                  <div v-if="containerMenuOpen === item.index" :class="$style.containerDropdown" @click.stop>
-                    <template v-if="!containerSubmenu">
-                      <button :class="$style.containerMenuItem" @click="containerSubmenu = 'addToPlaylist'">
-                        Сохранить в плейлист ›
-                      </button>
-                      <button :class="$style.containerMenuItem" @click="handleContainerCreatePlaylist(item.index)">
-                        Сформировать плейлист
-                      </button>
-                      <button :class="[$style.containerMenuItem, $style.dangerItem]" @click="handleContainerRemove(item.index)">
-                        Удалить из очереди
-                      </button>
-                    </template>
-                    <template v-else>
-                      <button :class="$style.containerMenuItem" @click="containerSubmenu = null">
-                        ‹ Назад
-                      </button>
-                      <div :class="$style.menuDivider"></div>
-                      <button
-                        v-for="pl in allPlaylists"
-                        :key="pl.id"
-                        :class="$style.containerMenuItem"
-                        @click="handleContainerAddToPlaylist(item.index, pl.id)"
-                      >
-                        {{ pl.title }}
-                      </button>
-                      <div v-if="allPlaylists.length === 0" :class="$style.menuEmpty">
-                        Нет плейлистов
-                      </div>
-                    </template>
-                  </div>
-                </div>
-                <button :class="$style.expandBtn" @click="toggleContainer(item.index)">
-                  {{ isContainerExpanded(item.index) ? '▲' : '▼' }}
-                </button>
-              </div>
-            </div>
+            <MediaCard
+              type="album"
+              :album="item.entry.meta"
+              show-action
+              context="queue"
+              container-mode
+              :is-expanded="isContainerExpanded(item.index)"
+              @click="toggleContainer(item.index)"
+              @toggle-expand="toggleContainer(item.index)"
+              @container-create-playlist="handleContainerCreatePlaylist(item.index)"
+              @container-add-to-playlist="(plId) => handleContainerAddToPlaylist(item.index, plId)"
+              @container-remove="handleContainerRemove(item.index)"
+            />
 
             <!-- Expanded tracks inside container -->
             <div
@@ -656,21 +588,12 @@ defineExpose({ fetchQueue });
 }
 
 .currentlyPlaying {
-  position: relative;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    border-radius: $radius-md;
-    background: black;
-    border: 2px solid var(--color-accent-primary);
-    pointer-events: none;
-    animation: pulse 2s ease-in-out infinite;
-  }
+  border-radius: $radius-md;
+  animation: pulse 2s ease-in-out infinite;
+}
+.currentlyPlayingList {
+  border-radius: $radius-md;
+  animation: pulse-y 2s ease-in-out infinite;
 }
 
 .containerWrapper {
@@ -682,105 +605,10 @@ defineExpose({ fetchQueue });
   &:has([data-dropdown-open]) {
     z-index: 1000;
   }
-}
 
-.containerHeader {
-  display: flex;
-  align-items: center;
-  gap: $spacing-xs;
-
-  > :first-child {
-    flex: 1;
-    min-width: 0;
+  &.currentlyPlaying {
+    border-color: transparent;
   }
-}
-
-.containerActions {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.containerMenuWrapper {
-  position: relative;
-}
-
-.containerMenuBtn {
-  background: transparent;
-  border: none;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font-size: $font-size-lg;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all $transition-fast;
-
-  &:hover {
-    background-color: var(--color-bg-hover);
-    color: var(--color-text-primary);
-  }
-}
-
-.containerDropdown {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  margin-top: $spacing-xs;
-  background-color: var(--color-bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: $radius-md;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  min-width: 200px;
-  z-index: 1000;
-  overflow: hidden;
-}
-
-.containerMenuItem {
-  display: block;
-  width: 100%;
-  padding: $spacing-sm $spacing-md;
-  background: transparent;
-  border: none;
-  text-align: left;
-  font-size: $font-size-sm;
-  color: var(--color-text-primary);
-  cursor: pointer;
-  transition: background-color $transition-fast;
-
-  &:hover {
-    background-color: var(--color-bg-hover);
-  }
-
-  &.dangerItem {
-    color: #e74c3c;
-  }
-}
-
-.menuDivider {
-  height: 1px;
-  background-color: var(--color-border);
-  margin: 2px 0;
-}
-
-.menuEmpty {
-  padding: $spacing-sm $spacing-md;
-  font-size: $font-size-xs;
-  color: var(--color-text-muted);
-  text-align: center;
-}
-
-.expandBtn {
-  background: transparent;
-  border: none;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  padding: $spacing-xs $spacing-md $spacing-xs $spacing-xs;
-  font-size: $font-size-sm;
-  flex-shrink: 0;
 }
 
 .containerTracks {
@@ -788,7 +616,6 @@ defineExpose({ fetchQueue });
   padding: $spacing-xs 0;
   border-bottom-left-radius: $radius-md;
   border-bottom-right-radius: $radius-md;
-  overflow: hidden;
 }
 
 .containerTrack {
@@ -836,15 +663,20 @@ defineExpose({ fetchQueue });
   font-size: $font-size-sm;
 }
 
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-    box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+@keyframes pulse-y {
+  0%, 100% {       
+    box-shadow: 12px 3px 12px 3px #ff9800;
   }
   50% {
-    opacity: 0.7;
-    box-shadow: 0 0 10px rgba(102, 126, 234, 0.2);
+    box-shadow: 4px 1px 4px 1px #ff9800;
+  }
+}
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 12px 3px rgba(76, 175, 80,0.5);
+  }
+  50% {
+    box-shadow: 0 0 4px 1px rgba(0, 255, 255, 0.1);
   }
 }
 </style>
