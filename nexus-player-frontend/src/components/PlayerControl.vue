@@ -208,13 +208,6 @@ onUnmounted(() => {
 
     <!-- Center: Waveform + Controls -->
     <div class="center-section">
-      <div class="waveform-section">
-        <span class="time">{{ formatTime(audioStore.position) }}</span>
-        <div class="waveform-wrapper">
-          <WaveformBar />
-        </div>
-        <span class="time">{{ formatTime(audioStore.duration) }}</span>
-      </div>
 
       <div class="controls">
         <button
@@ -223,7 +216,7 @@ onUnmounted(() => {
           title="Previous"
           :disabled="isLoading"
         >
-          ⏮
+            <img  src="/icon/prev.svg">
         </button>
         <button
           class="control-btn play-btn"
@@ -243,8 +236,15 @@ onUnmounted(() => {
           title="Next"
           :disabled="isLoading"
         >
-          ⏭
+            <img src="/icon/next.svg">
         </button>
+      </div>
+      <div class="waveform-section">
+        <span class="time">{{ formatTime(audioStore.position) }}</span>
+        <div class="waveform-wrapper">
+          <WaveformBar />
+        </div>
+        <span class="time">{{ formatTime(audioStore.duration) }}</span>
       </div>
     </div>
 
@@ -375,7 +375,6 @@ onUnmounted(() => {
 
 .control-btn {
   background: none;
-  border: 1px solid var(--color-border);
   border-radius: 50%;
   cursor: pointer;
   display: flex;
@@ -386,8 +385,8 @@ onUnmounted(() => {
 }
 
 .control-btn:hover:not(:disabled) {
-  background-color: var(--color-accent-primary);
-  border-color: var(--color-accent-primary);
+  background-color: var(--color-bg-hover);
+  border-color: var(--color-bg-hover);
   color: white;
   transform: scale(1.05);
 }
@@ -476,7 +475,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
-  z-index: 200;
+  z-index: 1000 !important;
   min-width: 44px;
 }
 
@@ -580,9 +579,8 @@ onUnmounted(() => {
 }
 
 .time {
-  font-family: 'Courier New', monospace;
-  font-size: 0.75rem;
-  color: var(--color-text-secondary);
+  font-size: 2rem;
+  color: white;
   min-width: 35px;
 }
 </style>

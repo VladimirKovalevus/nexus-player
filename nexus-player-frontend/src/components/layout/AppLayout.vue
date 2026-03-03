@@ -1,5 +1,5 @@
 <template>
-  <div :class="[$style.appLayout, { [$style.hideQueue]: !showQueue }]">
+  <div ref="appLayoutRef" :class="[$style.appLayout, { [$style.hideQueue]: !showQueue }]">
 
     <aside :class="$style.leftSidebar">
       <slot name="leftSidebar">
@@ -26,17 +26,18 @@
       </aside>
     </Transition>
 
-    <footer :class="$style.bottomPlayer">
+    <footer ref="bottomPlayerRef" :class="$style.bottomPlayer">
       <slot name="bottomPlayer" />
     </footer>
 
-    <nav :class="$style.mobileNav" >
+    <nav ref="mobileNavRef" :class="$style.mobileNav">
       <slot name="mobileNav" />
     </nav>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue';
 import Sidebar from './Sidebar.vue';
 import TopBar from './TopBar.vue';
 
@@ -49,6 +50,27 @@ withDefaults(defineProps<Props>(), {
 });
 
 defineEmits<{ closeQueue: [] }>();
+
+const appLayoutRef = ref<HTMLElement | null>(null);
+const bottomPlayerRef = ref<HTMLElement | null>(null);
+const mobileNavRef = ref<HTMLElement | null>(null);
+
+let resizeObserver: ResizeObserver | null = null;
+
+const updateQueueBottom = () => {
+  const playerH = bottomPlayerRef.value?.offsetHeight ?? 0;
+  const navH = mobileNavRef.value?.offsetHeight ?? 0;
+  appLayoutRef.value?.style.setProperty('--queue-bottom', `${playerH + navH}px`);
+};
+
+onMounted(() => {
+  resizeObserver = new ResizeObserver(updateQueueBottom);
+  if (bottomPlayerRef.value) resizeObserver.observe(bottomPlayerRef.value);
+  if (mobileNavRef.value) resizeObserver.observe(mobileNavRef.value);
+  updateQueueBottom();
+});
+
+onUnmounted(() => resizeObserver?.disconnect());
 </script>
 
 <style module lang="scss">
@@ -114,7 +136,7 @@ defineEmits<{ closeQueue: [] }>();
   grid-area: player;
   background-color: var(--color-bg-player);
   border-top: 1px solid var(--color-border);
-  z-index: $z-player;
+  z-index: $z-queue-overlay + 10;
 }
 
 .mobileNav {
@@ -163,7 +185,7 @@ defineEmits<{ closeQueue: [] }>();
   .rightSidebar {
     grid-area: unset;
     position: fixed;
-    bottom: $player-height + $mobile-nav-height;
+    bottom: var(--queue-bottom, #{$player-height + $mobile-nav-height});
     left: 0;
     right: 0;
     height: 66.666vh;
@@ -179,7 +201,10 @@ defineEmits<{ closeQueue: [] }>();
   .mobileBackdrop {
     display: block;
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: var(--queue-bottom, #{$player-height + $mobile-nav-height});
     background: rgba(0, 0, 0, 0.5);
     z-index: $z-queue-backdrop;
   }
