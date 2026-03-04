@@ -87,7 +87,7 @@ impl Seek for HlsReaderAdapter {
 
 impl symphonia::core::io::MediaSource for HlsReaderAdapter {
     fn is_seekable(&self) -> bool {
-        true
+        false
     }
 
     fn byte_len(&self) -> Option<u64> {
@@ -402,7 +402,7 @@ impl PlaybackEngine {
         let mut decoder_guard = self.decoder.lock().unwrap();
         if let Some(ref mut dec) = *decoder_guard {
             info!("Выполнение перемотки в декодере...");
-            
+
             // Очищаем буферы СРАЗУ, чтобы не играть старый звук
             self.sample_buffer.lock().unwrap().clear();
             *self.buffer_position.lock().unwrap() = 0;
