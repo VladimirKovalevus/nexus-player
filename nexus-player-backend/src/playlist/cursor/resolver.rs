@@ -100,8 +100,8 @@ impl CursorResolver for AppCursorResolver {
                 )))
             }
 
-            ContainerContext::SearchQuery { system, query } => {
-                let results = self.streaming.search(&system, Some(ContentType::Track), &query, 50, 0).await?;
+            ContainerContext::SearchQuery { system, query, content_type } => {
+                let results = self.streaming.search(&system, Some(content_type), &query, 50, 0).await?;
                 
                 let items = results.into_iter().map(|res| {
                     match res {
@@ -114,11 +114,11 @@ impl CursorResolver for AppCursorResolver {
                             system: system.clone(), 
                             id: info.id 
                         }),
-                        _ => CursorItem::Container(ContainerContext::SearchQuery { system: system.clone(), query: query.clone() }) 
+                        _ => CursorItem::Container(ContainerContext::SearchQuery { system: system.clone(), query: query.clone(), content_type }) 
                     }
                 }).collect();
 
-                Ok(Box::new(StreamingSearchCursor::new(self.streaming.clone(), system, query, items)))
+                Ok(Box::new(StreamingSearchCursor::new(self.streaming.clone(), system, query, content_type, items)))
             }
         }
     }

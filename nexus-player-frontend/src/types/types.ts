@@ -99,7 +99,7 @@ export interface AudioEvent {
 
 export interface StreamingTrack {
   type: 'track';
-  id: number;
+  id?: number;
   title: string;
   artist: string;
   durationSecs?: number;

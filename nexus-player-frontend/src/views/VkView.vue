@@ -96,6 +96,7 @@ const handleTrackClick = async (track: TrackDto) => {
     await invoke('handle_streaming_track', {
       searchResult,
       strategy: 'cache',
+      searchType: 'track',
     });
     refreshQueue();
   }
@@ -128,6 +129,7 @@ const handlePlaylistClick = async (playlist: PlaylistDto) => {
       await invoke('handle_streaming_track', {
         searchResult,
         strategy: 'cache',
+        searchType: 'playlist',
       });
       refreshQueue();
     } catch (e) {

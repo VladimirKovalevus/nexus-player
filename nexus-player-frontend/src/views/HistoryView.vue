@@ -93,7 +93,7 @@ const handleEntryClick = async (entry: PlayHistoryEntryDto) => {
   };
 
   try {
-    await invoke('handle_streaming_track', { searchResult, strategy: 'cache' });
+    await invoke('handle_streaming_track', { searchResult, strategy: 'cache', searchType: 'track' });
     refreshQueue();
     notifications.addNotification(`Добавлено: ${entry.title}`, 'success');
   } catch (e) {

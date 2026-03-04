@@ -76,15 +76,15 @@ pub async fn add_track_from_file(state: State<'_, Arc<AppState>>, path: String) 
 
     tracing::info!("Created track object, adding to library...");
 
-    let track_id = state
-        .add_track_to_library(track)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to add track to library: {}", e);
-            e.to_string()
-        })?;
+    let track_id = state.add_track_to_library(track).await.map_err(|e| {
+        tracing::error!("Failed to add track to library: {}", e);
+        e.to_string()
+    })?;
 
-    tracing::info!("Successfully added track to library with ID: {:?}", track_id);
+    tracing::info!(
+        "Successfully added track to library with ID: {:?}",
+        track_id
+    );
 
     Ok(track_id.0)
 }
@@ -501,11 +501,31 @@ fn build_queue_state_dto(
 pub async fn handle_search(
     state: State<'_, Arc<AppState>>,
     system: String,
+    content_type: Option<String>,
     query: String,
+    limit: Option<usize>,
+    offset: Option<usize>,
     selected_index: usize,
 ) -> Result<()> {
+    use nexus_player_backend::streaming::types::ContentType;
+
+    let content_type_enum = content_type.and_then(|ct| match ct.as_str() {
+        "track" => Some(ContentType::Track),
+        "playlist" => Some(ContentType::Playlist),
+        "album" => Some(ContentType::Album),
+        "channel" => Some(ContentType::Channel),
+        _ => None,
+    });
+
     state
-        .load_search_queue(system, query, selected_index)
+        .load_search_queue(
+            system,
+            query,
+            content_type_enum,
+            limit.unwrap_or(50),
+            offset.unwrap_or(0),
+            selected_index,
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -572,6 +592,7 @@ pub async fn search_streaming(
     content_type: Option<String>,
     query: String,
     limit: Option<usize>,
+    offset: Option<usize>,
 ) -> Result<Vec<SearchResultDto>> {
     let content_type_enum = content_type.and_then(|ct| match ct.as_str() {
         "track" => Some(ContentType::Track),
@@ -583,7 +604,13 @@ pub async fn search_streaming(
 
     let results = state
         .streaming()
-        .search(&provider, content_type_enum, &query, limit.unwrap_or(10), 0)
+        .search(
+            &provider,
+            content_type_enum,
+            &query,
+            limit.unwrap_or(10),
+            offset.unwrap_or(0),
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -601,7 +628,10 @@ pub async fn search_streaming(
     }
 
     if !tracks_to_enrich.is_empty() {
-        let enriched = state.enrich_tracks(tracks_to_enrich).await.map_err(|e| e.to_string())?;
+        let enriched = state
+            .enrich_tracks(tracks_to_enrich)
+            .await
+            .map_err(|e| e.to_string())?;
         for (i, track) in track_indices.into_iter().zip(enriched) {
             if let SearchResultDto::Track(ref mut t) = dtos[i] {
                 t.liked = track.liked;
@@ -618,8 +648,10 @@ pub async fn handle_streaming_track(
     search_result: SearchResultDto,
     strategy: String,
     query: Option<String>,
+    search_type: Option<String>,
 ) -> Result<Option<i64>> {
     use nexus_player_backend::library::types::DownloadStrategy;
+    use nexus_player_backend::streaming::types::ContentType;
 
     let download_strategy = match strategy.as_str() {
         "stream" => DownloadStrategy::Stream,
@@ -641,8 +673,16 @@ pub async fn handle_streaming_track(
                         let target_id = audio_track.id;
                         let system = audio_track.source.system().to_string();
 
+                        let content_type = match search_type.as_deref() {
+                            Some("track") => ContentType::Track,
+                            Some("playlist") => ContentType::Playlist,
+                            Some("album") => ContentType::Album,
+                            Some("channel") => ContentType::Channel,
+                            _ => ContentType::Track,
+                        };
+
                         state
-                            .load_search_to_queue(system, q, target_id)
+                            .load_search_to_queue(system, q, content_type, target_id)
                             .await
                             .map_err(|e| e.to_string())?;
                     } else {
@@ -786,8 +826,12 @@ pub async fn get_vk_profile(
         playlists.len()
     );
 
-    let audio_tracks: Vec<nexus_player_backend::audio::types::Track> = tracks.into_iter().map(Into::into).collect();
-    let enriched_tracks = state.enrich_tracks(audio_tracks).await.map_err(|e| e.to_string())?;
+    let audio_tracks: Vec<nexus_player_backend::audio::types::Track> =
+        tracks.into_iter().map(Into::into).collect();
+    let enriched_tracks = state
+        .enrich_tracks(audio_tracks)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let tracks_dto = enriched_tracks.into_iter().map(TrackDto::from).collect();
     let playlists_dto = playlists.into_iter().map(PlaylistDto::from).collect();

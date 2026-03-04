@@ -69,13 +69,13 @@ const isSettingsOpen = ref(false);
 @import '@/styles/mixins.scss';
 
 .sidebar {
-  width: $sidebar-width;
   height: 100%;
   background-color: $color-bg-sidebar;
   border-right: 1px solid $color-border;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  overflow-x: hidden;
   @include custom-scrollbar($color-border-light, $color-bg-sidebar);
 }
 

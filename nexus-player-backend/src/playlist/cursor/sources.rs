@@ -152,6 +152,7 @@ pub struct StreamingSearchCursor {
     streaming: Arc<StreamingService>,
     system: String,
     query: String,
+    content_type: ContentType,
     items: Vec<CursorItem>,
     index: usize,
     offset: usize,
@@ -160,12 +161,13 @@ pub struct StreamingSearchCursor {
 }
 
 impl StreamingSearchCursor {
-    pub fn new(streaming: Arc<StreamingService>, system: String, query: String, initial_items: Vec<CursorItem>) -> Self {
+    pub fn new(streaming: Arc<StreamingService>, system: String, query: String, content_type: ContentType, initial_items: Vec<CursorItem>) -> Self {
         let count = initial_items.len();
         Self {
             streaming,
             system,
             query,
+            content_type,
             items: initial_items,
             index: 0,
             offset: count,
@@ -181,13 +183,14 @@ impl StreamingSearchCursor {
 
         tracing::info!("Fetching next page for search: {} (offset: {})", self.query, self.offset);
         
-        let results = self.streaming.search(&self.system, Some(ContentType::Track), &self.query, self.limit, self.offset).await?;
+        let results = self.streaming.search(&self.system, Some(self.content_type), &self.query, self.limit, self.offset).await?;
         
         if results.is_empty() {
             self.has_more = false;
             return Ok(());
         }
 
+        let content_type = self.content_type;
         let new_items: Vec<CursorItem> = results.into_iter().filter_map(|res| match res {
             SearchResult::Track(info) => Some(CursorItem::Track(info.into())),
             SearchResult::Playlist(info) => Some(CursorItem::Container(ContainerContext::ExternalPlaylist { 
@@ -198,7 +201,7 @@ impl StreamingSearchCursor {
                 system: self.system.clone(), 
                 id: info.id 
             })),
-            _ => None,
+            _ => Some(CursorItem::Container(ContainerContext::SearchQuery { system: self.system.clone(), query: self.query.clone(), content_type })),
         }).collect();
 
         self.offset += new_items.len();

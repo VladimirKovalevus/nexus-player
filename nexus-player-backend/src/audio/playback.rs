@@ -402,11 +402,22 @@ impl PlaybackEngine {
         let mut decoder_guard = self.decoder.lock().unwrap();
         if let Some(ref mut dec) = *decoder_guard {
             info!("Выполнение перемотки в декодере...");
-            dec.seek(position.as_secs_f64())?;
-
-            // Очищаем буферы
+            
+            // Очищаем буферы СРАЗУ, чтобы не играть старый звук
             self.sample_buffer.lock().unwrap().clear();
             *self.buffer_position.lock().unwrap() = 0;
+
+            loop {
+                match dec.seek(position.as_secs_f64()) {
+                    Ok(_) => break,
+                    Err(AudioError::InProgress) => {
+                        info!("Seek в процессе (WouldBlock), ожидание...");
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
 
             // Цикл ожидания данных
             info!("Ожидание загрузки данных для новой позиции...");

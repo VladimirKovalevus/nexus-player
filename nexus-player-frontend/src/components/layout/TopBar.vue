@@ -182,6 +182,7 @@ const handleResultClick = async (result: SearchResult) => {
     await invoke('handle_streaming_track', {
       searchResult: result,
       strategy: 'cache',
+      searchType: selectedContentType.value,
     });
     emit('refetch');
     closeResults();

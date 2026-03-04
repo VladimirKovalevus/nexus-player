@@ -13,7 +13,7 @@ pub enum ContainerContext {
     ExternalAlbum { system: String, id: String },
 
     // Dynamic sources
-    SearchQuery { system: String, query: String },
+    SearchQuery { system: String, query: String, content_type: crate::streaming::types::ContentType },
 }
 
 #[derive(Debug, Clone)]

@@ -8,7 +8,7 @@ import { storeToRefs } from 'pinia';
 import { useStreamingStore } from '@/stores/streaming';
 
 const store = useStreamingStore();
-const { query, selectedProvider, selectedContentType, limit, searchResults, error } = storeToRefs(store);
+const { query, selectedProvider, selectedContentType, limit, offset, searchResults, error } = storeToRefs(store);
 
 const loading = ref(false);
 const isModalOpen = ref(false);
@@ -34,7 +34,10 @@ const emit = defineEmits<{
   refetch: [];
 }>();
 
-const search = async () => {
+const search_q = ()=>{
+    search(0)
+}
+const search = async (newOffset = 0) => {
   if (!query.value.trim()) {
     error.value = 'Please enter a search query';
     return;
@@ -43,12 +46,15 @@ const search = async () => {
   try {
     loading.value = true;
     error.value = null;
+    offset.value = newOffset;
+    console.log(offset.value,"OFFSET")
 
     const results = await invoke<SearchResult[]>('search_streaming', {
       provider: selectedProvider.value,
       contentType: selectedContentType.value,
       query: query.value,
       limit: limit.value,
+      offset: offset.value,
     });
 
     searchResults.value = results;
@@ -59,6 +65,14 @@ const search = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+const nextPage = () => {
+  search(offset.value + limit.value);
+};
+
+const prevPage = () => {
+  search(Math.max(0, offset.value - limit.value));
 };
 
 const isContainerExpanded = (index: number) => expandedContainers.value.has(index);
@@ -76,7 +90,10 @@ const handleResultClick = async (result: SearchResult, index: number) => {
   try {
     await invoke('handle_search', {
       system: selectedProvider.value,
+      contentType: selectedContentType.value,
       query: query.value,
+      limit: limit.value,
+      offset: offset.value,
       selectedIndex: index,
     });
   } catch (e) {
@@ -85,6 +102,7 @@ const handleResultClick = async (result: SearchResult, index: number) => {
       searchResult: result,
       strategy: 'cache',
       query: query.value,
+      searchType: selectedContentType.value,
     });
   }
   emit('refetch');
@@ -99,7 +117,11 @@ const handleResultPlay = async (result: SearchResult, index: number) => {
 // Side effect: replaces the current playback queue.
 const getContainerTracks = async (result: SearchResult): Promise<any[] | null> => {
   try {
-    await invoke('handle_streaming_track', { searchResult: result, strategy: 'cache' });
+    await invoke('handle_streaming_track', {
+      searchResult: result,
+      strategy: 'cache',
+      searchType: selectedContentType.value,
+    });
     const queueState = await invoke<any>('get_queue_state');
     const entry = queueState.entries?.[0];
     if (!entry) return null;
@@ -190,9 +212,9 @@ const handleCreatePlaylist = async (name: string) => {
           type="text"
           placeholder="Search for music..."
           class="search-input"
-          @keyup.enter="search"
+          @keyup.enter="search_q"
         />
-        <button @click="search" :disabled="loading" class="search-btn">
+        <button @click="search_q" :disabled="loading" class="search-btn">
           {{ loading ? 'Searching...' : 'Search' }}
         </button>
       </div>
@@ -247,7 +269,15 @@ const handleCreatePlaylist = async (name: string) => {
     <div v-if="error" class="error-message">{{ error }}</div>
 
     <div v-if="searchResults.length > 0" class="results">
-      <h3>Results ({{ searchResults.length }})</h3>
+      <div class="results-header">
+        <button v-if="offset > 0" @click="prevPage" class="pagination-btn" title="Previous page">
+          ←
+        </button>
+        <h3>Results ({{ searchResults.length }})</h3>
+        <button v-if="searchResults.length >= limit" @click="nextPage" class="pagination-btn" title="Next page">
+          →
+        </button>
+      </div>
       <div class="results-list">
         <MediaCard
           v-for="(result, index) in searchResults"
@@ -385,6 +415,37 @@ h3 {
   color: #c62828;
   border-radius: 6px;
   margin-bottom: 20px;
+}
+
+.results-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.results-header h3 {
+  margin-bottom: 0;
+}
+
+.pagination-btn {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 20px;
+  color: #666;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pagination-btn:hover {
+  background-color: #f5f5f5;
+  border-color: #4caf50;
+  color: #4caf50;
 }
 
 .results-list {

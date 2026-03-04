@@ -3,7 +3,9 @@ use crate::audio::engine::AudioEngine;
 use crate::audio::types::Track;
 use crate::audio::types::Track as AudioTrack;
 use crate::config::{AppConfig, ConfigManager};
-use crate::library::models::{Metadata, PlayHistoryEntry, Playlist as LibraryPlaylist, Track as LibraryTrack};
+use crate::library::models::{
+    Metadata, PlayHistoryEntry, Playlist as LibraryPlaylist, Track as LibraryTrack,
+};
 use crate::library::{LibraryService, PlaylistId, TrackId};
 use crate::playlist::cursor::{AppCursorResolver, ContainerContext, PlayerCursor};
 use crate::playlist::playback_queue::{
@@ -11,8 +13,8 @@ use crate::playlist::playback_queue::{
     SearchQueue, SearchQueueItem,
 };
 use crate::playlist::playlist::Playlist;
-use crate::streaming::external::StreamingSourceWrapper;
 use crate::streaming::StreamingService;
+use crate::streaming::{external::StreamingSourceWrapper, types::ContentType};
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::Arc;
@@ -360,12 +362,14 @@ impl AppState {
         &self,
         system: String,
         query: String,
+        content_type: ContentType,
         selected_track_id: usize,
     ) -> Result<()> {
         tracing::info!("Loading search context: {} from {}", query, system);
         let context = ContainerContext::SearchQuery {
             system: system.clone(),
             query: query.clone(),
+            content_type,
         };
         let cursor = PlayerCursor::from_context(context, self.cursor_resolver.clone()).await?;
 
@@ -409,19 +413,22 @@ impl AppState {
         &self,
         system: String,
         query: String,
+        content_type: Option<crate::streaming::types::ContentType>,
+        limit: usize,
+        offset: usize,
         selected_index: usize,
     ) -> Result<()> {
         use crate::streaming::types::{ContentType, SearchResult as SR};
 
-        tracing::info!("Loading search queue: '{}' from {}", query, system);
+        tracing::info!("Loading search queue: '{}' from {} (offset: {}, limit: {})", query, system, offset, limit);
 
         let results = self
             .streaming
-            .search(&system, None, &query, 50, 0)
+            .search(&system, content_type, &query, limit, offset)
             .await
             .context("Search failed")?;
 
-        let has_more = results.len() >= 50;
+        let has_more = results.len() >= limit;
         let items: Vec<SearchQueueItem> = results
             .into_iter()
             .map(|r| match r {
@@ -811,7 +818,9 @@ impl AppState {
         playlist_id: PlaylistId,
         item_ids: Vec<i64>,
     ) -> Result<()> {
-        self.library.reorder_playlist_items(playlist_id, item_ids).await
+        self.library
+            .reorder_playlist_items(playlist_id, item_ids)
+            .await
     }
 
     // --- Play History ---

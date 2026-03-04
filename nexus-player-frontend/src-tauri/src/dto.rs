@@ -407,7 +407,7 @@ impl From<TrackState> for TrackStateDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamingTrackDto {
-    pub id: i64,
+    pub id: Option<i64>,
     pub title: String,
     pub artist: String,
     pub duration_secs: Option<f64>,
@@ -503,7 +503,7 @@ impl From<streaming::SearchResult> for SearchResultDto {
                 };
 
                 SearchResultDto::Track(StreamingTrackDto {
-                    id: hash_str_to_i64(&url),
+                    id: Some(hash_str_to_i64(&url)),
                     title: track.title,
                     artist: track.artist,
                     duration_secs: track.duration.map(|d| d.as_secs_f64()),
@@ -559,7 +559,7 @@ impl From<streaming::TrackInfo> for StreamingTrackDto {
         };
 
         Self {
-            id: hash_str_to_i64(&url),
+            id: Some(hash_str_to_i64(&url)),
             title: track.title,
             artist: track.artist,
             duration_secs: track.duration.map(|d| d.as_secs_f64()),

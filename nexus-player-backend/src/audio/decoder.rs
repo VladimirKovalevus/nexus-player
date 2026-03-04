@@ -159,20 +159,27 @@ impl AudioDecoder {
 
         let ts = Time::from(time_secs);
 
-        let seeked_to = self
-            .format_reader
-            .seek(
-                SeekMode::Coarse,
-                SeekTo::Time {
-                    time: ts,
-                    track_id: Some(self.track_id),
-                },
-            )
-            .map_err(|e| AudioError::InProgress)?;
-        self.decoder.reset();
-        info!("Перемотка выполнена на позицию: {:?}", seeked_to.actual_ts);
-
-        Ok(seeked_to.actual_ts)
+        match self.format_reader.seek(
+            SeekMode::Coarse,
+            SeekTo::Time {
+                time: ts,
+                track_id: Some(self.track_id),
+            },
+        ) {
+            Ok(seeked_to) => {
+                self.decoder.reset();
+                info!("Перемотка выполнена на позицию: {:?}", seeked_to.actual_ts);
+                Ok(seeked_to.actual_ts)
+            }
+            Err(symphonia::core::errors::Error::IoError(e))
+                if e.kind() == std::io::ErrorKind::WouldBlock =>
+            {
+                // Даже если WouldBlock, сбрасываем декодер, так как позиция в стриме изменится
+                self.decoder.reset();
+                Err(AudioError::InProgress)
+            }
+            Err(e) => Err(AudioError::DecodingError(format!("Seek error: {}", e))),
+        }
     }
 
     pub fn duration(&self) -> Option<f64> {
@@ -204,8 +211,11 @@ impl AudioDecoder {
                     if total_bytes > 0 {
                         for w in waveforms.iter_mut() {
                             if w.end_time == 0.0 && w.byte_end.is_some() {
-                                w.start_time = (w.byte_start.unwrap_or(0) as f64 / total_bytes as f64) * duration;
-                                w.end_time = (w.byte_end.unwrap() as f64 / total_bytes as f64) * duration;
+                                w.start_time = (w.byte_start.unwrap_or(0) as f64
+                                    / total_bytes as f64)
+                                    * duration;
+                                w.end_time =
+                                    (w.byte_end.unwrap() as f64 / total_bytes as f64) * duration;
                             }
                         }
                     }
