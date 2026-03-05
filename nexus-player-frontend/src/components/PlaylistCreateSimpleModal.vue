@@ -1,27 +1,66 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+
+interface PlaylistInitialData {
+  title?: string;
+  description?: string;
+  artworkUrl?: string;
+}
 
 interface Props {
   isOpen: boolean;
   isLoading: boolean;
+  initialData?: PlaylistInitialData;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 const emit = defineEmits<{
   close: [];
-  save: [name: string];
+  save: [data: { title: string; description: string | null; artworkUrl: string | null }];
 }>();
 
-const name = ref('');
+const title = ref('');
+const description = ref('');
+const artworkUrl = ref('');
+
+const handleSelectArtwork = async () => {
+  try {
+    const filePath = await invoke<string | null>('select_image_file');
+    if (filePath) {
+      // In Tauri v2, convertFileSrc handles the protocol mapping (asset://)
+      artworkUrl.value = convertFileSrc(filePath);
+      console.log('Original path:', filePath);
+      console.log('Converted URL:', artworkUrl.value);
+    }
+  } catch (e) {
+    console.error('Failed to select artwork:', e);
+  }
+};
+
+watch(() => props.isOpen, (isOpen) => {
+  if (isOpen && props.initialData) {
+    title.value = props.initialData.title || '';
+    description.value = props.initialData.description || '';
+    artworkUrl.value = props.initialData.artworkUrl || '';
+  } else if (isOpen) {
+    title.value = '';
+    description.value = '';
+    artworkUrl.value = '';
+  }
+});
 
 const handleSave = () => {
-  if (name.value.trim()) {
-    emit('save', name.value.trim());
+  if (title.value.trim()) {
+    emit('save', {
+      title: title.value.trim(),
+      description: description.value.trim() || null,
+      artworkUrl: artworkUrl.value.trim() || null,
+    });
   }
 };
 
 const handleClose = () => {
-  name.value = '';
   emit('close');
 };
 </script>
@@ -37,16 +76,49 @@ const handleClose = () => {
 
         <div class="modal-body">
           <div class="form-group">
-            <label for="playlist-name">Название плейлиста</label>
+            <label for="playlist-title">Название плейлиста *</label>
             <input
-              id="playlist-name"
-              v-model="name"
+              id="playlist-title"
+              v-model="title"
               type="text"
               placeholder="Новый плейлист"
               class="form-input"
-              @keyup.enter="handleSave"
               :disabled="isLoading"
             />
+          </div>
+
+          <div class="form-group">
+            <label for="playlist-description">Описание</label>
+            <textarea
+              id="playlist-description"
+              v-model="description"
+              placeholder="О чем этот плейлист?"
+              class="form-textarea"
+              :disabled="isLoading"
+              rows="2"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="playlist-artwork">URL обложки</label>
+            <div class="input-group">
+              <input
+                id="playlist-artwork"
+                v-model="artworkUrl"
+                type="text"
+                placeholder="https://example.com/image.jpg"
+                class="form-input"
+                :disabled="isLoading"
+              />
+              <button 
+                type="button" 
+                class="btn btn-secondary btn-small" 
+                @click="handleSelectArtwork"
+                :disabled="isLoading"
+              >
+                Выбрать
+              </button>
+            </div>
           </div>
         </div>
 
@@ -63,7 +135,9 @@ const handleClose = () => {
   </Teleport>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
+@import '@/styles/variables.scss';
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -82,28 +156,29 @@ const handleClose = () => {
   background-color: var(--color-bg-primary);
   border-radius: 12px;
   width: 90%;
-  max-width: 400px;
+  max-width: 500px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: $spacing-lg;
   border-bottom: 1px solid var(--color-border);
 }
 
 .modal-header h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: $font-size-lg;
   color: var(--color-text-primary);
 }
 
 .close-btn {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   cursor: pointer;
   color: var(--color-text-secondary);
   width: 32px;
@@ -121,35 +196,59 @@ const handleClose = () => {
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: $spacing-lg;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  font-size: 0.875rem;
+.form-group {
+  margin-bottom: $spacing-md;
+
+  label {
+    display: block;
+    margin-bottom: $spacing-xs;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    font-size: $font-size-sm;
+  }
 }
 
-.form-input {
+.form-input,
+.form-textarea {
   width: 100%;
-  padding: 0.75rem;
+  padding: $spacing-sm;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: $font-size-base;
   background-color: var(--color-bg-secondary);
   color: var(--color-text-primary);
   transition: all 0.2s;
+  font-family: inherit;
 }
 
-.form-input:focus {
+.form-textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.input-group {
+  display: flex;
+  gap: $spacing-xs;
+
+  .form-input {
+    flex: 1;
+  }
+}
+
+.form-input:focus,
+.form-textarea:focus {
   outline: none;
   border-color: var(--color-accent-primary);
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.form-input:disabled {
+.form-input:disabled,
+.form-textarea:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -157,16 +256,16 @@ const handleClose = () => {
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  padding-top: 0;
+  gap: $spacing-sm;
+  padding: $spacing-lg;
+  border-top: 1px solid var(--color-border);
 }
 
 .btn {
-  padding: 0.6rem 1.2rem;
+  padding: $spacing-sm $spacing-lg;
   border-radius: 8px;
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: $font-size-sm;
   cursor: pointer;
   transition: all 0.2s;
   border: none;
@@ -187,14 +286,19 @@ const handleClose = () => {
   background-color: var(--color-bg-hover);
 }
 
+.btn-small {
+  padding: $spacing-xs $spacing-md;
+  font-size: $font-size-xs;
+  white-space: nowrap;
+}
+
 .btn-primary {
-  background: black;
+  background: var(--color-accent-primary);
   color: white;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+  transform: translateY(-1px);
+  filter: brightness(1.1);
 }
 </style>

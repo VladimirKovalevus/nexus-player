@@ -24,7 +24,7 @@
 
 
       <button
-        v-if="type === 'playlist'"
+        v-if="false"
         :class="$style.menuButton"
         @click.stop="toggleMenu"
       >
@@ -371,7 +371,7 @@ const handlePlay = () => {
 
 .artist {
   font-size: $font-size-xs;
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   @include text-ellipsis;
 }
 </style>

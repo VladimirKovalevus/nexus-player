@@ -38,7 +38,7 @@
             <MediaCardCompact
               type="playlist"
               :title="playlist.title"
-              :artist="playlist.creator || 'Unknown'"
+              :artist="playlist.description || 'Unknown'"
               :thumbnail="playlist.thumbnail || undefined"
               :track-count="playlist.trackCount"
               :playlist-id="playlist.id"
@@ -54,9 +54,9 @@
     <section :class="$style.section">
       <div :class="$style.sectionHeader">
         <h2 :class="$style.sectionTitle">Треки</h2>
-        <div v-if="tracks.length > 0" :class="$style.filter">
-          <span>По умолчанию</span>
-          <span>▼</span>
+        <div v-if="tracks.length > 0" :class="$style.filter" @click="toggleSort">
+          <span>{{ currentSortLabel }}</span>
+          <span :class="[$style.arrow, sortDirection === 'desc' && $style.arrowDown]">▲</span>
         </div>
       </div>
 
@@ -82,7 +82,6 @@
               :track="track"
               @click="handleTrackClick(track)"
               @play="handleTrackPlay(track)"
-              @more="handleTrackMore(track)"
               @refresh="fetchTracks"
             />
           </template>
@@ -93,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject } from 'vue';
+import { ref, onMounted, inject, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import MediaCard from '@/components/common/MediaCard.vue';
 import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
@@ -114,6 +113,30 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 const isPlaylistModalOpen = ref(false);
 
+const sortField = ref<'default' | 'title' | 'artist' | 'added_at'>('default');
+const sortDirection = ref<'asc' | 'desc'>('asc');
+
+const sortLabels = {
+  default: 'По умолчанию',
+  title: 'Название',
+  artist: 'Артист',
+  added_at: 'Дата',
+};
+
+const currentSortLabel = computed(() => sortLabels[sortField.value]);
+
+const toggleSort = () => {
+  if (sortDirection.value === 'asc') {
+    sortDirection.value = 'desc';
+  } else {
+    sortDirection.value = 'asc';
+    const fields: (typeof sortField.value)[] = ['default', 'title', 'artist', 'added_at'];
+    const currentIndex = fields.indexOf(sortField.value);
+    sortField.value = fields[(currentIndex + 1) % fields.length];
+  }
+  fetchTracks();
+};
+
 
 const fetchPlaylists = async () => {
   try {
@@ -128,7 +151,9 @@ const fetchPlaylists = async () => {
 
 const fetchTracks = async () => {
   try {
-    const trackDtos = await invoke<TrackDto[]>('get_all_tracks');
+    const order = { [sortField.value]: sortDirection.value };
+    const trackDtos = await invoke<TrackDto[]>('get_all_tracks', { order });
+    console.log(trackDtos,"DTOS")
     tracks.value = trackDtos;
   } catch (e) {
     console.error('Failed to fetch tracks:', e);
@@ -280,11 +305,22 @@ const handleTrackMore = (track: TrackDto) => {
   padding: $spacing-xs $spacing-sm;
   border-radius: $radius-sm;
   transition: all $transition-fast;
+  user-select: none;
 
   &:hover {
     color: var(--color-text-primary);
     background-color: var(--color-bg-hover);
   }
+}
+
+.arrow {
+  display: inline-block;
+  font-size: 10px;
+  transition: transform $transition-fast;
+}
+
+.arrowDown {
+  transform: rotate(180deg);
 }
 
 .playlistList {

@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use super::{
     db_v2, models, PlaylistId, PlaylistRepositoryV2, SeaOrmPlaylistRepository,
-    SeaOrmTrackRepository, TrackId, TrackRepositoryV2,
+    SeaOrmTrackRepository, TrackId, TrackRepositoryV2, types::TrackOrder,
 };
 use crate::db;
 use crate::library::repository_v2::PlayHistoryRepository;
@@ -85,9 +85,9 @@ impl LibraryService {
         self.track_repo.get(id).await
     }
 
-    /// Get all liked tracks ordered by liked_position
-    pub async fn get_all_tracks(&self) -> Result<Vec<models::Track>> {
-        self.track_repo.list_liked().await
+    /// Get all liked tracks with specified ordering
+    pub async fn get_all_tracks(&self, order: TrackOrder) -> Result<Vec<models::Track>> {
+        self.track_repo.list_liked(order).await
     }
 
     /// Search tracks by query

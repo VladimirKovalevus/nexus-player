@@ -407,17 +407,7 @@ impl PlaybackEngine {
             self.sample_buffer.lock().unwrap().clear();
             *self.buffer_position.lock().unwrap() = 0;
 
-            loop {
-                match dec.seek(position.as_secs_f64()) {
-                    Ok(_) => break,
-                    Err(AudioError::InProgress) => {
-                        info!("Seek в процессе (WouldBlock), ожидание...");
-                        std::thread::sleep(std::time::Duration::from_millis(50));
-                        continue;
-                    }
-                    Err(e) => return Err(e),
-                }
-            }
+            dec.seek(position.as_secs_f64());
 
             // Цикл ожидания данных
             info!("Ожидание загрузки данных для новой позиции...");

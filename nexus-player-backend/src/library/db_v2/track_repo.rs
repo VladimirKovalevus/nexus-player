@@ -9,7 +9,7 @@ use sea_orm::{
 use crate::library::entities_v2::{playlist_item, track};
 use crate::library::models::Track;
 use crate::library::repository_v2::TrackRepositoryV2;
-use crate::library::types::TrackId;
+use crate::library::types::{SortDirection, TrackId, TrackOrder};
 
 pub struct SeaOrmTrackRepository {
     db: DatabaseConnection,
@@ -278,14 +278,27 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
         }
     }
 
-    async fn list_liked(&self) -> Result<Vec<Track>> {
-        let results = track::Entity::find()
+    async fn list_liked(&self, order: TrackOrder) -> Result<Vec<Track>> {
+        let mut query = track::Entity::find()
             .filter(track::Column::Liked.eq(1))
-            .find_also_related(crate::library::entities_v2::artwork::Entity)
-            .order_by_asc(track::Column::LikedPosition)
+            .find_also_related(crate::library::entities_v2::artwork::Entity);
+
+        let (col, direction) = match order {
+            TrackOrder::Default(d) => (track::Column::LikedPosition, d),
+            TrackOrder::Title(d) => (track::Column::Title, d),
+            TrackOrder::Artist(d) => (track::Column::Artist, d),
+            TrackOrder::AddedAt(d) => (track::Column::AddedAt, d),
+        };
+
+        query = match direction {
+            SortDirection::Asc => query.order_by_asc(col),
+            SortDirection::Desc => query.order_by_desc(col),
+        };
+
+        let results = query
             .all(&self.db)
             .await
-            .context("Failed to list liked tracks with artwork")?;
+            .context("Failed to list liked tracks with artwork and sorting")?;
 
         let mut domain_tracks = Vec::new();
         for (entity, artwork_entity) in results {

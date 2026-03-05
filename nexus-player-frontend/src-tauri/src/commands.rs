@@ -6,7 +6,7 @@ use crate::dto::{
 };
 use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
 use nexus_player_backend::library::types::{
-    AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackSource,
+    AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackOrder, TrackSource,
 };
 use nexus_player_backend::playlist::cursor::ContainerContext;
 use nexus_player_backend::state::state::AppState;
@@ -19,9 +19,12 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 type Result<T> = std::result::Result<T, String>;
 
 #[tauri::command]
-pub async fn get_all_tracks(state: State<'_, Arc<AppState>>) -> Result<Vec<TrackDto>> {
+pub async fn get_all_tracks(
+    state: State<'_, Arc<AppState>>,
+    order: Option<TrackOrder>,
+) -> Result<Vec<TrackDto>> {
     let tracks = state
-        .get_all_library_tracks()
+        .get_all_library_tracks(order.unwrap_or_default())
         .await
         .map_err(|e| e.to_string())?;
 
@@ -130,6 +133,7 @@ pub async fn get_playlist_with_tracks(
                     .map_err(|e| e.to_string())?
                 {
                     items.push(PlaylistItemDto::Track {
+                        id: item.id,
                         item_id: item.item_id,
                         track: track.into(),
                         position: item.position,
@@ -143,6 +147,7 @@ pub async fn get_playlist_with_tracks(
                     .map_err(|e| e.to_string())?
                 {
                     items.push(PlaylistItemDto::Playlist {
+                        id: item.id,
                         item_id: item.item_id,
                         playlist: playlist.into(),
                         position: item.position,
@@ -199,7 +204,12 @@ pub async fn create_playlist(
     request: CreatePlaylistRequest,
 ) -> Result<i64> {
     let playlist_id = state
-        .create_playlist(request.title, request.description)
+        .create_playlist(
+            request.title,
+            request.description,
+            request.creator,
+            request.artwork_url,
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -216,6 +226,24 @@ pub async fn delete_playlist(state: State<'_, Arc<AppState>>, playlist_id: i64) 
 }
 
 #[tauri::command]
+pub async fn create_playlist_from_container(
+    state: State<'_, Arc<AppState>>,
+    provider: String,
+    content_type: ContentType,
+    id: String,
+    title: String,
+    description: Option<String>,
+    creator: Option<String>,
+    artwork_url: Option<String>,
+) -> Result<i64> {
+    state
+        .create_playlist_from_container(provider, content_type, id, title, description, artwork_url)
+        .await
+        .map(|id| id.0)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn create_playlist_with_tracks(
     state: State<'_, Arc<AppState>>,
     request: CreatePlaylistWithTracksRequest,
@@ -223,7 +251,12 @@ pub async fn create_playlist_with_tracks(
     let audio_tracks: Vec<_> = request.tracks.iter().map(|t| t.to_audio_track()).collect();
 
     let playlist_id = state
-        .create_playlist_with_tracks(request.title, request.description, audio_tracks)
+        .create_playlist_with_tracks(
+            request.title,
+            request.description,
+            request.artwork_url,
+            audio_tracks,
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -565,6 +598,17 @@ pub async fn select_audio_file(app: tauri::AppHandle) -> Result<Option<String>> 
         .dialog()
         .file()
         .add_filter("Audio Files", &["mp3", "wav", "flac", "ogg", "m4a", "aac"])
+        .blocking_pick_file();
+
+    Ok(file_path.map(|path| path.to_string()))
+}
+
+#[tauri::command]
+pub async fn select_image_file(app: tauri::AppHandle) -> Result<Option<String>> {
+    let file_path = app
+        .dialog()
+        .file()
+        .add_filter("Images", &["jpg", "jpeg", "png", "webp", "gif", "bmp"])
         .blocking_pick_file();
 
     Ok(file_path.map(|path| path.to_string()))

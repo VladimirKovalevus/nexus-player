@@ -29,8 +29,8 @@ export interface PlaylistDto {
 }
 
 export type PlaylistItemDto =
-  | { itemType: 'track'; itemId: number; track: TrackDto; position: number }
-  | { itemType: 'playlist'; itemId: number; playlist: PlaylistDto; position: number };
+  | { id: number; itemType: 'track'; itemId: number; track: TrackDto; position: number }
+  | { id: number; itemType: 'playlist'; itemId: number; playlist: PlaylistDto; position: number };
 
 export interface PlaylistWithItemsDto {
   playlist: PlaylistDto;

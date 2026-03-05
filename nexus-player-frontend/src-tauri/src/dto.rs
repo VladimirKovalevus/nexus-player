@@ -52,12 +52,14 @@ pub struct PlaylistWithTracksDto {
 pub enum PlaylistItemDto {
     #[serde(rename = "track")]
     Track {
+        id: i64,
         item_id: i64,
         track: TrackDto,
         position: u32,
     },
     #[serde(rename = "playlist")]
     Playlist {
+        id: i64,
         item_id: i64,
         playlist: PlaylistDto,
         position: u32,
@@ -185,6 +187,8 @@ pub struct CreateTrackRequest {
 pub struct CreatePlaylistRequest {
     pub title: String,
     pub description: Option<String>,
+    pub creator: Option<String>,
+    pub artwork_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -192,6 +196,8 @@ pub struct CreatePlaylistRequest {
 pub struct CreatePlaylistWithTracksRequest {
     pub title: String,
     pub description: Option<String>,
+    pub creator: Option<String>,
+    pub artwork_url: Option<String>,
     pub tracks: Vec<TrackDto>,
 }
 

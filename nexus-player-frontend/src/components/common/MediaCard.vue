@@ -56,7 +56,7 @@
         <div v-if="props.track?.liked" :class="$style.heartFilled"></div>
         <div v-else :class="$style.heartOutline"></div>
       </button>
-      <button v-if="showAction" ref="actionButtonRef" :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
+      <button v-if="showAction && type !== 'playlist'" ref="actionButtonRef" :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
       <button v-if="props.containerMode" :class="$style.expandBtn" @click.stop="emit('toggleExpand')">
         {{ props.isExpanded ? '▲' : '▼' }}
       </button>
@@ -64,7 +64,7 @@
   </div>
 
   <Teleport to="body">
-    <div v-if="dropdownOpen" ref="dropdownPortalRef" :class="$style.dropdown" :style="dropdownStyle" @click.stop>
+    <div v-if="dropdownOpen" ref="dropdownPortalRef" :class="$style.dropdown" :style="dropdownStyle" @click.stop @wheel.stop>
       <div v-if="!showPlaylistSubmenu">
         <button
           v-for="option in menuOptions"
@@ -132,6 +132,7 @@ const emit = defineEmits<{
   containerCreatePlaylist: [];
   containerAddToPlaylist: [playlistId: number];
   containerRemove: [];
+  remove: [];
 }>();
 
 const dropdownOpen = ref(false);
@@ -238,6 +239,15 @@ const menuOptions = computed<MenuOption[]>(() => {
       action: handleShowPlaylistSubmenu,
       hasSubmenu: true,
     });
+
+    if (props.context === 'playlist') {
+      options.push({
+        label: 'Удалить из плейлиста',
+        icon: '🗑️',
+        isDanger: true,
+        action: handleRemoveFromPlaylist,
+      });
+    }
   } else if (props.type === 'playlist') {
     options.push({
       label: 'Добавить в плейлист',
@@ -337,17 +347,29 @@ const toggleDropdown = async () => {
   showPlaylistSubmenu.value = false;
 
   if (dropdownOpen.value) {
+    await nextTick();
     if (actionButtonRef.value) {
       const rect = actionButtonRef.value.getBoundingClientRect();
-      dropdownPos.value = {
-        top: rect.bottom + 4,
-        right: window.innerWidth - rect.right,
-      };
+      const viewportHeight = window.innerHeight;
+      
+      // Initial position (below)
+      let top = rect.bottom + 4;
+      let right = window.innerWidth - rect.right;
+      
+      // Check if dropdown goes off screen
+      if (dropdownPortalRef.value) {
+        const dropdownHeight = dropdownPortalRef.value.offsetHeight;
+        if (top + dropdownHeight > viewportHeight) {
+          // Open upwards if not enough space below
+          top = rect.top - dropdownHeight - 4;
+        }
+      }
+      
+      dropdownPos.value = { top, right };
     }
     if (playlists.value.length === 0) {
       await fetchPlaylists();
     }
-    await nextTick();
     document.addEventListener('mousedown', handleDocumentClick);
   } else {
     document.removeEventListener('mousedown', handleDocumentClick);
@@ -371,6 +393,11 @@ const fetchPlaylists = async () => {
 
 const handleShowPlaylistSubmenu = () => {
   showPlaylistSubmenu.value = true;
+};
+
+const handleRemoveFromPlaylist = () => {
+  emit('remove');
+  closeDropdown();
 };
 
 const handleAddToPlaylist = async (playlistId: number) => {
@@ -695,8 +722,9 @@ const handleToggleLike = async () => {
   border-radius: $radius-md;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   min-width: 200px;
-  z-index: 9999;
-  overflow: hidden;
+  z-index: 10000;
+  overflow-y: auto;
+  max-height: 400px;
 }
 
 .dropdownItem {

@@ -14,6 +14,7 @@ const loading = ref(false);
 const isModalOpen = ref(false);
 const isSavingPlaylist = ref(false);
 const modalTargetIndex = ref<number | null>(null);
+const playlistInitialData = ref<{ title?: string; description?: string; artworkUrl?: string }>({});
 const expandedContainers = ref<Set<number>>(new Set());
 
 const providers = [
@@ -24,15 +25,20 @@ const providers = [
 
 const contentTypes = [
   { value: null, label: 'All' },
-  { value: 'track', label: 'Track' },
-  { value: 'playlist', label: 'Playlist' },
-  { value: 'album', label: 'Album' },
-  { value: 'channel', label: 'Channel' },
+  { value: 'Track', label: 'Track' },
+  { value: 'Playlist', label: 'Playlist' },
+  { value: 'Album', label: 'Album' },
+  { value: 'Channel', label: 'Channel' },
 ];
 
 const emit = defineEmits<{
   refetch: [];
 }>();
+
+const mapContentType = (type: string) => {
+  if (!type) return null;
+  return type.charAt(0).toUpperCase() + type.slice(1);
+};
 
 const search_q = ()=>{
     search(0)
@@ -47,15 +53,22 @@ const search = async (newOffset = 0) => {
     loading.value = true;
     error.value = null;
     offset.value = newOffset;
-    console.log(offset.value,"OFFSET")
-
-    const results = await invoke<SearchResult[]>('search_streaming', {
+    console.log({
       provider: selectedProvider.value,
       contentType: selectedContentType.value,
       query: query.value,
       limit: limit.value,
       offset: offset.value,
+    },"OFFSET")
+
+    const results = await invoke<SearchResult[]>('search_streaming', {
+      provider: selectedProvider.value,
+      contentType: selectedContentType.value?.toLowerCase(),
+      query: query.value,
+      limit: limit.value,
+      offset: offset.value,
     });
+    console.log(results,"AAA")
 
     searchResults.value = results;
     expandedContainers.value.clear();
@@ -87,10 +100,18 @@ const toggleContainer = (index: number) => {
 
 const handleResultClick = async (result: SearchResult, index: number) => {
   console.log('Clicked result:', result, 'at index:', index);
+  console.log({
+      system: selectedProvider.value,
+      contentType: selectedContentType.value,
+      query: query.value,
+      limit: limit.value,
+      offset: offset.value,
+      selectedIndex: index,
+    },'search')
   try {
     await invoke('handle_search', {
       system: selectedProvider.value,
-      contentType: selectedContentType.value,
+      contentType: selectedContentType.value?.toLowerCase(),
       query: query.value,
       limit: limit.value,
       offset: offset.value,
@@ -137,6 +158,25 @@ const getContainerTracks = async (result: SearchResult): Promise<any[] | null> =
 };
 
 const handleContainerCreatePlaylist = (index: number) => {
+  const result = searchResults.value[index];
+  if (result) {
+    let description = '';
+    if (result.type === 'album') {
+      description = result.artist || '';
+    } else if (result.type === 'playlist') {
+      description = result.creator || '';
+    }
+
+    if (result.description) {
+      description = description ? `${description} (${result.description})` : result.description;
+    }
+
+    playlistInitialData.value = {
+      title: result.title,
+      description: description,
+      artworkUrl: result.thumbnail || '',
+    };
+  }
   modalTargetIndex.value = index;
   isModalOpen.value = true;
 };
@@ -146,15 +186,17 @@ const handleContainerAddToPlaylist = async (index: number, playlistId: number) =
   if (!result || result.type === 'track' || result.type === 'channel') return;
 
   try {
-    const tracks = await getContainerTracks(result);
-    if (!tracks) return;
-
     const title = result.title;
     const description = result.type === 'album' ? result.artist : result.creator;
 
-    const childId = await invoke<number>('create_playlist_with_tracks', {
-      request: { title, description, tracks },
+    const childId = await invoke<number>('create_playlist_from_container', {
+      provider: result.source?.system || selectedProvider.value,
+      contentType: mapContentType(result.type),
+      id: result.id,
+      title,
+      description,
     });
+    
     await invoke('add_playlist_to_playlist', {
       parentPlaylistId: playlistId,
       childPlaylistId: childId,
@@ -169,7 +211,7 @@ const handleContainerRemove = (index: number) => {
   searchResults.value.splice(index, 1);
 };
 
-const handleCreatePlaylist = async (name: string) => {
+const handleCreatePlaylist = async (data: { title: string; description: string | null; artworkUrl: string | null }) => {
   if (isSavingPlaylist.value || modalTargetIndex.value === null) return;
 
   const result = searchResults.value[modalTargetIndex.value];
@@ -178,16 +220,13 @@ const handleCreatePlaylist = async (name: string) => {
   isSavingPlaylist.value = true;
   error.value = null;
   try {
-    const tracks = await getContainerTracks(result);
-    if (!tracks) {
-      error.value = 'Не удалось загрузить треки';
-      return;
-    }
-
-    const description = result.type === 'album' ? result.artist : result.creator;
-
-    await invoke<number>('create_playlist_with_tracks', {
-      request: { title: name, description, tracks },
+    await invoke<number>('create_playlist_from_container', {
+      provider: result.source?.system || selectedProvider.value,
+      contentType: mapContentType(result.type),
+      id: result.id,
+      title: data.title,
+      description: data.description,
+      artworkUrl: data.artworkUrl,
     });
     isModalOpen.value = false;
     emit('refetch');
@@ -289,7 +328,7 @@ const handleCreatePlaylist = async (name: string) => {
           show-action
           :container-mode="result.type !== 'track'"
           :is-expanded="isContainerExpanded(index)"
-          @click="result.type === 'track' ? handleResultClick(result, index) : toggleContainer(index)"
+          @click=" handleResultClick(result, index) "
           @play="handleResultPlay(result, index)"
           @refresh="search"
           @toggle-expand="toggleContainer(index)"
@@ -310,6 +349,7 @@ const handleCreatePlaylist = async (name: string) => {
     <PlaylistCreateSimpleModal
       :is-open="isModalOpen"
       :is-loading="isSavingPlaylist"
+      :initial-data="playlistInitialData"
       @close="isModalOpen = false"
       @save="handleCreatePlaylist"
     />

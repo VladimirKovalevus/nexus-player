@@ -68,6 +68,28 @@ pub enum CodecFormat {
     Other,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrackOrder {
+    Default(SortDirection),
+    Title(SortDirection),
+    Artist(SortDirection),
+    AddedAt(SortDirection),
+}
+
+impl Default for TrackOrder {
+    fn default() -> Self {
+        Self::Default(SortDirection::Asc)
+    }
+}
+
 impl CodecFormat {
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {

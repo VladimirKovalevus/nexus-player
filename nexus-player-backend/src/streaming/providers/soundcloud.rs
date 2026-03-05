@@ -11,8 +11,8 @@ use crate::library::TrackSource;
 use crate::streaming::error::{StreamError, StreamResult};
 use crate::streaming::provider::StreamProvider;
 use crate::streaming::types::{
-    AlbumInfo, ContentType, PlaylistInfo, ResolvedContent, ResolveOptions, SearchResult, StreamMetadata,
-    StreamingService, TrackInfo,
+    AlbumInfo, ContentType, PlaylistInfo, ResolveOptions, ResolvedContent, SearchResult,
+    StreamMetadata, StreamingService, TrackInfo,
 };
 
 pub struct SoundCloudProvider {
@@ -211,7 +211,6 @@ impl StreamProvider for SoundCloudProvider {
                         })
                         .collect();
 
-
                     tracing::info!("SoundCloud Playlist tracks: {:?}", tracks);
 
                     search_results.push(SearchResult::Playlist(PlaylistInfo {
@@ -260,7 +259,6 @@ impl StreamProvider for SoundCloudProvider {
                         })
                         .collect();
 
-
                     tracing::info!("SoundCloud Album tracks: {:?}", tracks);
 
                     search_results.push(SearchResult::Album(AlbumInfo {
@@ -295,7 +293,7 @@ impl StreamProvider for SoundCloudProvider {
             .await
             .map_err(|e| StreamError::MetadataError(format!("SoundCloud API error: {}", e)))?;
 
-        let track_infos = tracks
+        let track_infos: Vec<TrackInfo> = tracks
             .into_iter()
             .map(|t| TrackInfo {
                 source: TrackSource::External {
@@ -304,14 +302,13 @@ impl StreamProvider for SoundCloudProvider {
                 },
                 title: t.track.title,
                 artist: t.user.username,
-                duration: Some(std::time::Duration::from_millis(
-                    t.track.duration as u64,
-                )),
+                duration: Some(std::time::Duration::from_millis(t.track.duration as u64)),
                 thumbnail: t.track.artwork_url,
                 description: t.track.description,
             })
             .collect();
 
+        println!("TRACKS LEN {:?}", track_infos.len());
         Ok(track_infos)
     }
 

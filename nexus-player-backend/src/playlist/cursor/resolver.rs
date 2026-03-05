@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::library::LibraryService;
 use crate::library::models::PlaylistItemKind;
 use crate::streaming::StreamingService;
-use crate::library::types::{PlaylistId, TrackId as LibTrackId};
+use crate::library::types::{PlaylistId, TrackId as LibTrackId, TrackOrder};
 use crate::playlist::cursor::{
     CursorSource, CursorResolver, ContainerContext, CursorItem,
     DbTrackCursor, ProviderCursor, StreamingSearchCursor
@@ -76,7 +76,7 @@ impl CursorResolver for AppCursorResolver {
             ContainerContext::LocalAlbum(id) => {
                 // Assuming we can find tracks by album ID or name. 
                 // For now, let's say we have a method in library or use a placeholder.
-                let tracks = self.library.get_all_tracks().await?; // Temporary: should be filtered by album
+                let tracks = self.library.get_all_tracks(TrackOrder::default()).await?; // Temporary: should be filtered by album
                 let track_ids: Vec<LibTrackId> = tracks.into_iter().map(|t| t.id).collect();
                 
                 Ok(Box::new(DbTrackCursor::new(self.library.clone(), track_ids)))

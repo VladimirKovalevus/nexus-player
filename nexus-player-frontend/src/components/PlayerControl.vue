@@ -191,7 +191,7 @@ onUnmounted(() => {
     <!-- Left: Track Info -->
     <div class="left-section">
       <div class="track-info">
-        <div v-if="audioStore.currentTrack?.artworkUrl" class="track-artist">
+        <div v-if="audioStore.currentTrack?.artworkUrl" class="track-art">
             <img height="64" width="64" :src="audioStore.currentTrack?.artworkUrl">
         </div>
         <div style="display:flex; flex-direction: column;">
@@ -324,16 +324,20 @@ onUnmounted(() => {
 }
 
 .current-track {
-  font-weight: 600;
-  font-size: 0.95rem;
+  font-weight: 400;
+  font-size: 1.45rem;
   color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.track-art {
+    width:64px;
+
+}
 .track-artist {
-  font-size: 0.8rem;
+  font-size: 1.3rem;
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
