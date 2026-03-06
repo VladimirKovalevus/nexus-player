@@ -65,7 +65,7 @@ export const useAudioStore = defineStore('audio', () => {
     navigator.mediaSession.setActionHandler('nexttrack', () => invoke('play_next'));
     navigator.mediaSession.setActionHandler('seekto', (details) => {
       if (details.seekTime !== undefined) {
-        invoke('seek', { positionSecs: details.seekTime });
+        invoke('seek', { positionSecs: Math.max(details.seekTime,0) });
       }
     });
   }

@@ -87,7 +87,7 @@ impl Seek for HlsReaderAdapter {
 
 impl symphonia::core::io::MediaSource for HlsReaderAdapter {
     fn is_seekable(&self) -> bool {
-        false
+        true
     }
 
     fn byte_len(&self) -> Option<u64> {
@@ -407,8 +407,15 @@ impl PlaybackEngine {
             self.sample_buffer.lock().unwrap().clear();
             *self.buffer_position.lock().unwrap() = 0;
 
-            dec.seek(position.as_secs_f64());
-
+            let res = dec.seek(position.as_secs_f64());
+            if let Err(AudioError::OutsideOfBuffer) = res {
+                if was_playing {
+                    if let Some(ref stream) = self.stream {
+                        let _ = stream.play();
+                    }
+                }
+                return Err(AudioError::OutsideOfBuffer);
+            }
             // Цикл ожидания данных
             info!("Ожидание загрузки данных для новой позиции...");
             loop {

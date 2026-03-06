@@ -24,7 +24,7 @@ const handleSeek = (event: MouseEvent) => {
   const rect = containerRef.value.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const percentage = x / rect.width;
-  invoke('seek', { positionSecs: percentage * audioStore.duration });
+  invoke('seek', { positionSecs: Math.max(percentage * audioStore.duration,0) });
 };
 
 const draw = () => {

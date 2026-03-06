@@ -25,6 +25,9 @@ pub enum AudioError {
     #[error("Данные ещё не доступны")]
     InProgress,
 
+    #[error("Запрашиваемая часть вне буфера")]
+    OutsideOfBuffer,
+
     #[error("Ошибка чтения аудио файла: {0}")]
     IoError(#[from] std::io::Error),
 }

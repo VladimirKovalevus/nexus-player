@@ -415,6 +415,14 @@ impl AudioEngine {
                                     state.write().unwrap().position = position;
                                     let _ = event_tx.send(AudioEvent::PositionUpdated { position });
                                 }
+                                Err(AudioError::OutsideOfBuffer) => {
+                                    info!("Ошибка OutsideOfBuffer:");
+                                    let _ = event_tx.send(AudioEvent::Error {
+                                        message: format!(
+                                            "Поиск вне буфера не поддерживается для opus"
+                                        ),
+                                    });
+                                }
                                 Err(e) => {
                                     warn!("Ошибка перемотки: {}", e);
                                 }

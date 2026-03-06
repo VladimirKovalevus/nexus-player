@@ -338,9 +338,7 @@ impl HlsAudioDecoder {
                         "Seek to {:.2}s ignored (not buffered in contiguous mode)",
                         time_secs
                     );
-                    return Err(AudioError::DecodingError(
-                        "Seek outside of buffer in contiguous mode".into(),
-                    ));
+                    return Err(AudioError::OutsideOfBuffer);
                 }
             }
 
@@ -361,7 +359,7 @@ impl HlsAudioDecoder {
                 )
                 .map_err(|e| AudioError::DecodingError(format!("Seek failed: {}", e)))?;
 
-            self.decoder.reset();
+            // self.decoder.reset();
             info!("HLS continuous seek completed to {:.2}s", time_secs);
             return Ok(seeked_to.actual_ts);
         }
