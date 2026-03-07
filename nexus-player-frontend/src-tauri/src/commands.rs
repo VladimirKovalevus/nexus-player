@@ -1,9 +1,10 @@
 use crate::dto::{
-    AudioStateDto, ContainerMetaDto, CreatePlaylistRequest, CreatePlaylistWithTracksRequest,
-    CurrentPositionDto, PlayHistoryEntryDto, PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto,
-    PlaylistWithTracksDto, QueueEntryDto, QueueStateDto, SearchContextDto, SearchResultDto,
-    TrackDto,
+    hash_str_to_i64, AudioStateDto, ContainerMetaDto, CreatePlaylistRequest,
+    CreatePlaylistWithTracksRequest, CurrentPositionDto, PlayHistoryEntryDto, PlaylistDto,
+    PlaylistItemDto, PlaylistWithItemsDto, PlaylistWithTracksDto, QueueEntryDto, QueueStateDto,
+    SearchContextDto, SearchResultDto, TrackDto, TrackSourceDto,
 };
+use crate::events::FrontendEvent;
 use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
 use nexus_player_backend::library::types::{
     AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackOrder, TrackSource,
@@ -886,17 +887,124 @@ pub async fn get_vk_profile(
 }
 
 #[tauri::command]
-pub async fn save_track_to_file(state: State<'_, Arc<AppState>>, track_id: i64) -> Result<()> {
-    let downloads_dir = Path::new("/home/syndafloden/.cache/downloads");
-    std::fs::create_dir_all(downloads_dir).map_err(|e| e.to_string())?;
+pub async fn save_track_to_file(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    track: TrackDto,
+) -> Result<()> {
+    let downloads_dir = app
+        .path()
+        .cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("nexus-downloads");
+    std::fs::create_dir_all(&downloads_dir).map_err(|e| e.to_string())?;
 
-    let file_path = state
-        .streaming()
-        .save_track_to_file(track_id as u64, downloads_dir)
-        .await
-        .map_err(|e| e.to_string())?;
+    let track_id = if track.id == 0 {
+        let src = track.source.as_ref().ok_or("Track has no source")?;
+        hash_str_to_i64(&src.url)
+    } else {
+        track.id
+    };
 
-    tracing::info!("Track saved to {:?}", file_path);
+    let src = track.source.as_ref().ok_or("Track has no source")?;
+    let track_title = track.title.clone();
+    let state_arc = state.inner().clone();
+    let has_track = state.streaming().has_track(track_id as u64).await;
+    let options = streaming::state::types::DownloadOptions {
+        user_agent: None,
+        on_start: Some(Box::new({
+            let app_handle = app.clone();
+            let track_title = track_title.clone();
+            move |_| {
+                let _ = app_handle.emit(
+                    "audio-event",
+                    FrontendEvent::DownloadStarted {
+                        title: track_title.clone(),
+                    },
+                );
+            }
+        })),
+        on_progress: Some(Box::new({
+            let app_handle = app.clone();
+            move |res| {
+                if let Ok(buffer) = res {
+                    let _ = app_handle.emit(
+                        "audio-event",
+                        FrontendEvent::DownloadProgress {
+                            track_id,
+                            progress: buffer.progress() as f32,
+                        },
+                    );
+                }
+            }
+        })),
+        on_finish: Some(Box::new({
+            let app_handle = app.clone();
+            let state_arc = state_arc.clone();
+            move |res| {
+                let success = res.is_ok();
+                if let Ok(buffer) = res {
+                    let file_path = downloads_dir.join(format!(
+                        "{}-{}.{}",
+                        track.artist.clone().unwrap_or("Unknown".to_string()),
+                        track.title,
+                        buffer.container()
+                    ));
+                    let _ = buffer.save_to_file(file_path.clone());
+
+                    // Update database in background
+                    let file_path_clone = file_path;
+                    let state_arc_clone = state_arc.clone();
+                    tauri::async_runtime::spawn(async move {
+                        use nexus_player_backend::library::types::CacheStatus;
+                        if let Ok(Some(mut lib_track)) = state_arc_clone
+                            .library()
+                            .get_track(nexus_player_backend::library::TrackId(track_id))
+                            .await
+                        {
+                            lib_track.cache = CacheStatus::Cached {
+                                path: file_path_clone,
+                                downloaded_at: chrono::Utc::now(),
+                            };
+                            let _ = state_arc_clone.library().update_track(lib_track).await;
+                        }
+                    });
+                }
+                let _ = app_handle.emit(
+                    "audio-event",
+                    FrontendEvent::DownloadFinished {
+                        track_id,
+                        title: track.title.clone(),
+                        success,
+                    },
+                );
+            }
+        })),
+    };
+
+    if has_track {
+        state
+            .streaming()
+            .update_task(track_id as u64, options)
+            .await;
+        tracing::info!("Track saved");
+    } else {
+        state
+            .streaming()
+            .add_download_task(
+                TrackSource::External {
+                    system: src.system.clone(),
+                    id: src.url.clone(),
+                },
+                track_id as u64,
+                Some(options),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+
+        tracing::info!("Track download initiated for {:?}", track_id);
+    }
+
     Ok(())
 }
 

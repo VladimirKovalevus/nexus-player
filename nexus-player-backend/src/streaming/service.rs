@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 use crate::audio::types::{MediaSource, TrackSource};
 use crate::config::ProviderConfig;
 use crate::streaming::external::{StreamingMediaSource, StreamingSourceWrapper};
-use crate::streaming::types::{AlbumInfo, TrackInfo};
+use crate::streaming::types::{AlbumInfo, ResolveOptions, TrackInfo};
 use streaming::multi_downloader::source::Source;
 
 use super::cache::CacheManager;
@@ -14,11 +14,11 @@ use super::error::{StreamError, StreamResult};
 use super::provider::StreamProvider;
 use super::providers::{BandcampProvider, SoundCloudProvider, VkProvider, YtDlpProvider};
 use super::types::{
-    ContentType, PlaylistInfo, ResolveOptions, SearchResult,
-    StreamingService as StreamingServiceEnum,
+    ContentType, PlaylistInfo, SearchResult, StreamingService as StreamingServiceEnum,
 };
 use std::str::FromStr;
 use streaming::state::manager::DownloadManager;
+use streaming::state::types::DownloadOptions;
 
 pub struct StreamingService {
     providers: HashMap<String, Arc<dyn StreamProvider>>,
@@ -67,6 +67,50 @@ impl StreamingService {
         if let Some(vk) = self.providers.get("vk") {
             vk.set_credentials(config.vk.credentials.clone()).await;
         }
+    }
+    pub async fn update_task(&self, task_id: u64, options: DownloadOptions) {
+        self.download_manager.update_task(task_id, options).await;
+    }
+    pub async fn add_download_task(
+        &self,
+        source: TrackSource,
+        task_id: u64,
+        options: Option<DownloadOptions>,
+    ) -> StreamResult<()> {
+        if let Some(provider) = self.providers.get(source.system()) {
+            let mut effective_options = options.unwrap_or(DownloadOptions {
+                user_agent: None,
+                on_start: None,
+                on_progress: None,
+                on_finish: None,
+            });
+
+            if source.system() == "vk" && effective_options.user_agent.is_none() {
+                effective_options.user_agent = Some(vk_down::auth::VK_USER_AGENT.to_string());
+            }
+            match provider
+                .resolve(
+                    &source,
+                    Some(ResolveOptions {
+                        user_agent: effective_options.user_agent.clone(),
+                    }),
+                )
+                .await
+            {
+                Ok(url) => {
+                    match self
+                        .download_manager
+                        .add_download_task(url.as_str(), task_id, Some(effective_options))
+                        .await
+                    {
+                        Ok(_) => Ok(()),
+                        Err(e) => Err(StreamError::Other(e.to_string())),
+                    }
+                }
+                Err(e) => Err(e),
+            };
+        }
+        Err(StreamError::NoProviderFound)
     }
 
     pub async fn search(
@@ -174,7 +218,7 @@ impl StreamingService {
         &self,
         source: TrackSource,
         track_id: u64,
-        options: Option<ResolveOptions>,
+        options: Option<DownloadOptions>,
     ) -> StreamResult<StreamingSourceWrapper> {
         println!("Source {:?}", source);
         match source {
@@ -192,8 +236,12 @@ impl StreamingService {
             }
             TrackSource::External { system, id } => {
                 if let Some(provider) = self.providers.get(&system) {
-                    let mut effective_options =
-                        options.unwrap_or(ResolveOptions { user_agent: None });
+                    let mut effective_options = options.unwrap_or(DownloadOptions {
+                        user_agent: None,
+                        on_start: None,
+                        on_progress: None,
+                        on_finish: None,
+                    });
 
                     if system == "vk" && effective_options.user_agent.is_none() {
                         effective_options.user_agent =
@@ -205,14 +253,18 @@ impl StreamingService {
                         Ok(StreamingSourceWrapper::from_source(stream))
                     } else {
                         match provider
-                            .resolve(&source, Some(effective_options.clone()))
+                            .resolve(
+                                &source,
+                                Some(ResolveOptions {
+                                    user_agent: effective_options.user_agent.clone(),
+                                }),
+                            )
                             .await
                         {
                             Ok(url) => {
-                                let user_agent = effective_options.user_agent;
                                 match self
                                     .download_manager
-                                    .add_track(&url, track_id, user_agent)
+                                    .add_track(&url, track_id, Some(effective_options))
                                     .await
                                 {
                                     Ok(s) => Ok(StreamingSourceWrapper::from_source(s)),
@@ -234,61 +286,8 @@ impl StreamingService {
             .set_context(Some(track_id), next)
             .await;
     }
-    pub async fn debug(&self) {
-        // let _ = self.download_manager.debug_to_file().await;
-    }
 
     pub async fn has_track(&self, track_id: u64) -> bool {
         self.download_manager.get_track(track_id).await.is_some()
-    }
-
-    pub async fn save_track_to_file_path(
-        &self,
-        track_id: u64,
-        path: &std::path::Path,
-    ) -> StreamResult<std::path::PathBuf> {
-        if let Some((source, _)) = self.download_manager.get_track_with_url(track_id).await {
-            source
-                .save_to_file(path)
-                .map_err(|e| StreamError::Other(e.to_string()))?;
-
-            Ok(path.to_path_buf())
-        } else {
-            Err(StreamError::Other(
-                "Track not found in download manager".to_string(),
-            ))
-        }
-    }
-
-    pub async fn save_track_to_file(
-        &self,
-        track_id: u64,
-        dir: &std::path::Path,
-    ) -> StreamResult<std::path::PathBuf> {
-        if let Some((source, url)) = self.download_manager.get_track_with_url(track_id).await {
-            let mut sanitized_filename: String = url
-                .chars()
-                .map(|c| match c {
-                    '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
-                    _ => c,
-                })
-                .collect();
-
-            if sanitized_filename.len() > 200 {
-                sanitized_filename.truncate(200);
-            }
-
-            let file_path = dir.join(format!("{}.mp3", sanitized_filename));
-
-            source
-                .save_to_file(&file_path)
-                .map_err(|e| StreamError::Other(e.to_string()))?;
-
-            Ok(file_path)
-        } else {
-            Err(StreamError::Other(
-                "Track not found in download manager".to_string(),
-            ))
-        }
     }
 }

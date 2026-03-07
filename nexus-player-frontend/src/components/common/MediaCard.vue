@@ -487,7 +487,7 @@ const handleDownload = async () => {
 
 const handleSaveToFile = async () => {
   try {
-    await invoke('save_track_to_file', { trackId: entity.value.id });
+    await invoke('save_track_to_file', { track: entity.value });
     console.log('Track saved to file:', entity.value.id);
   } catch (e) {
     console.error('Failed to save track to file:', e);

@@ -29,7 +29,8 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = "0.3"
 chrono = { workspace = true }
-vk-down = { path = "../../../vk-down" }
+vk-down = { workspace = true }
+streaming = { workspace = true }
 rand = "0.8"
 
 # Vendored OpenSSL for Android build

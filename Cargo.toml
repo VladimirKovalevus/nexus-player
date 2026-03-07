@@ -24,6 +24,9 @@ tracing = "0.1"
 anyhow = "1.0"
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
+streaming = { path = "../streaming" }
+vk-down = { path = "../vk-down" }
+rsoundcloud = { path = "../rsoundcloud" }
 
 [patch.crates-io]
 symphonia-core = { path = "../Symphonia/symphonia-core" }

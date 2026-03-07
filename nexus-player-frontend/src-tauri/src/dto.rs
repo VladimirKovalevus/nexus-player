@@ -665,7 +665,7 @@ impl From<SearchResultDto> for streaming::SearchResult {
     }
 }
 
-fn hash_str_to_i64(s: &str) -> i64 {
+pub(crate) fn hash_str_to_i64(s: &str) -> i64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     s.hash(&mut hasher);

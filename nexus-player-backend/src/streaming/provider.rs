@@ -1,6 +1,6 @@
 use crate::audio::types::MediaSource;
 use crate::library::TrackSource;
-use crate::streaming::types::{ResolvedContent, ResolveOptions};
+use crate::streaming::types::{ResolveOptions, ResolvedContent};
 
 use super::error::StreamResult;
 use super::types::{ContentType, PlaylistInfo, SearchResult, StreamMetadata, TrackInfo};
@@ -34,8 +34,7 @@ pub trait StreamProvider: Send + Sync {
         Err(StreamError::NotSupported)
     }
 
-    async fn expand_collection(&self, _collection: SearchResult)
-        -> StreamResult<Vec<TrackInfo>>;
+    async fn expand_collection(&self, _collection: SearchResult) -> StreamResult<Vec<TrackInfo>>;
 
     async fn get_profile_content(&self) -> StreamResult<(Vec<TrackInfo>, Vec<PlaylistInfo>)> {
         Ok((vec![], vec![]))

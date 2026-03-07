@@ -47,7 +47,6 @@ pub struct HlsAudioDecoder {
     total_duration: f64,
 
     is_continuous: bool,
-    hls_contiguous: bool,
 }
 
 impl HlsAudioDecoder {
@@ -64,7 +63,6 @@ impl HlsAudioDecoder {
 
         let is_continuous = source.is_continuous();
         // Enable contiguous seek restriction by default for OGG
-        let hls_contiguous = is_continuous;
 
         let (mut format_reader, track_id, sample_rate, channels) = if is_continuous {
             // For continuous streams (OGG), wrap the whole HlsSource
@@ -149,12 +147,7 @@ impl HlsAudioDecoder {
             accumulated_duration: 0.0,
             total_duration,
             is_continuous,
-            hls_contiguous,
         })
-    }
-
-    pub fn set_hls_contiguous(&mut self, enabled: bool) {
-        self.hls_contiguous = enabled;
     }
 
     pub fn buffered_ranges(&self) -> Vec<(f64, f64)> {
@@ -328,18 +321,16 @@ impl HlsAudioDecoder {
         );
 
         if self.is_continuous {
-            if self.hls_contiguous {
-                let ranges = self.source.get_buffered_ranges();
-                let is_buffered = ranges
-                    .iter()
-                    .any(|(start, end)| time_secs >= *start && time_secs <= *end);
-                if !is_buffered {
-                    warn!(
-                        "Seek to {:.2}s ignored (not buffered in contiguous mode)",
-                        time_secs
-                    );
-                    return Err(AudioError::OutsideOfBuffer);
-                }
+            let ranges = self.source.get_buffered_ranges();
+            let is_buffered = ranges
+                .iter()
+                .any(|(start, end)| time_secs >= *start && time_secs <= *end);
+            if !is_buffered {
+                warn!(
+                    "Seek to {:.2}s ignored (not buffered in contiguous mode)",
+                    time_secs
+                );
+                return Err(AudioError::OutsideOfBuffer);
             }
 
             // Explicitly tell source to seek to this time to trigger download if needed

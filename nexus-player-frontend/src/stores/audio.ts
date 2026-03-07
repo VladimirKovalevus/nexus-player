@@ -201,6 +201,18 @@ export const useAudioStore = defineStore('audio', () => {
           queueState.value = event.payload.queue;
         }
         break;
+      case 'DownloadStarted':
+        if (event.payload?.title) {
+          notificationStore.addNotification(`Download started: ${event.payload.title}`, 'success');
+        }
+        break;
+      case 'DownloadFinished':
+        if (event.payload?.success) {
+          notificationStore.addNotification(`Download finished: ${event.payload.title}`, 'success');
+        } else {
+          notificationStore.addNotification(`Download failed: ${event.payload.title}`, 'error');
+        }
+        break;
       case 'Error':
         console.error('Audio error:', event.payload?.message);
         notificationStore.addNotification(`Audio Error: ${event.payload?.message}`, 'error');

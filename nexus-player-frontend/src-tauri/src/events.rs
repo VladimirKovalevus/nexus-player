@@ -58,6 +58,24 @@ pub enum FrontendEvent {
     },
 
     #[serde(rename_all = "camelCase")]
+    DownloadStarted {
+        title: String,
+    },
+
+    #[serde(rename_all = "camelCase")]
+    DownloadProgress {
+        track_id: i64,
+        progress: f32,
+    },
+
+    #[serde(rename_all = "camelCase")]
+    DownloadFinished {
+        track_id: i64,
+        title: String,
+        success: bool,
+    },
+
+    #[serde(rename_all = "camelCase")]
     AudioStateUpdated {
         state: AudioStateDto,
         queue: QueueStateDto,
