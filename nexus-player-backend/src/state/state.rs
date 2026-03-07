@@ -707,6 +707,10 @@ impl AppState {
         self.library.get_track(track_id).await
     }
 
+    pub async fn update_track(&self, track: LibraryTrack) -> Result<()> {
+        self.library.update_track(track).await
+    }
+
     pub async fn create_playlist(
         &self,
         title: String,

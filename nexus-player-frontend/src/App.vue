@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, provide } from 'vue';
+import { ref, provide, onMounted } from 'vue';
+import { listen } from '@tauri-apps/api/event';
+import { useNotificationStore } from './stores/notifications';
 import AppLayout from './components/layout/AppLayout.vue';
 import PlaybackQueue from './components/PlaybackQueue.vue';
 import PlayerControl from './components/PlayerControl.vue';
@@ -19,6 +21,26 @@ const showQueue = ref(true);
 const currentView = ref('home');
 const selectedPlaylistId = ref<number | null>(null);
 const playlistHistory = ref<number[]>([]);
+
+const notificationStore = useNotificationStore();
+
+onMounted(async () => {
+  // Listen for download events from backend
+  await listen<any>('download-started', (event) => {
+    const { title, artist } = event.payload;
+    notificationStore.addNotification(`Начато скачивание: ${artist} - ${title}`, 'info');
+  });
+
+  await listen<any>('download-finished', (event) => {
+    const { success, error } = event.payload;
+    if (success) {
+      notificationStore.addNotification(`Скачивание завершено!`, 'success');
+      refreshQueue(); // Refresh to show local source
+    } else {
+      notificationStore.addNotification(`Ошибка скачивания: ${error}`, 'error');
+    }
+  });
+});
 
 const refreshQueue = () => {
   playbackQueueRef.value?.fetchQueue();

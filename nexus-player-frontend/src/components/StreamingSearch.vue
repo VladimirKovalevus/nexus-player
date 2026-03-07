@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { SearchResult } from '@/types/types';
 import MediaCard from '@/components/common/MediaCard.vue';
@@ -8,7 +8,18 @@ import { storeToRefs } from 'pinia';
 import { useStreamingStore } from '@/stores/streaming';
 
 const store = useStreamingStore();
-const { query, selectedProvider, selectedContentType, limit, offset, searchResults, error } = storeToRefs(store);
+const {
+  query,
+  activeQuery,
+  selectedProvider,
+  activeProvider,
+  selectedContentType,
+  activeContentType,
+  limit,
+  offset,
+  searchResults,
+  error
+} = storeToRefs(store);
 
 const loading = ref(false);
 const isModalOpen = ref(false);
@@ -40,11 +51,25 @@ const mapContentType = (type: string) => {
   return type.charAt(0).toUpperCase() + type.slice(1);
 };
 
-const search_q = ()=>{
-    search(0)
-}
-const search = async (newOffset = 0) => {
+const currentPage = computed(() => Math.floor(offset.value / limit.value) + 1);
+
+const search_q = () => {
   if (!query.value.trim()) {
+    error.value = 'Please enter a search query';
+    return;
+  }
+  activeQuery.value = query.value;
+  activeProvider.value = selectedProvider.value;
+  activeContentType.value = selectedContentType.value;
+  search(0);
+};
+
+const search = async (newOffset = 0) => {
+  const currentQ = activeQuery.value;
+  const currentProvider = activeProvider.value;
+  const currentContentType = activeContentType.value;
+
+  if (!currentQ.trim()) {
     error.value = 'Please enter a search query';
     return;
   }
@@ -54,17 +79,17 @@ const search = async (newOffset = 0) => {
     error.value = null;
     offset.value = newOffset;
     console.log({
-      provider: selectedProvider.value,
-      contentType: selectedContentType.value,
-      query: query.value,
+      provider: currentProvider,
+      contentType: currentContentType,
+      query: currentQ,
       limit: limit.value,
       offset: offset.value,
     },"OFFSET")
 
     const results = await invoke<SearchResult[]>('search_streaming', {
-      provider: selectedProvider.value,
-      contentType: selectedContentType.value?.toLowerCase(),
-      query: query.value,
+      provider: currentProvider,
+      contentType: currentContentType?.toLowerCase(),
+      query: currentQ,
       limit: limit.value,
       offset: offset.value,
     });
@@ -101,18 +126,18 @@ const toggleContainer = (index: number) => {
 const handleResultClick = async (result: SearchResult, index: number) => {
   console.log('Clicked result:', result, 'at index:', index);
   console.log({
-      system: selectedProvider.value,
-      contentType: selectedContentType.value,
-      query: query.value,
+      system: activeProvider.value,
+      contentType: activeContentType.value,
+      query: activeQuery.value,
       limit: limit.value,
       offset: offset.value,
       selectedIndex: index,
     },'search')
   try {
     await invoke('handle_search', {
-      system: selectedProvider.value,
-      contentType: selectedContentType.value?.toLowerCase(),
-      query: query.value,
+      system: activeProvider.value,
+      contentType: activeContentType.value?.toLowerCase(),
+      query: activeQuery.value,
       limit: limit.value,
       offset: offset.value,
       selectedIndex: index,
@@ -122,8 +147,8 @@ const handleResultClick = async (result: SearchResult, index: number) => {
     await invoke('handle_streaming_track', {
       searchResult: result,
       strategy: 'cache',
-      query: query.value,
-      searchType: selectedContentType.value,
+      query: activeQuery.value,
+      searchType: activeContentType.value,
     });
   }
   emit('refetch');
@@ -141,7 +166,7 @@ const getContainerTracks = async (result: SearchResult): Promise<any[] | null> =
     await invoke('handle_streaming_track', {
       searchResult: result,
       strategy: 'cache',
-      searchType: selectedContentType.value,
+      searchType: activeContentType.value,
     });
     const queueState = await invoke<any>('get_queue_state');
     const entry = queueState.entries?.[0];
@@ -190,7 +215,7 @@ const handleContainerAddToPlaylist = async (index: number, playlistId: number) =
     const description = result.type === 'album' ? result.artist : result.creator;
 
     const childId = await invoke<number>('create_playlist_from_container', {
-      provider: result.source?.system || selectedProvider.value,
+      provider: result.source?.system || activeProvider.value,
       contentType: mapContentType(result.type),
       id: result.id,
       title,
@@ -221,7 +246,7 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
   error.value = null;
   try {
     await invoke<number>('create_playlist_from_container', {
-      provider: result.source?.system || selectedProvider.value,
+      provider: result.source?.system || activeProvider.value,
       contentType: mapContentType(result.type),
       id: result.id,
       title: data.title,
@@ -312,7 +337,7 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
         <button v-if="offset > 0" @click="prevPage" class="pagination-btn" title="Previous page">
           ←
         </button>
-        <h3>Results ({{ searchResults.length }})</h3>
+        <h3>Results ({{ searchResults.length }}) - Page {{ currentPage }}</h3>
         <button v-if="searchResults.length >= limit" @click="nextPage" class="pagination-btn" title="Next page">
           →
         </button>

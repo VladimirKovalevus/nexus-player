@@ -282,11 +282,11 @@ const menuOptions = computed<MenuOption[]>(() => {
     });
   }
 
-  options.push({
-    label: 'Сохранить в файл',
-    icon: '💾',
-    action: handleSaveToFile,
-  });
+  // options.push({
+  //   label: 'Сохранить в файл',
+  //   icon: '💾',
+  //   action: handleSaveToFile,
+  // });
 
   if (props.context === 'queue' && !props.isInLibrary) {
     options.push({
@@ -463,7 +463,25 @@ const handleRemoveFromQueue = async () => {
 };
 
 const handleDownload = async () => {
-  console.log('Download track:', entity.value.id);
+  try {
+    const t = props.track as any;
+    const track = {
+      id: t.id ?? 0,
+      title: t.title,
+      artist: t.artist ?? null,
+      album: t.album ?? null,
+      durationSecs: t.durationSecs ?? null,
+      artworkUrl: t.artworkUrl ?? t.thumbnail ?? null,
+      playCount: t.playCount ?? 0,
+      liked: t.liked ?? false,
+      state: t.state ?? { type: 'streaming' },
+      source: t.source ?? null,
+    };
+    await invoke('save_track_to_file', { track });
+    console.log('Download process started for:', entity.value.id);
+  } catch (e) {
+    console.error('Failed to start download process:', e);
+  }
   closeDropdown();
 };
 

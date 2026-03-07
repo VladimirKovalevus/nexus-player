@@ -589,11 +589,19 @@ defineExpose({ fetchQueue });
 
 .currentlyPlaying {
   border-radius: $radius-md;
-  animation: pulse 2s ease-in-out infinite;
+  animation: bg-pulse 2s ease-in-out infinite;
+  
+  // Делаем фон MediaCard прозрачным, чтобы была видна анимация обертки
+  & > div {
+    background-color: transparent !important;
+  }
 }
 .currentlyPlayingList {
   border-radius: $radius-md;
-  animation: pulse-y 2s ease-in-out infinite;
+  & > div {
+    background-color: transparent !important;
+  }
+
 }
 
 .containerWrapper {
@@ -663,20 +671,12 @@ defineExpose({ fetchQueue });
   font-size: $font-size-sm;
 }
 
-@keyframes pulse-y {
-  0%, 100% {       
-    box-shadow: 12px 3px 12px 3px #ff9800;
-  }
-  50% {
-    box-shadow: 4px 1px 4px 1px #ff9800;
-  }
-}
-@keyframes pulse {
+@keyframes bg-pulse {
   0%, 100% {
-    box-shadow: 0 0 12px 3px rgba(76, 175, 80,0.5);
+    background-color: rgba(76, 175, 80, 0.1);
   }
   50% {
-    box-shadow: 0 0 4px 1px rgba(0, 255, 255, 0.1);
+    background-color: rgba(76, 175, 80, 0.05);
   }
 }
 </style>

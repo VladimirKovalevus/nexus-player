@@ -238,6 +238,28 @@ impl StreamingService {
         // let _ = self.download_manager.debug_to_file().await;
     }
 
+    pub async fn has_track(&self, track_id: u64) -> bool {
+        self.download_manager.get_track(track_id).await.is_some()
+    }
+
+    pub async fn save_track_to_file_path(
+        &self,
+        track_id: u64,
+        path: &std::path::Path,
+    ) -> StreamResult<std::path::PathBuf> {
+        if let Some((source, _)) = self.download_manager.get_track_with_url(track_id).await {
+            source
+                .save_to_file(path)
+                .map_err(|e| StreamError::Other(e.to_string()))?;
+
+            Ok(path.to_path_buf())
+        } else {
+            Err(StreamError::Other(
+                "Track not found in download manager".to_string(),
+            ))
+        }
+    }
+
     pub async fn save_track_to_file(
         &self,
         track_id: u64,
