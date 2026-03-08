@@ -227,7 +227,9 @@ onUnmounted(() => {
           <span v-if="isLoading" class="loader">●●●</span>
           <span v-else>
             <img v-if="!audioStore.isPlaying" src="/icon/play.svg" alt="Play">
-            <span v-else>⏸</span>
+            <span v-else>
+                <img src="/icon/pause.svg">
+            </span>
           </span>
         </button>
         <button
