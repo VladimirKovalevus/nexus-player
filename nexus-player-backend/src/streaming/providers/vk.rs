@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use tokio::sync::RwLock;
-use vk_down::VkClient;
+use vk_api::{Playlist, VkClient};
 
 use crate::audio::types::MediaSource;
 use crate::library::TrackSource;
@@ -162,7 +162,7 @@ impl StreamProvider for VkProvider {
                     String::new()
                 };
 
-                let playlist = vk_down::Playlist {
+                let playlist = Playlist {
                     id,
                     owner_id,
                     title: info.title,
@@ -261,7 +261,8 @@ impl StreamProvider for VkProvider {
     }
 
     async fn is_available(&self) -> bool {
-        self.client.read().await.is_some()
+        let client = self.client.read().await;
+        client.is_some()
     }
 
     async fn set_credentials(&self, credentials: Option<String>) {

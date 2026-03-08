@@ -86,7 +86,7 @@ impl StreamingService {
             });
 
             if source.system() == "vk" && effective_options.user_agent.is_none() {
-                effective_options.user_agent = Some(vk_down::auth::VK_USER_AGENT.to_string());
+                effective_options.user_agent = Some(vk_api::auth::VK_USER_AGENT.to_string());
             }
             match provider
                 .resolve(
@@ -245,7 +245,7 @@ impl StreamingService {
 
                     if system == "vk" && effective_options.user_agent.is_none() {
                         effective_options.user_agent =
-                            Some(vk_down::auth::VK_USER_AGENT.to_string());
+                            Some(vk_api::auth::VK_USER_AGENT.to_string());
                     }
 
                     let source = TrackSource::External { system, id };

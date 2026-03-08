@@ -781,7 +781,7 @@ use nexus_player_backend::config::AppConfig;
 pub async fn open_vk_login(app: AppHandle) -> Result<()> {
     #[cfg(not(target_os = "android"))]
     {
-        let url = vk_down::get_default_auth_url();
+        let url = vk_api::get_default_auth_url();
         let app_handle = app.clone();
 
         let _login_window = tauri::WebviewWindowBuilder::new(
@@ -795,7 +795,7 @@ pub async fn open_vk_login(app: AppHandle) -> Result<()> {
         .on_navigation(move |url: &tauri::Url| {
             let url_str = url.as_str();
             if url_str.contains("access_token=") {
-                let token = vk_down::extract_token_from_url(url_str);
+                let token = vk_api::extract_token_from_url(url_str);
                 let _ = app_handle.emit("vk-token-received", token);
                 if let Some(w) = app_handle.get_webview_window("vk-login") {
                     let _ = w.destroy();
@@ -817,7 +817,7 @@ pub async fn open_vk_login(app: AppHandle) -> Result<()> {
 
 #[tauri::command]
 pub fn get_vk_auth_url() -> String {
-    let url = vk_down::auth::get_oauth_url(&vk_down::auth::AuthConfig::default());
+    let url = vk_api::auth::get_oauth_url(&vk_api::auth::AuthConfig::default());
     // On Android use our own scheme — no domain verification needed, always routes to our app
     #[cfg(target_os = "android")]
     {
@@ -832,12 +832,12 @@ pub fn get_vk_auth_url() -> String {
 
 #[tauri::command]
 pub fn get_vk_auth_html() -> String {
-    vk_down::get_auth_html()
+    vk_api::get_auth_html()
 }
 
 #[tauri::command]
 pub fn extract_vk_token(url_or_token: String) -> String {
-    vk_down::extract_token_from_url(&url_or_token)
+    vk_api::extract_token_from_url(&url_or_token)
 }
 
 #[tauri::command]
