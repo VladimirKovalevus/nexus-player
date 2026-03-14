@@ -2,18 +2,18 @@
   <div :class="$style.vkView">
     <header :class="$style.header">
       <h1 :class="$style.title">VK Музыка</h1>
-      <button :class="$style.refreshButton" @click="fetchContent" :disabled="loading">
-        {{ loading ? 'Загрузка...' : 'Обновить' }}
+      <button :class="$style.refreshButton" @click="vkStore.fetchContent(true)" :disabled="vkStore.loading">
+        {{ vkStore.loading ? 'Загрузка...' : 'Обновить' }}
       </button>
     </header>
 
-    <div v-if="error" :class="$style.error">{{ error }}</div>
+    <div v-if="vkStore.error" :class="$style.error">{{ vkStore.error }}</div>
 
-    <section v-if="playlists.length > 0" :class="$style.section">
+    <section v-if="vkStore.playlists.length > 0" :class="$style.section">
       <h2 :class="$style.sectionTitle">Ваши плейлисты</h2>
       <div :class="$style.grid">
         <MediaCardCompact
-          v-for="playlist in playlists"
+          v-for="playlist in vkStore.playlists"
           :key="playlist.id"
           type="playlist"
           :title="playlist.title"
@@ -26,71 +26,52 @@
       </div>
     </section>
 
-    <section v-if="tracks.length > 0" :class="$style.section">
+    <section v-if="vkStore.tracks.length > 0" :class="$style.section">
       <h2 :class="$style.sectionTitle">Ваши аудиозаписи</h2>
       <div :class="$style.list">
         <MediaCard
-          v-for="track in tracks"
+          v-for="track in vkStore.tracks"
           :key="track.id"
           type="track"
           :track="track"
           show-action
           @click="handleTrackClick(track)"
           @play="handleTrackPlay(track)"
-          @refresh="fetchContent"
+          @refresh="vkStore.fetchContent(true)"
         />
       </div>
     </section>
 
-    <div v-if="!loading && tracks.length === 0 && playlists.length === 0" :class="$style.empty">
+    <div v-if="!vkStore.loading && vkStore.tracks.length === 0 && vkStore.playlists.length === 0" :class="$style.empty">
       Ничего не найдено. Убедитесь, что вы залогинены в настройках.
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject } from 'vue';
+import { onMounted, inject } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import MediaCard from '@/components/common/MediaCard.vue';
 import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
 import type { TrackDto, PlaylistDto } from '@/types/types';
+import { useVkStore } from '@/stores/vk';
 
+const vkStore = useVkStore();
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
-
-const tracks = ref<TrackDto[]>([]);
-const playlists = ref<PlaylistDto[]>([]);
-const loading = ref(false);
-const error = ref<string | null>(null);
-
-const fetchContent = async () => {
-  loading.value = true;
-  error.value = null;
-  console.log('Fetching VK profile content...');
-  try {
-    const result = await invoke<[TrackDto[], PlaylistDto[]]>('get_vk_profile');
-    console.log('Received VK profile data:', result);
-    const [t, p] = result;
-    tracks.value = t;
-    playlists.value = p;
-  } catch (e) {
-    console.error('Failed to fetch VK profile:', e);
-    error.value = `Ошибка: ${e}`;
-  } finally {
-    loading.value = false;
-  }
-};
 
 const handleTrackClick = async (track: TrackDto) => {
   if (track.source) {
     // Construct SearchResultDto (Track variant)
     const searchResult = {
       type: 'track',
+      id: track.id,
       title: track.title,
       artist: track.artist || '',
       durationSecs: track.durationSecs,
       thumbnail: track.artworkUrl,
       source: track.source,
       state: track.state,
+      liked: track.liked || false,
     };
 
     await invoke('handle_streaming_track', {
@@ -144,7 +125,9 @@ const handlePlaylistPlay = async (playlist: PlaylistDto) => {
   refreshQueue();
 };
 
-onMounted(fetchContent);
+onMounted(() => {
+  vkStore.fetchContent();
+});
 </script>
 
 <style module lang="scss">

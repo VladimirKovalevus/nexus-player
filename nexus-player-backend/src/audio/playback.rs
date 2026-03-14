@@ -115,6 +115,8 @@ impl MediaSource for HlsReaderAdapter {
     }
 }
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 pub struct PlaybackEngine {
     decoder: Arc<Mutex<Option<DecoderType>>>,
     stream: Option<Stream>,
@@ -128,6 +130,7 @@ pub struct PlaybackEngine {
     sample_buffer: Arc<Mutex<Vec<f32>>>,
     buffer_position: Arc<Mutex<usize>>,
     volume: Arc<Mutex<f32>>,
+    needs_recreation: Arc<AtomicBool>,
 }
 
 impl PlaybackEngine {
@@ -162,6 +165,7 @@ impl PlaybackEngine {
             sample_buffer: Arc::new(Mutex::new(Vec::new())),
             buffer_position: Arc::new(Mutex::new(0)),
             volume: Arc::new(Mutex::new(1.0)),
+            needs_recreation: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -272,12 +276,16 @@ impl PlaybackEngine {
         let sample_buffer = Arc::clone(&self.sample_buffer);
         let buffer_position = Arc::clone(&self.buffer_position);
         let volume = Arc::clone(&self.volume);
+        let needs_recreation = Arc::clone(&self.needs_recreation);
 
         let mut config = self.config.clone();
         config.sample_rate = cpal::SampleRate(sample_rate);
         config.channels = channels as u16;
 
-        let err_fn = |err| warn!("Ошибка стрима: {}", err);
+        let err_fn = move |err| {
+            warn!("Ошибка стрима: {}", err);
+            needs_recreation.store(true, Ordering::SeqCst);
+        };
 
         let stream = self
             .device
@@ -360,7 +368,60 @@ impl PlaybackEngine {
             .map_err(|e| AudioError::OutputError(format!("Не удалось запустить стрим: {}", e)))?;
 
         self.stream = Some(stream);
+        self.needs_recreation.store(false, Ordering::SeqCst);
 
+        Ok(())
+    }
+
+    pub fn needs_recreation(&self) -> bool {
+        self.needs_recreation.load(Ordering::SeqCst)
+    }
+
+    pub fn recreate_stream(&mut self) -> Result<(), AudioError> {
+        info!("Попытка пересоздания стрима (возможно смена устройства)...");
+
+        // Пытаемся получить новое аудио устройство по умолчанию
+        let host = cpal::default_host();
+        let device = host
+            .default_output_device()
+            .ok_or_else(|| AudioError::OutputError("Не найдено аудио устройство".to_string()))?;
+
+        info!(
+            "Новое аудио устройство: {}",
+            device.name().unwrap_or_else(|_| "Unknown".to_string())
+        );
+
+        let config = device
+            .default_output_config()
+            .map_err(|e| {
+                AudioError::OutputError(format!("Не удалось получить конфигурацию: {}", e))
+            })?
+            .into();
+
+        self.device = device;
+        self.config = config;
+
+        // Получаем текущие параметры из декодера, если он есть
+        let (sr, channels) = {
+            let decoder_guard = self.decoder.lock().unwrap();
+            if let Some(ref dec) = *decoder_guard {
+                (dec.sample_rate(), dec.channels())
+            } else {
+                return Ok(()); // Нет декодера - ничего не делаем
+            }
+        };
+
+        // Пересоздаем стрим
+        self.create_stream(sr, channels)?;
+
+        // Если мы должны были играть - запускаем
+        if *self.is_playing.lock().unwrap() {
+            if let Some(ref stream) = self.stream {
+                let _ = stream.play();
+            }
+        }
+
+        info!("Стрим успешно пересоздан");
         Ok(())
     }
 

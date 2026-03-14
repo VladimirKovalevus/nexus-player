@@ -143,6 +143,24 @@ const setVolume = async (event: Event) => {
   }
 };
 
+const handleVolumeWheel = async (event: WheelEvent) => {
+  // Prevent page scroll when hovering volume
+  event.preventDefault();
+  
+  const step = 0.05;
+  const delta = event.deltaY < 0 ? step : -step;
+  const newVolume = Math.min(1, Math.max(0, audioStore.volume + delta));
+  
+  if (newVolume !== audioStore.volume) {
+    localVolume.value = newVolume;
+    try {
+      await invoke('set_volume', { volume: newVolume });
+    } catch (e) {
+      console.error('Failed to set volume via wheel:', e);
+    }
+  }
+};
+
 const formatTime = (seconds: number): string => {
   if (!seconds || !isFinite(seconds)) return '0:00';
   const mins = Math.floor(seconds / 60);
@@ -252,7 +270,7 @@ onUnmounted(() => {
 
     <!-- Right: Volume + Queue -->
     <div class="right-section">
-      <div class="volume-wrapper" ref="volumeWrapperRef">
+      <div class="volume-wrapper" ref="volumeWrapperRef" @wheel.stop.prevent="handleVolumeWheel">
         <button
           class="volume-btn"
           :class="{ active: volumePopupOpen }"

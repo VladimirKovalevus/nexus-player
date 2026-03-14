@@ -112,7 +112,9 @@ import { ref, watch, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { AppConfig } from '@/types/types';
+import { useVkStore } from '@/stores/vk';
 
+const vkStore = useVkStore();
 const props = defineProps<{
   isOpen: boolean;
 }>();
@@ -173,6 +175,7 @@ const handleVkAuth = async () => {
       const result = await invoke<{ token: string }>('plugin:vkLogin|open', { url });
       if (config.value.providers.vk) {
         config.value.providers.vk.credentials = result.token;
+        vkStore.clear();
       }
     } catch (e) {
       if (e !== 'cancelled') {
@@ -193,6 +196,7 @@ onMounted(async () => {
     const token = event.payload;
     if (config.value.providers.vk) {
       config.value.providers.vk.credentials = token;
+      vkStore.clear();
       isVkLoginActive.value = false;
     }
   });
@@ -206,6 +210,7 @@ const handleTokenExtraction = async () => {
     });
     if (config.value.providers.vk) {
       config.value.providers.vk.credentials = token;
+      vkStore.clear();
     }
     isVkLoginActive.value = false;
     vkRedirectUrl.value = '';

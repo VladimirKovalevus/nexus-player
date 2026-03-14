@@ -13,10 +13,15 @@ const error = ref<string | null>(null);
 const isModalOpen = ref(false);
 const isSavingPlaylist = ref(false);
 const expandedContainers = ref<Set<number>>(new Set());
-
+const playlistInitialData = ref<{ title?: string; description?: string; artworkUrl?: string }>({});
 
 // Modal mode: 'queue' for whole queue, or {index, entry} for single container
 const modalTarget = ref<'queue' | { index: number } >('queue');
+
+const mapContentType = (type: string) => {
+  if (!type) return null;
+  return type.charAt(0).toUpperCase() + type.slice(1);
+};
 
 const queue = computed(() => {
   return audioStore.entries.map((entry, index) => ({
@@ -111,6 +116,11 @@ const clearQueue = async () => {
 
 const openCreatePlaylistModal = () => {
   if (queue.value.length > 0) {
+    playlistInitialData.value = {
+      title: `Очередь ${new Date().toLocaleDateString()}`,
+      description: `Сформирован из очереди ${new Date().toLocaleDateString()}`,
+      artworkUrl: '',
+    };
     modalTarget.value = 'queue';
     isModalOpen.value = true;
   }
@@ -128,7 +138,7 @@ const ensureAllContainersExpanded = async () => {
   }
 };
 
-const handleCreatePlaylist = async (name: string) => {
+const handleCreatePlaylist = async (data: { title: string; description: string | null; artworkUrl: string | null }) => {
   if (isSavingPlaylist.value) return;
 
   isSavingPlaylist.value = true;
@@ -139,21 +149,15 @@ const handleCreatePlaylist = async (name: string) => {
       const idx = modalTarget.value.index;
       const entry = audioStore.entries[idx];
       if (entry?.entryType === 'container') {
-        // Ensure tracks are loaded
-        if (!entry.tracks) {
-          const result = await invoke<any>('expand_queue_container', { itemIndex: idx });
-          audioStore.updateQueueState(result);
-        }
-        const freshEntry = audioStore.entries[idx];
-        if (freshEntry?.entryType === 'container' && freshEntry.tracks) {
-          await invoke<number>('create_playlist_with_tracks', {
-            request: {
-              title: name,
-              description: `${freshEntry.meta.title} - ${freshEntry.meta.artist}`,
-              tracks: freshEntry.tracks,
-            },
-          });
-        }
+        // Prefer create_playlist_from_container for streaming containers
+        await invoke<number>('create_playlist_from_container', {
+          provider: entry.meta.system,
+          contentType: mapContentType(entry.meta.kind),
+          id: entry.meta.id,
+          title: data.title,
+          description: data.description,
+          artworkUrl: data.artworkUrl,
+        });
       }
       isModalOpen.value = false;
       return;
@@ -175,17 +179,19 @@ const handleCreatePlaylist = async (name: string) => {
       const tracks = audioStore.tracks;
       await invoke<number>('create_playlist_with_tracks', {
         request: {
-          title: name,
-          description: `Сформирован из очереди ${new Date().toLocaleDateString()}`,
+          title: data.title,
+          description: data.description,
+          artworkUrl: data.artworkUrl,
           tracks,
         },
       });
     } else {
-      // Create parent playlist (empty)
+      // Create parent playlist
       const parentId = await invoke<number>('create_playlist', {
         request: {
-          title: name,
-          description: `Сформирован из очереди ${new Date().toLocaleDateString()}`,
+          title: data.title,
+          description: data.description,
+          artworkUrl: data.artworkUrl,
         },
       });
 
@@ -224,6 +230,14 @@ const handleCreatePlaylist = async (name: string) => {
 };
 
 const handleContainerCreatePlaylist = (itemIndex: number) => {
+  const entry = audioStore.entries[itemIndex];
+  if (entry && entry.entryType === 'container') {
+    playlistInitialData.value = {
+      title: entry.meta.title,
+      description: entry.meta.artist,
+      artworkUrl: entry.meta.thumbnail || '',
+    };
+  }
   modalTarget.value = { index: itemIndex };
   isModalOpen.value = true;
 };
@@ -388,6 +402,7 @@ defineExpose({ fetchQueue });
     <PlaylistCreateSimpleModal
       :is-open="isModalOpen"
       :is-loading="isSavingPlaylist"
+      :initial-data="playlistInitialData"
       @close="isModalOpen = false"
       @save="handleCreatePlaylist"
     />

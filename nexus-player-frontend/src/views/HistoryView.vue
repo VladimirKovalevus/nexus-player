@@ -84,6 +84,7 @@ const fetchHistory = async () => {
 const handleEntryClick = async (entry: PlayHistoryEntryDto) => {
   const searchResult = {
     type: 'track',
+    id: entry.id,
     title: entry.title,
     artist: entry.artist || '',
     thumbnail: entry.artworkUrl,

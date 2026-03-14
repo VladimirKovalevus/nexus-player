@@ -134,6 +134,16 @@ impl AudioEngine {
         let mut last_position_update = std::time::Instant::now();
 
         loop {
+            // Проверка необходимости пересоздания стрима (например, при смене устройства)
+            if playback.needs_recreation() {
+                if let Err(e) = playback.recreate_stream() {
+                    warn!("Не удалось автоматически пересоздать аудио стрим: {}", e);
+                    let _ = event_tx.send(AudioEvent::Error {
+                        message: format!("Ошибка аудио устройства: {}", e),
+                    });
+                }
+            }
+
             if playback.is_playing() || playback.buffered_ranges().len() > 0 {
                 let now = std::time::Instant::now();
                 if now.duration_since(last_position_update) >= Duration::from_millis(100) {
