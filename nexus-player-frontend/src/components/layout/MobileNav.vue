@@ -40,6 +40,7 @@ const navItems = [
   { view: 'playlists', icon: '📋', label: 'Плейлисты' },
   { view: 'vk', icon: 'VK', label: 'VK Музыка' },
   { view: 'history', icon: '🕒', label: 'История' },
+  { view: 'downloads', icon: '📥', label: 'Загрузки' },
 ];
 </script>
 

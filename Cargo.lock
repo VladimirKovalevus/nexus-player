@@ -2959,6 +2959,7 @@ dependencies = [
  "parking_lot",
  "rand 0.8.5",
  "reqwest 0.11.27",
+ "resampler",
  "rsoundcloud",
  "sea-orm",
  "serde",
@@ -4410,6 +4411,12 @@ dependencies = [
  "web-sys",
  "webpki-roots 1.0.4",
 ]
+
+[[package]]
+name = "resampler"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80f5ab61459422b1a350caae1aadef48ebae234b12e80248e9ba9557018ef060"
 
 [[package]]
 name = "rfd"

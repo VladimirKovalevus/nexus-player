@@ -21,6 +21,7 @@ anyhow = { workspace = true }
 symphonia = { path = "../../Symphonia/symphonia", features = ["all", "ogg", "vorbis", "opus"] }
 lofty = "0.21"
 cpal = "0.15"
+resampler = "0.4.1"
 arc-swap = "1.7.1"
 crossbeam = "0.8"
 rand = "0.8"

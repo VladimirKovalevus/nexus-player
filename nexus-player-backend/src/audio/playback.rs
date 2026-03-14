@@ -1,9 +1,10 @@
 use super::decoder::{AudioDecoder, DecoderType};
 use super::hls_decoder::HlsAudioDecoder;
-use crate::audio::types::{AudioSource, MediaSource, SampleRate, TrackSource};
+use crate::audio::types::{AudioSource, MediaSource, SampleRate as MSR, TrackSource};
 use crate::error::AudioError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
+use resampler::{ResamplerFir, SampleRate};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::result;
@@ -11,6 +12,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use streaming::multi_downloader::source::HlsSource;
+use symphonia::core::sample;
 use tracing::{info, warn};
 
 #[derive(Debug, Clone)]
@@ -160,7 +162,7 @@ impl PlaybackEngine {
             is_playing: Arc::new(Mutex::new(false)),
             current_position: Arc::new(Mutex::new(Duration::ZERO)),
             duration: None,
-            sample_rate: Arc::new(Mutex::new(SampleRate::LOW.as_u32())),
+            sample_rate: Arc::new(Mutex::new(MSR::LOW.as_u32())),
             samples_played: Arc::new(Mutex::new(0)),
             sample_buffer: Arc::new(Mutex::new(Vec::new())),
             buffer_position: Arc::new(Mutex::new(0)),
@@ -278,14 +280,23 @@ impl PlaybackEngine {
         let volume = Arc::clone(&self.volume);
         let needs_recreation = Arc::clone(&self.needs_recreation);
 
-        let mut config = self.config.clone();
-        config.sample_rate = cpal::SampleRate(sample_rate);
-        config.channels = channels as u16;
+        let config = self.config.clone();
+        // config.sample_rate = cpal::SampleRate(sample_rate);
+        // config.channels = channels as u16;
 
         let err_fn = move |err| {
             warn!("Ошибка стрима: {}", err);
             needs_recreation.store(true, Ordering::SeqCst);
         };
+        let i = sample_rate;
+        let o = config.sample_rate.0;
+        let mut resampler = resampler::ResamplerFir::new(
+            channels,
+            SampleRate::try_from(i).unwrap_or(SampleRate::Hz44100),
+            SampleRate::try_from(o).unwrap_or(SampleRate::Hz44100),
+            resampler::Latency::Sample64,
+            resampler::Attenuation::Db120,
+        );
 
         let stream = self
             .device
@@ -340,16 +351,30 @@ impl PlaybackEngine {
 
                         let available = buffer.len() - *buf_pos;
                         let needed = data.len() - output_pos;
-                        let to_copy = available.min(needed);
+
+                        let to_copy = (available.min(needed) / channels) * channels;
+
+                        let input = &buffer[*buf_pos..*buf_pos + to_copy];
+
+                        let ratio = o as u64 as f32 / i as u64 as f32;
+                        let out_capacity = ((to_copy as f32) * ratio).ceil() as usize * channels;
+
+                        let mut resampled = vec![0.0f32; out_capacity];
+
+                        let (consumed, produced) =
+                            resampler.resample(input, &mut resampled).unwrap();
 
                         let volume = *volume.lock().unwrap();
-                        data[output_pos..output_pos + to_copy]
-                            .iter_mut()
-                            .zip(&buffer[*buf_pos..*buf_pos + to_copy])
-                            .for_each(|(out, sample)| *out = sample * volume);
 
-                        *buf_pos += to_copy;
-                        output_pos += to_copy;
+                        for (out, sample) in data[output_pos..output_pos + produced]
+                            .iter_mut()
+                            .zip(resampled[..produced].iter())
+                        {
+                            *out = *sample * volume;
+                        }
+
+                        *buf_pos += consumed;
+                        output_pos += produced;
 
                         let num_frames = to_copy / channels;
                         *samples_played.lock().unwrap() += num_frames as u64;
