@@ -10,11 +10,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 use super::{
-    db_v2, models, PlaylistId, PlaylistRepositoryV2, SeaOrmPlaylistRepository,
-    SeaOrmTrackRepository, TrackId, TrackRepositoryV2, types::TrackOrder,
+    db_v2, models, types::TrackOrder, PlaylistId, PlaylistRepositoryV2, SeaOrmPlaylistRepository,
+    SeaOrmTrackRepository, TrackId, TrackRepositoryV2,
 };
 use crate::db;
+use crate::library::models::Track;
 use crate::library::repository_v2::PlayHistoryRepository;
+use crate::library::TrackSource;
 use chrono::Utc;
 
 /// Service for managing music library (tracks and playlists)
@@ -122,12 +124,8 @@ impl LibraryService {
 
     /// Toggle liked state for a track
     pub async fn toggle_liked(&self, id: TrackId) -> Result<()> {
-        let track = self
-            .track_repo
-            .get(id)
-            .await?
-            .context("Track not found")?;
-        
+        let track = self.track_repo.get(id).await?.context("Track not found")?;
+
         let new_liked_state = !track.liked;
         self.track_repo.set_liked(id, new_liked_state).await?;
 
@@ -136,7 +134,10 @@ impl LibraryService {
         if !new_liked_state {
             let in_playlists = self.playlist_repo.is_track_in_any_playlist(id).await?;
             if !in_playlists {
-                tracing::info!("Track {:?} is no longer liked and not in any playlist. Deleting from library.", id);
+                tracing::info!(
+                    "Track {:?} is no longer liked and not in any playlist. Deleting from library.",
+                    id
+                );
                 self.track_repo.delete(id).await?;
             }
         }
@@ -163,6 +164,9 @@ impl LibraryService {
             return Ok(existing.id);
         }
         self.add_track(track).await
+    }
+    pub async fn find_by_source(&self, source: &TrackSource) -> Result<Option<models::Track>> {
+        self.track_repo.find_by_source(&source).await
     }
 
     // ========================================================================
@@ -217,7 +221,12 @@ impl LibraryService {
         let position = playlist.items.len() as u32;
 
         self.playlist_repo
-            .add_item(playlist_id, models::PlaylistItemKind::Track, track_id.0, position)
+            .add_item(
+                playlist_id,
+                models::PlaylistItemKind::Track,
+                track_id.0,
+                position,
+            )
             .await
     }
 
@@ -247,7 +256,12 @@ impl LibraryService {
         let position = playlist.items.len() as u32;
 
         self.playlist_repo
-            .add_item(parent_id, models::PlaylistItemKind::Playlist, child_id.0, position)
+            .add_item(
+                parent_id,
+                models::PlaylistItemKind::Playlist,
+                child_id.0,
+                position,
+            )
             .await
     }
 

@@ -125,7 +125,7 @@ impl StreamProvider for VkProvider {
                         SearchResult::Track(TrackInfo {
                             source: TrackSource::External {
                                 system: "vk".to_string(),
-                                id: format!("{}_{}", track.owner_id, track.id),
+                                id: track.audio_id(),
                             },
                             title: track.title,
                             artist: track.artist,
@@ -184,7 +184,7 @@ impl StreamProvider for VkProvider {
                     .map(|track| TrackInfo {
                         source: TrackSource::External {
                             system: "vk".to_string(),
-                            id: format!("{}_{}", track.owner_id, track.id),
+                            id: track.audio_id(),
                         },
                         title: track.title,
                         artist: track.artist,
@@ -229,7 +229,7 @@ impl StreamProvider for VkProvider {
             .map(|track| TrackInfo {
                 source: TrackSource::External {
                     system: "vk".to_string(),
-                    id: format!("{}_{}", track.owner_id, track.id),
+                    id: track.audio_id(),
                 },
                 title: track.title,
                 artist: track.artist,
@@ -243,10 +243,7 @@ impl StreamProvider for VkProvider {
             .into_iter()
             .map(|p| PlaylistInfo {
                 id: format!("{}_{}", p.owner_id, p.id),
-                url: format!(
-                    "https://vk.com/audio?z=audio_playlist{}_{}",
-                    p.owner_id, p.id
-                ),
+                url: format!("https://vk.com/audio?z=audio_playlist{}", p.full_id()),
                 service: StreamingService::Vk,
                 title: p.title,
                 creator: "".to_string(),

@@ -25,9 +25,8 @@
           <label>Provider:</label>
           <select v-model="selectedProvider" :class="$style.filterSelect">
             <option value="bandcamp">Bandcamp</option>
-            <option value="youtube">YouTube</option>
             <option value="soundcloud">SoundCloud</option>
-            <option value="ytdlp">YT-DLP (All)</option>
+            <option value="vk">VK</option>
           </select>
         </div>
 

@@ -44,14 +44,6 @@
           <section :class="$style.section">
             <h3 :class="$style.sectionTitle">Провайдеры</h3>
             
-            <div :class="$style.provider">
-              <div :class="$style.providerHeader">
-                <label :class="$style.checkboxLabel">
-                  <input type="checkbox" v-model="config.providers.youtube.enabled" />
-                  YouTube
-                </label>
-              </div>
-            </div>
 
             <div :class="$style.provider">
               <div :class="$style.providerHeader">
@@ -137,7 +129,6 @@ const vkRedirectUrl = ref('');
 const isVkLoginActive = ref(false);
 const config = ref<AppConfig>({
   providers: {
-    youtube: { enabled: true },
     soundcloud: { enabled: true },
     bandcamp: { enabled: true },
     vk: { enabled: false, credentials: null },

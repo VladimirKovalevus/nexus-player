@@ -27,7 +27,6 @@ impl ContentType {
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum StreamingService {
-    YouTube,
     SoundCloud,
     Bandcamp,
     Vk,
@@ -36,7 +35,6 @@ pub enum StreamingService {
 impl std::fmt::Display for StreamingService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::YouTube => write!(f, "youtube"),
             Self::SoundCloud => write!(f, "soundcloud"),
             Self::Bandcamp => write!(f, "bandcamp"),
             Self::Vk => write!(f, "vk"),
@@ -49,7 +47,6 @@ impl std::str::FromStr for StreamingService {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "youtube" | "ytdlp" => Ok(Self::YouTube),
             "soundcloud" => Ok(Self::SoundCloud),
             "bandcamp" => Ok(Self::Bandcamp),
             "vk" => Ok(Self::Vk),
@@ -61,7 +58,6 @@ impl std::str::FromStr for StreamingService {
 impl StreamingService {
     pub fn name(&self) -> &'static str {
         match self {
-            Self::YouTube => "YouTube",
             Self::SoundCloud => "SoundCloud",
             Self::Bandcamp => "Bandcamp",
             Self::Vk => "VK",
@@ -70,7 +66,6 @@ impl StreamingService {
 
     pub fn search_prefix(&self, limit: usize) -> String {
         match self {
-            Self::YouTube => format!("ytsearch{}", limit),
             Self::SoundCloud => format!("scsearch{}", limit),
             Self::Bandcamp => String::new(),
             Self::Vk => String::new(),

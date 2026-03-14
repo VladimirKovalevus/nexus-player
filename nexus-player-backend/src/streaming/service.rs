@@ -4,12 +4,12 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use crate::audio::types::{MediaSource, TrackSource};
-use crate::config::ProviderConfig;
+use crate::config::{AudioConfig, ProviderConfig};
+use crate::library::{CacheStatus, LibraryService};
 use crate::streaming::external::{StreamingMediaSource, StreamingSourceWrapper};
 use crate::streaming::types::{AlbumInfo, ResolveOptions, TrackInfo};
 use streaming::multi_downloader::source::Source;
 
-use super::cache::CacheManager;
 use super::error::{StreamError, StreamResult};
 use super::provider::StreamProvider;
 use super::providers::{BandcampProvider, SoundCloudProvider, VkProvider, YtDlpProvider};
@@ -18,25 +18,21 @@ use super::types::{
 };
 use std::str::FromStr;
 use streaming::state::manager::DownloadManager;
-use streaming::state::types::DownloadOptions;
+use streaming::state::types::{DownloadOptions, ManagerConfig};
 
 pub struct StreamingService {
     providers: HashMap<String, Arc<dyn StreamProvider>>,
     download_manager: DownloadManager,
     config: RwLock<ProviderConfig>,
+    library: Arc<LibraryService>,
 }
 
 impl StreamingService {
     pub fn new(
-        cache_dir: PathBuf,
-        cache_size_mb: u64,
         config: ProviderConfig,
-        waveform_enabled: bool,
+        config_audio: AudioConfig,
+        library: Arc<LibraryService>,
     ) -> StreamResult<Self> {
-        let cache = Arc::new(CacheManager::new(cache_dir, cache_size_mb)?);
-
-        let ytdlp = Arc::new(YtDlpProvider::new(cache)) as Arc<dyn StreamProvider>;
-
         let bandcamp = Arc::new(BandcampProvider::new()) as Arc<dyn StreamProvider>;
         let soundcloud = Arc::new(SoundCloudProvider::new()) as Arc<dyn StreamProvider>;
         let vk =
@@ -44,25 +40,33 @@ impl StreamingService {
 
         let mut providers = HashMap::new();
 
-        providers.insert("ytdlp".to_string(), ytdlp.clone());
-        providers.insert("youtube".to_string(), ytdlp);
         providers.insert("bandcamp".to_string(), bandcamp);
         providers.insert("soundcloud".to_string(), soundcloud);
         providers.insert("vk".to_string(), vk);
 
-        let manager = DownloadManager::new(waveform_enabled);
+        let manager = DownloadManager::new(ManagerConfig {
+            waveform_enabled: config_audio.waveform_enabled,
+            mem_limit_bytes: config_audio.mem_limit,
+        });
 
         Ok(Self {
             providers,
             download_manager: manager,
             config: RwLock::new(config),
+            library: library,
         })
     }
 
-    pub async fn update_config(&self, config: ProviderConfig) {
+    pub async fn update_config(&self, config: ProviderConfig, config_audio: AudioConfig) {
         if let Ok(mut c) = self.config.write() {
             *c = config.clone();
         }
+        self.download_manager
+            .update_config(ManagerConfig {
+                waveform_enabled: config_audio.waveform_enabled,
+                mem_limit_bytes: config_audio.mem_limit,
+            })
+            .await;
 
         if let Some(vk) = self.providers.get("vk") {
             vk.set_credentials(config.vk.credentials.clone()).await;
@@ -125,7 +129,6 @@ impl StreamingService {
         {
             let config = self.config.read().unwrap();
             let enabled = match provider_name {
-                "youtube" | "ytdlp" => config.youtube.enabled,
                 "soundcloud" => config.soundcloud.enabled,
                 "bandcamp" => config.bandcamp.enabled,
                 "vk" => config.vk.enabled,
@@ -185,7 +188,7 @@ impl StreamingService {
                 id: id.to_string(),
                 url: id.to_string(),
                 service: StreamingServiceEnum::from_str(provider_name)
-                    .unwrap_or(StreamingServiceEnum::YouTube),
+                    .unwrap_or(StreamingServiceEnum::Bandcamp),
                 title: "".to_string(),
                 creator: "".to_string(),
                 tracks: vec![],
@@ -197,7 +200,7 @@ impl StreamingService {
                 id: id.to_string(),
                 url: id.to_string(),
                 service: StreamingServiceEnum::from_str(provider_name)
-                    .unwrap_or(StreamingServiceEnum::YouTube),
+                    .unwrap_or(StreamingServiceEnum::Bandcamp),
                 title: "".to_string(),
                 artist: "".to_string(),
                 tracks: vec![],
@@ -221,6 +224,21 @@ impl StreamingService {
         options: Option<DownloadOptions>,
     ) -> StreamResult<StreamingSourceWrapper> {
         println!("Source {:?}", source);
+        if let Ok(track) = self.library.find_by_source(&source).await {
+            if let Some(track) = track {
+                match track.cache {
+                    CacheStatus::Cached {
+                        path,
+                        downloaded_at: _,
+                    } => {
+                        let file = File::open(path)?;
+                        return Ok(StreamingSourceWrapper::Local(Box::new(file)));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         match source {
             TrackSource::Local(path) => {
                 let file = File::open(path)?;

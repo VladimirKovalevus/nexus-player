@@ -266,10 +266,16 @@ impl From<models::PlayHistoryEntry> for PlayHistoryEntryDto {
 
 impl From<models::Track> for TrackDto {
     fn from(track: models::Track) -> Self {
-        let artwork_url = track.metadata.artwork.as_ref().and_then(|art| match &art.source {
-            nexus_player_backend::library::types::ArtworkSource::Url { url } => Some(url.clone()),
-            _ => None,
-        });
+        let artwork_url = track
+            .metadata
+            .artwork
+            .as_ref()
+            .and_then(|art| match &art.source {
+                nexus_player_backend::library::types::ArtworkSource::Url { url } => {
+                    Some(url.clone())
+                }
+                _ => None,
+            });
 
         Self {
             id: track.id.0,
@@ -325,10 +331,16 @@ impl From<&audio::Track> for TrackDto {
 
 impl From<models::Playlist> for PlaylistDto {
     fn from(playlist: models::Playlist) -> Self {
-        let thumbnail = playlist.metadata.artwork.as_ref().and_then(|art| match &art.source {
-            nexus_player_backend::library::types::ArtworkSource::Url { url } => Some(url.clone()),
-            _ => None,
-        });
+        let thumbnail = playlist
+            .metadata
+            .artwork
+            .as_ref()
+            .and_then(|art| match &art.source {
+                nexus_player_backend::library::types::ArtworkSource::Url { url } => {
+                    Some(url.clone())
+                }
+                _ => None,
+            });
 
         Self {
             id: playlist.id.0,
@@ -343,7 +355,6 @@ impl From<models::Playlist> for PlaylistDto {
         }
     }
 }
-
 
 impl From<audio::AudioState> for AudioStateDto {
     fn from(state: audio::AudioState) -> Self {
@@ -366,11 +377,7 @@ impl From<audio::AudioState> for AudioStateDto {
                 .into_iter()
                 .map(BufferedRangeDto::from)
                 .collect(),
-            waveforms: state
-                .waveforms
-                .into_iter()
-                .map(WaveformDto::from)
-                .collect(),
+            waveforms: state.waveforms.into_iter().map(WaveformDto::from).collect(),
         }
     }
 }
@@ -592,7 +599,8 @@ impl From<SearchResultDto> for streaming::SearchResult {
                 description: None,
             }),
             SearchResultDto::Playlist(playlist) => {
-                let service = std::str::FromStr::from_str(&playlist.system).unwrap_or(streaming::StreamingService::YouTube);
+                let service = std::str::FromStr::from_str(&playlist.system)
+                    .unwrap_or(streaming::StreamingService::Bandcamp);
                 streaming::SearchResult::Playlist(streaming::PlaylistInfo {
                     id: playlist.id,
                     url: playlist.url,
@@ -620,7 +628,8 @@ impl From<SearchResultDto> for streaming::SearchResult {
                 })
             }
             SearchResultDto::Album(album) => {
-                let service = std::str::FromStr::from_str(&album.system).unwrap_or(streaming::StreamingService::YouTube);
+                let service = std::str::FromStr::from_str(&album.system)
+                    .unwrap_or(streaming::StreamingService::Bandcamp);
                 streaming::SearchResult::Album(streaming::AlbumInfo {
                     id: album.id,
                     url: album.url,
@@ -649,7 +658,8 @@ impl From<SearchResultDto> for streaming::SearchResult {
                 })
             }
             SearchResultDto::Channel(channel) => {
-                let service = std::str::FromStr::from_str(&channel.system).unwrap_or(streaming::StreamingService::YouTube);
+                let service = std::str::FromStr::from_str(&channel.system)
+                    .unwrap_or(streaming::StreamingService::Bandcamp);
                 streaming::SearchResult::Channel(streaming::ChannelInfo {
                     id: channel.id,
                     url: channel.url,

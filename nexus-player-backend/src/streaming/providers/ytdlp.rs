@@ -15,8 +15,8 @@ use crate::streaming::cache::CacheManager;
 use crate::streaming::error::{StreamError, StreamResult};
 use crate::streaming::provider::StreamProvider;
 use crate::streaming::types::{
-    AlbumInfo, AudioQuality, ChannelInfo, ContentType, PlaylistInfo, ResolvedContent, ResolveOptions, SearchResult,
-    StreamMetadata, StreamingService, TrackInfo,
+    AlbumInfo, AudioQuality, ChannelInfo, ContentType, PlaylistInfo, ResolveOptions,
+    ResolvedContent, SearchResult, StreamMetadata, StreamingService, TrackInfo,
 };
 
 #[derive(Clone, Debug, Deserialize)]
@@ -196,9 +196,7 @@ impl YtDlpProvider {
     }
 
     fn extract_service(url: &str) -> Option<StreamingService> {
-        if url.contains("youtube.com") || url.contains("youtu.be") {
-            Some(StreamingService::YouTube)
-        } else if url.contains("soundcloud.com") {
+        if url.contains("soundcloud.com") {
             Some(StreamingService::SoundCloud)
         } else if url.contains("bandcamp.com") {
             Some(StreamingService::Bandcamp)

@@ -53,10 +53,9 @@ impl AppState {
 
         let cache_dir = db_path.parent().unwrap().join("cache");
         let streaming = StreamingService::new(
-            cache_dir,
-            config.network.chunk_size as u64,
             config.providers.clone(),
-            config.audio.waveform_enabled,
+            config.audio.clone(),
+            library.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create streaming service: {}", e))?;
         let streaming = Arc::new(streaming);
@@ -79,7 +78,9 @@ impl AppState {
 
     pub async fn update_config(&self, config: AppConfig) -> anyhow::Result<()> {
         self.config_manager.update(config.clone())?;
-        self.streaming.update_config(config.providers).await;
+        self.streaming
+            .update_config(config.providers, config.audio)
+            .await;
         Ok(())
     }
 

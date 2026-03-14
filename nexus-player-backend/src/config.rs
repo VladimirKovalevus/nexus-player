@@ -13,7 +13,7 @@ pub enum ConfigError {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct ProviderSettings {
     pub enabled: bool,
     pub credentials: Option<String>,
@@ -29,9 +29,8 @@ impl Default for ProviderSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct ProviderConfig {
-    pub youtube: ProviderSettings,
     pub soundcloud: ProviderSettings,
     pub bandcamp: ProviderSettings,
     pub vk: ProviderSettings,
@@ -40,7 +39,6 @@ pub struct ProviderConfig {
 impl Default for ProviderConfig {
     fn default() -> Self {
         Self {
-            youtube: ProviderSettings::default(),
             soundcloud: ProviderSettings::default(),
             bandcamp: ProviderSettings::default(),
             vk: ProviderSettings {
@@ -52,21 +50,23 @@ impl Default for ProviderConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct AudioConfig {
     pub waveform_enabled: bool,
+    pub mem_limit: u64,
 }
 
 impl Default for AudioConfig {
     fn default() -> Self {
         Self {
             waveform_enabled: true,
+            mem_limit: 100 * 1024 * 1024,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct NetworkConfig {
     pub timeout_seconds: u64,
     pub chunk_size: usize,
@@ -77,14 +77,14 @@ impl Default for NetworkConfig {
     fn default() -> Self {
         Self {
             timeout_seconds: 30,
-            chunk_size: 1024 * 1024,      // 1MB
+            chunk_size: 1024 * 1024,       // 1MB
             buffer_size: 10 * 1024 * 1024, // 10MB
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct AppConfig {
     pub providers: ProviderConfig,
     pub audio: AudioConfig,
