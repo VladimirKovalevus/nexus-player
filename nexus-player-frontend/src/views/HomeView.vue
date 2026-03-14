@@ -42,10 +42,20 @@
               :thumbnail="playlist.thumbnail || undefined"
               :track-count="playlist.trackCount"
               :playlist-id="playlist.id"
+              show-action
               @click="handlePlaylistClick(playlist)"
               @play="handlePlaylistPlay(playlist)"
               @delete="handlePlaylistDelete(playlist)"
-            />
+            >
+              <template #menu="{ close }">
+                <button :class="$style.menuItem" @click.stop="() => { handlePlaylistCache(playlist); close(); }">
+                  Кэшировать плейлист
+                </button>
+                <button :class="[$style.menuItem, $style.danger]" @click.stop="() => { handlePlaylistDelete(playlist); close(); }">
+                  Удалить
+                </button>
+              </template>
+            </MediaCardCompact>
           </template>
         </VirtualHorizontalList>
       </div>
@@ -99,13 +109,15 @@ import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
 import PlaylistCreateModal from '@/components/PlaylistCreateModal.vue';
 import VirtualList from '@/components/common/VirtualList.vue';
 import VirtualHorizontalList from '@/components/common/VirtualHorizontalList.vue';
-import type { PlaylistDto, TrackDto } from '@/types/types';
+import type { PlaylistDto, TrackDto, PlaylistWithItemsDto } from '@/types/types';
+import { useNotificationStore } from '@/stores/notifications';
 
 const emit = defineEmits<{
   'navigate-playlist': [playlistId: number];
 }>();
 
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
+const notifications = useNotificationStore();
 
 const playlists = ref<PlaylistDto[]>([]);
 const tracks = ref<TrackDto[]>([]);
@@ -205,6 +217,39 @@ const handlePlaylistPlay = async (playlist: PlaylistDto) => {
     refreshQueue();
   } catch (e) {
     console.error('Failed to play playlist:', e);
+  }
+};
+
+const handlePlaylistCache = async (playlist: PlaylistDto) => {
+  console.log('Caching playlist:', playlist.title);
+  notifications.addNotification(`Начинаю кэширование плейлиста "${playlist.title}"`, 'info');
+  try {
+    const pwi = await invoke<PlaylistWithItemsDto | null>('get_playlist_with_tracks', { playlistId: playlist.id });
+    if (pwi && pwi.items) {
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const item of pwi.items) {
+        if (item.itemType === 'track') {
+          try {
+            await invoke('save_track_to_file', { track: item.track });
+            successCount++;
+          } catch (e) {
+            console.error(`Failed to cache track ${item.track.title}:`, e);
+            failCount++;
+          }
+        }
+      }
+      
+      if (failCount === 0) {
+        notifications.addNotification(`Плейлист "${playlist.title}" поставлен на загрузку (${successCount} треков)`, 'success');
+      } else {
+        notifications.addNotification(`Загрузка "${playlist.title}": ${successCount} ок, ${failCount} ошибок`, 'warning');
+      }
+    }
+  } catch (e) {
+    console.error('Failed to cache playlist:', e);
+    notifications.addNotification(`Ошибка при получении данных плейлиста: ${e}`, 'error');
   }
 };
 
@@ -390,6 +435,27 @@ const handleTrackMore = (track: TrackDto) => {
 
   &:active {
     transform: translateY(0);
+  }
+}
+
+.menuItem {
+  display: block;
+  width: 100%;
+  padding: $spacing-sm $spacing-md;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: $font-size-sm;
+  color: var(--color-text-primary);
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: var(--color-bg-hover);
+  }
+
+  &.danger {
+    color: #e74c3c;
   }
 }
 </style>

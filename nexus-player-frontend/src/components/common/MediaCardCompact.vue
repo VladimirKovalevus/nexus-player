@@ -24,41 +24,46 @@
 
 
       <button
-        v-if="false"
+        v-if="showAction"
+        ref="actionButtonRef"
         :class="$style.menuButton"
         @click.stop="toggleMenu"
       >
         <span :class="$style.dots">⋮</span>
       </button>
-
-      <div v-if="menuOpen" :class="$style.dropdownMenu" @click.stop>
-        <template v-if="!showPlaylistSubmenu">
-          <button :class="$style.menuItem" @click.stop="handleShowPlaylistSubmenu">
-            Добавить в плейлист ›
-          </button>
-          <button :class="[$style.menuItem, $style.danger]" @click.stop="handleDelete">
-            Delete
-          </button>
-        </template>
-        <template v-else>
-          <button :class="$style.menuItem" @click.stop="showPlaylistSubmenu = false">
-            ‹ Назад
-          </button>
-          <div :class="$style.divider"></div>
-          <button
-            v-for="pl in filteredPlaylists"
-            :key="pl.id"
-            :class="$style.menuItem"
-            @click.stop="handleAddToPlaylist(pl.id)"
-          >
-            {{ pl.title }}
-          </button>
-          <div v-if="filteredPlaylists.length === 0" :class="$style.emptyHint">
-            Нет плейлистов
-          </div>
-        </template>
-      </div>
     </div>
+
+    <Teleport to="body">
+      <div v-if="menuOpen" ref="dropdownRef" :class="$style.dropdownMenu" :style="dropdownStyle" @click.stop>
+        <slot name="menu" :close="() => menuOpen = false">
+          <template v-if="!showPlaylistSubmenu">
+            <button :class="$style.menuItem" @click.stop="handleShowPlaylistSubmenu">
+              Добавить в плейлист ›
+            </button>
+            <button :class="[$style.menuItem, $style.danger]" @click.stop="handleDelete">
+              Удалить
+            </button>
+          </template>
+          <template v-else>
+            <button :class="$style.menuItem" @click.stop="showPlaylistSubmenu = false">
+              ‹ Назад
+            </button>
+            <div :class="$style.divider"></div>
+            <button
+              v-for="pl in filteredPlaylists"
+              :key="pl.id"
+              :class="$style.menuItem"
+              @click.stop="handleAddToPlaylist(pl.id)"
+            >
+              {{ pl.title }}
+            </button>
+            <div v-if="filteredPlaylists.length === 0" :class="$style.emptyHint">
+              Нет плейлистов
+            </div>
+          </template>
+        </slot>
+      </div>
+    </Teleport>
 
     <div :class="$style.info">
       <div :class="$style.title" :title="title">{{ title }}</div>
@@ -78,23 +83,30 @@ interface Props {
   thumbnail?: string;
   trackCount?: number;
   playlistId?: number;
+  showAction?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   thumbnail: undefined,
   trackCount: undefined,
   playlistId: undefined,
+  showAction: false,
 });
 
 const emit = defineEmits<{
   click: [];
   play: [];
   delete: [];
+  action: [actionId: string];
 }>();
 
 const menuOpen = ref(false);
 const showPlaylistSubmenu = ref(false);
 const allPlaylists = ref<Array<{ id: number; title: string }>>([]);
+
+const actionButtonRef = ref<HTMLElement | null>(null);
+const dropdownRef = ref<HTMLElement | null>(null);
+const dropdownPos = ref({ top: 0, left: 0 });
 
 const filteredPlaylists = computed(() => {
   if (props.playlistId !== undefined) {
@@ -103,15 +115,45 @@ const filteredPlaylists = computed(() => {
   return allPlaylists.value;
 });
 
+const dropdownStyle = computed(() => ({
+  top: `${dropdownPos.value.top}px`,
+  left: `${dropdownPos.value.left}px`,
+}));
+
 const toggleMenu = async () => {
   menuOpen.value = !menuOpen.value;
   showPlaylistSubmenu.value = false;
-  if (menuOpen.value && allPlaylists.value.length === 0) {
-    try {
-      allPlaylists.value = await invoke<Array<{ id: number; title: string }>>('get_all_playlists');
-    } catch (e) {
-      console.error('Failed to fetch playlists:', e);
+  
+  if (menuOpen.value) {
+    if (actionButtonRef.value) {
+      const rect = actionButtonRef.value.getBoundingClientRect();
+      dropdownPos.value = {
+        top: rect.bottom + 4,
+        left: rect.left
+      };
     }
+    
+    if (allPlaylists.value.length === 0) {
+      try {
+        allPlaylists.value = await invoke<Array<{ id: number; title: string }>>('get_all_playlists');
+      } catch (e) {
+        console.error('Failed to fetch playlists:', e);
+      }
+    }
+    document.addEventListener('mousedown', handleDocumentClick);
+  } else {
+    document.removeEventListener('mousedown', handleDocumentClick);
+  }
+};
+
+const handleDocumentClick = (e: MouseEvent) => {
+  const target = e.target as Node;
+  const isInsideActionButton = actionButtonRef.value?.contains(target);
+  const isInsideDropdown = dropdownRef.value?.contains(target);
+  
+  if (menuOpen.value && !isInsideActionButton && !isInsideDropdown) {
+    menuOpen.value = false;
+    document.removeEventListener('mousedown', handleDocumentClick);
   }
 };
 
@@ -308,15 +350,13 @@ const handlePlay = () => {
 }
 
 .dropdownMenu {
-  position: absolute;
-  top: calc(#{$spacing-sm} + 32px);
-  left: $spacing-sm;
+  position: fixed;
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
   border-radius: $radius-md;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 100;
-  min-width: 100px;
+  z-index: 10000;
+  min-width: 150px;
   overflow: hidden;
 }
 

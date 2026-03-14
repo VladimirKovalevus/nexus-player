@@ -92,7 +92,7 @@ impl StreamingService {
             if source.system() == "vk" && effective_options.user_agent.is_none() {
                 effective_options.user_agent = Some(vk_api::auth::VK_USER_AGENT.to_string());
             }
-            match provider
+            return match provider
                 .resolve(
                     &source,
                     Some(ResolveOptions {

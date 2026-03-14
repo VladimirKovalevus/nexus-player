@@ -20,9 +20,16 @@
           :artist="playlist.creator || 'VK User'"
           :thumbnail="playlist.thumbnail || undefined"
           :track-count="playlist.trackCount"
+          show-action
           @click="handlePlaylistClick(playlist)"
           @play="handlePlaylistPlay(playlist)"
-        />
+        >
+          <template #menu="{ close }">
+            <button :class="$style.menuItem" @click.stop="() => { console.log('Template: click on create playlist'); handleCreatePlaylist(playlist); close(); }">
+              Сформировать плейлист
+            </button>
+          </template>
+        </MediaCardCompact>
       </div>
     </section>
 
@@ -55,8 +62,10 @@ import MediaCard from '@/components/common/MediaCard.vue';
 import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
 import type { TrackDto, PlaylistDto } from '@/types/types';
 import { useVkStore } from '@/stores/vk';
+import { useNotificationStore } from '@/stores/notifications';
 
 const vkStore = useVkStore();
+const notifications = useNotificationStore();
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
 
 const handleTrackClick = async (track: TrackDto) => {
@@ -123,6 +132,31 @@ const handlePlaylistPlay = async (playlist: PlaylistDto) => {
   await handlePlaylistClick(playlist);
   await invoke('play_at_index', { index: 0 });
   refreshQueue();
+};
+
+const handleCreatePlaylist = async (playlist: PlaylistDto) => {
+  console.log('handleCreatePlaylist triggered for:', playlist.title);
+  if (playlist.source) {
+    console.log('Playlist source found:', playlist.source);
+    try {
+      notifications.addNotification(`Импорт плейлиста "${playlist.title}"...`, 'info');
+      await invoke('create_playlist_from_container', {
+        provider: playlist.source.system,
+        contentType: 'Playlist',
+        id: playlist.source.url,
+        title: playlist.title,
+        description: playlist.description || '',
+        artworkUrl: playlist.thumbnail,
+      });
+      notifications.addNotification(`Плейлист "${playlist.title}" успешно импортирован`, 'success');
+    } catch (e) {
+      console.error('Failed to create playlist from VK:', e);
+      notifications.addNotification(`Ошибка импорта: ${e}`, 'error');
+    }
+  } else {
+    console.warn('Playlist has no source data:', playlist);
+    notifications.addNotification('Не удалось получить данные источника плейлиста', 'error');
+  }
 };
 
 onMounted(() => {
@@ -198,5 +232,22 @@ onMounted(() => {
   text-align: center;
   padding: $spacing-3xl;
   color: var(--color-text-secondary);
+}
+
+.menuItem {
+  display: block;
+  width: 100%;
+  padding: $spacing-sm $spacing-md;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: $font-size-sm;
+  color: var(--color-text-primary);
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: var(--color-bg-hover);
+  }
 }
 </style>

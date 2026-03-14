@@ -945,7 +945,7 @@ pub async fn save_track_to_file(
                 let success = res.is_ok();
                 if let Ok(buffer) = res {
                     let file_path = downloads_dir.join(format!(
-                        "{}-{}.{}",
+                        "{} - {}.{}",
                         track.artist.clone().unwrap_or("Unknown".to_string()),
                         track.title,
                         buffer.container()
@@ -989,6 +989,13 @@ pub async fn save_track_to_file(
             .await;
         tracing::info!("Track saved");
     } else {
+        tracing::info!(
+            "POEBOTA for {:?}",
+            TrackSource::External {
+                system: src.system.clone(),
+                id: src.url.clone(),
+            }
+        );
         state
             .streaming()
             .add_download_task(
