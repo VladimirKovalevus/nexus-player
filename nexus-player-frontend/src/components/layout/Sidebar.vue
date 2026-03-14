@@ -36,6 +36,10 @@
         <span :class="$style.icon">🕒</span>
         <span>История</span>
       </a>
+      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'downloads' }]" @click.prevent="$emit('changeView', 'downloads')">
+        <span :class="$style.icon">📥</span>
+        <span>Загрузки</span>
+      </a>
       <button :class="$style.settingsButton" @click="isSettingsOpen = true">
         <span :class="$style.icon">⚙️</span>
         <span>Настройки</span>

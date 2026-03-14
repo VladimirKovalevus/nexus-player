@@ -2,7 +2,7 @@ use crate::dto::{
     hash_str_to_i64, AudioStateDto, ContainerMetaDto, CreatePlaylistRequest,
     CreatePlaylistWithTracksRequest, CurrentPositionDto, PlayHistoryEntryDto, PlaylistDto,
     PlaylistItemDto, PlaylistWithItemsDto, PlaylistWithTracksDto, QueueEntryDto, QueueStateDto,
-    SearchContextDto, SearchResultDto, TrackDto, TrackSourceDto,
+    SearchContextDto, SearchResultDto, TaskInfoDto, TrackDto, TrackSourceDto,
 };
 use crate::events::FrontendEvent;
 use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
@@ -1058,4 +1058,16 @@ pub async fn reorder_playlist_items(
         .reorder_playlist_items(PlaylistId(playlist_id), item_ids)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_download_tasks(state: State<'_, Arc<AppState>>) -> Result<Vec<TaskInfoDto>> {
+    let tasks = state.streaming().list_tasks().await;
+    Ok(tasks.into_iter().map(|t| t.into()).collect())
+}
+
+#[tauri::command]
+pub async fn remove_download_task(state: State<'_, Arc<AppState>>, track_id: u64) -> Result<()> {
+    state.streaming().remove_task(track_id).await;
+    Ok(())
 }

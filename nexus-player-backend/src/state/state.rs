@@ -16,6 +16,7 @@ use crate::playlist::playback_queue::{
 use crate::playlist::playlist::Playlist;
 use crate::streaming::StreamingService;
 use crate::streaming::{external::StreamingSourceWrapper, types::ContentType};
+use streaming::state::types::DefaultCallbacks;
 use anyhow::{Context, Result};
 use chrono::Utc;
 use std::path::Path;
@@ -39,7 +40,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub async fn new(db_path: &Path) -> anyhow::Result<Self> {
+    pub async fn new(db_path: &Path, default_callbacks: DefaultCallbacks) -> anyhow::Result<Self> {
         let library = LibraryService::new(db_path).await?;
         let library = Arc::new(library);
 
@@ -51,11 +52,12 @@ impl AppState {
 
         let audio_engine = AudioEngine::new()?;
 
-        let cache_dir = db_path.parent().unwrap().join("cache");
+        let _cache_dir = db_path.parent().unwrap().join("cache");
         let streaming = StreamingService::new(
             config.providers.clone(),
             config.audio.clone(),
             library.clone(),
+            default_callbacks,
         )
         .map_err(|e| anyhow::anyhow!("Failed to create streaming service: {}", e))?;
         let streaming = Arc::new(streaming);

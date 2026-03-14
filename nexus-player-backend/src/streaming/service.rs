@@ -18,7 +18,7 @@ use super::types::{
 };
 use std::str::FromStr;
 use streaming::state::manager::DownloadManager;
-use streaming::state::types::{DownloadOptions, ManagerConfig};
+use streaming::state::types::{DownloadOptions, ManagerConfig, TaskInfo, DefaultCallbacks};
 
 pub struct StreamingService {
     providers: HashMap<String, Arc<dyn StreamProvider>>,
@@ -32,6 +32,7 @@ impl StreamingService {
         config: ProviderConfig,
         config_audio: AudioConfig,
         library: Arc<LibraryService>,
+        default_callbacks: DefaultCallbacks,
     ) -> StreamResult<Self> {
         let bandcamp = Arc::new(BandcampProvider::new()) as Arc<dyn StreamProvider>;
         let soundcloud = Arc::new(SoundCloudProvider::new()) as Arc<dyn StreamProvider>;
@@ -47,6 +48,7 @@ impl StreamingService {
         let manager = DownloadManager::new(ManagerConfig {
             waveform_enabled: config_audio.waveform_enabled,
             mem_limit_bytes: config_audio.mem_limit,
+            default_callbacks,
         });
 
         Ok(Self {
@@ -61,16 +63,26 @@ impl StreamingService {
         if let Ok(mut c) = self.config.write() {
             *c = config.clone();
         }
+        
+        let mut manager_config = self.download_manager.config.read().await.clone();
+        manager_config.waveform_enabled = config_audio.waveform_enabled;
+        manager_config.mem_limit_bytes = config_audio.mem_limit;
+
         self.download_manager
-            .update_config(ManagerConfig {
-                waveform_enabled: config_audio.waveform_enabled,
-                mem_limit_bytes: config_audio.mem_limit,
-            })
+            .update_config(manager_config)
             .await;
 
         if let Some(vk) = self.providers.get("vk") {
             vk.set_credentials(config.vk.credentials.clone()).await;
         }
+    }
+
+    pub async fn list_tasks(&self) -> Vec<TaskInfo> {
+        self.download_manager.list_tasks().await
+    }
+
+    pub async fn remove_task(&self, track_id: u64) {
+        self.download_manager.remove_track(track_id).await;
     }
     pub async fn update_task(&self, task_id: u64, options: DownloadOptions) {
         self.download_manager.update_task(task_id, options).await;

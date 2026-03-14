@@ -181,3 +181,11 @@ export interface PlayHistoryEntryDto {
   artworkUrl: string | null;
   playedAt: number;
 }
+
+export interface TaskInfoDto {
+  trackId: number;
+  url: string;
+  state: string;
+  sizeHuman: string;
+  progress: f64;
+}

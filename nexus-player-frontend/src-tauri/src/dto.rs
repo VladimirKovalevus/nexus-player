@@ -675,6 +675,28 @@ impl From<SearchResultDto> for streaming::SearchResult {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskInfoDto {
+    pub track_id: u64,
+    pub url: String,
+    pub state: String,
+    pub size_human: String,
+    pub progress: f64,
+}
+
+impl From<::streaming::state::types::TaskInfo> for TaskInfoDto {
+    fn from(info: ::streaming::state::types::TaskInfo) -> Self {
+        Self {
+            track_id: info.track_id,
+            url: info.url,
+            state: info.state,
+            size_human: info.size_human,
+            progress: info.progress,
+        }
+    }
+}
+
 pub(crate) fn hash_str_to_i64(s: &str) -> i64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();

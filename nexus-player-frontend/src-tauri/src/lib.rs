@@ -3,9 +3,10 @@ mod dto;
 mod events;
 
 use nexus_player_backend::state::state::AppState;
+use streaming::state::types::{DefaultCallbacks, TaskInfo};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Manager, AppHandle, Emitter};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,6 +20,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri::plugin::Builder::<_, ()>::new("vkLogin").build())
         .setup(|app| {
+            let app_handle = app.handle().clone();
             let app_data_dir = app
                 .path()
                 .app_data_dir()
@@ -30,8 +32,29 @@ pub fn run() {
 
             tracing::info!("Database path: {:?}", db_path);
 
+            // Setup download callbacks
+            let h1 = app_handle.clone();
+            let h2 = app_handle.clone();
+            let h3 = app_handle.clone();
+
+            let default_callbacks = DefaultCallbacks {
+                on_start: Some(Arc::new(move |id, _res| {
+                    let _ = h1.emit("download-start", id);
+                })),
+                on_progress: Some(Arc::new(move |id, res| {
+                    if let Ok(buffer) = res {
+                        let progress = buffer.progress();
+                        let _ = h2.emit("download-progress", (id, progress));
+                    }
+                })),
+                on_finish: Some(Arc::new(move |id, res| {
+                    let success = res.is_ok();
+                    let _ = h3.emit("download-finish", (id, success));
+                })),
+            };
+
             let state = tauri::async_runtime::block_on(async {
-                AppState::new(&db_path)
+                AppState::new(&db_path, default_callbacks)
                     .await
                     .expect("Failed to initialize AppState")
             });
@@ -97,6 +120,8 @@ pub fn run() {
             commands::toggle_liked,
             commands::reorder_liked_tracks,
             commands::reorder_playlist_items,
+            commands::list_download_tasks,
+            commands::remove_download_task,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
