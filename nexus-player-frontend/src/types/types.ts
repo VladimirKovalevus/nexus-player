@@ -187,5 +187,7 @@ export interface TaskInfoDto {
   url: string;
   state: string;
   sizeHuman: string;
-  progress: f64;
+  byteSize: number;
+  progress: number;
+  meta: StreamingTrack | null;
 }

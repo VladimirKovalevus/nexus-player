@@ -3,7 +3,8 @@
 
 :root {
   color-scheme: dark;
-  // Dark theme (по умолчанию)
+  
+  // Colors - Dark theme (по умолчанию)
   --color-bg-primary: #{$dark-bg-primary};
   --color-bg-secondary: #{$dark-bg-secondary};
   --color-bg-sidebar: #{$dark-bg-sidebar};
@@ -17,14 +18,41 @@
   --color-border: #{$dark-border};
   --color-border-light: #{$dark-border-light};
 
-  // Акценты (одинаковы для обеих тем)
-  --color-accent-primary: #{$color-accent-primary};
-  --color-accent-hover: #{$color-accent-hover};
-  --color-accent-purple: #{$color-accent-purple};
+  // Акценты
+  --color-accent-primary: #{$color-accent-primary-const};
+  --color-accent-hover: #{$color-accent-hover-const};
+  --color-accent-purple: #{$color-accent-purple-const};
+
+  // Typography
+  --font-family-primary: #{$font-family-primary-const};
+  --font-size-xs: #{$font-size-xs-const};
+  --font-size-sm: #{$font-size-sm-const};
+  --font-size-base: #{$font-size-base-const};
+  --font-size-lg: #{$font-size-lg-const};
+  --font-size-xl: #{$font-size-xl-const};
+  --font-size-2xl: #{$font-size-2xl-const};
+  --font-size-3xl: #{$font-size-3xl-const};
+  
+  // Radiuses
+  --radius-sm: #{$radius-sm-const};
+  --radius-md: #{$radius-md-const};
+  --radius-lg: #{$radius-lg-const};
+  --radius-xl: #{$radius-xl-const};
+
+  // Shadows
+  --shadow-md: #{$shadow-md-const};
+  --shadow-lg: #{$shadow-lg-const};
+  --shadow-xl: #{$shadow-xl-const};
+
+  // Transitions
+  --transition-fast: #{$transition-fast-const};
+  --transition-base: #{$transition-base-const};
+  --transition-slow: #{$transition-slow-const};
 }
 
 // Light theme
 [data-theme='light'] {
+  color-scheme: light;
   --color-bg-primary: #{$light-bg-primary};
   --color-bg-secondary: #{$light-bg-secondary};
   --color-bg-sidebar: #{$light-bg-sidebar};

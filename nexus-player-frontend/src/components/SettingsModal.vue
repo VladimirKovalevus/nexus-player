@@ -40,6 +40,35 @@
             </div>
           </section>
 
+          <!-- Appearance Settings -->
+          <section :class="$style.section">
+            <h3 :class="$style.sectionTitle">Внешний вид</h3>
+            <div :class="$style.field">
+              <label>Тема оформления</label>
+              <div :class="$style.themeGrid">
+                <button 
+                  v-for="t in ['dark', 'light', 'cartoon', 'retro', 'cyberpunk']" 
+                  :key="t"
+                  :class="[$style.themeButton, themeStore.activeTheme === t && $style.active]"
+                  @click="themeStore.setTheme(t)"
+                >
+                  {{ formatThemeDisplayName(t) }}
+                </button>
+              </div>
+            </div>
+            
+            <div :class="$style.field">
+              <label>Пользовательский CSS</label>
+              <textarea 
+                v-model="themeStore.customCss" 
+                @input="themeStore.setCustomCss(($event.target as HTMLTextAreaElement).value)"
+                placeholder="/* Вставьте ваш CSS сюда */"
+                rows="5"
+                :class="$style.customCssInput"
+              ></textarea>
+            </div>
+          </section>
+
           <!-- Providers Settings -->
           <section :class="$style.section">
             <h3 :class="$style.sectionTitle">Провайдеры</h3>
@@ -113,8 +142,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { AppConfig } from '@/types/types';
 import { useVkStore } from '@/stores/vk';
+import { useThemeStore } from '@/stores/theme';
 
 const vkStore = useVkStore();
+const themeStore = useThemeStore();
 const props = defineProps<{
   isOpen: boolean;
 }>();
@@ -134,6 +165,7 @@ const config = ref<AppConfig>({
     soundcloud: { enabled: true },
     bandcamp: { enabled: true },
     vk: { enabled: false, credentials: null },
+    youtube: { enabled: true },
   },
   audio: {
     waveformEnabled: true
@@ -216,6 +248,17 @@ const handleTokenExtraction = async () => {
     vkRedirectUrl.value = '';
   } catch (e) {
     alert(`Ошибка: ${e}`);
+  }
+};
+
+const formatThemeDisplayName = (theme: string) => {
+  switch (theme) {
+    case 'dark': return 'Темная';
+    case 'light': return 'Светлая';
+    case 'cartoon': return 'Мультяшная';
+    case 'retro': return 'Ретро (NES)';
+    case 'cyberpunk': return 'Cyberpunk';
+    default: return theme;
   }
 };
 
@@ -484,5 +527,41 @@ watch(
 
 .error {
   color: #ef4444;
+}
+
+.themeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: $spacing-md;
+  margin-top: $spacing-xs;
+}
+
+.themeButton {
+  padding: $spacing-md;
+  background-color: var(--color-bg-primary);
+  border: 2px solid var(--color-border);
+  border-radius: $radius-md;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: all $transition-fast;
+  font-weight: $font-weight-medium;
+
+  &:hover {
+    border-color: var(--color-accent-primary);
+    background-color: var(--color-bg-hover);
+  }
+
+  &.active {
+    border-color: var(--color-accent-primary);
+    background-color: var(--color-bg-hover);
+    box-shadow: 0 0 0 1px var(--color-accent-primary);
+  }
+}
+
+.customCssInput {
+  width: 100%;
+  font-family: monospace !important;
+  font-size: $font-size-xs !important;
+  resize: vertical;
 }
 </style>

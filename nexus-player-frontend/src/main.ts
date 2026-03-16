@@ -3,13 +3,17 @@ import { createPinia } from 'pinia';
 import App from './App.vue';
 import './styles/global.scss';
 import { useNotificationStore } from './stores/notifications';
+import { useThemeStore } from './stores/theme';
 
 const app = createApp(App);
 const pinia = createPinia();
 
 app.use(pinia);
 
-// Global Error Handlers
+// Initialize stores
+const themeStore = useThemeStore(pinia);
+themeStore.initTheme();
+
 const notificationStore = useNotificationStore(pinia);
 
 app.config.errorHandler = (err, instance, info) => {

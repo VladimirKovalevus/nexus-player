@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import '@/styles/nes.scss';
+
+html[data-theme='retro'] {
+  --color-bg-primary: #92ccfe;
+  --color-bg-secondary: #ffffff;
+  --color-bg-sidebar: #ffffff;
+  --color-bg-player: #ffffff;
+  --color-bg-hover: #e7e7e7;
+
+  --color-text-primary: #212529;
+  --color-text-secondary: #757575;
+  --color-text-muted: #adafae;
+
+  --color-border: #212529;
+  --color-border-light: #212529;
+
+  --color-accent-primary: #209cee;
+  --color-accent-hover: #108de0;
+
+  --font-family-primary: 'Press Start 2P', cursive;
+  --font-size-xs: 0.7rem;
+  --font-size-sm: 0.8rem;
+  --font-size-base: 0.9rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.2rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 2rem;
+
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+
+  --shadow-md: 4px 4px 0px #000;
+  --shadow-lg: 6px 6px 0px #000;
+
+  button {
+    display: inline-block;
+    position: relative;
+    padding: 6px 10px;
+    margin: 4px;
+    text-align: center;
+    vertical-align: middle;
+    cursor: pointer;
+    user-select: none;
+    color: #212529 !important;
+    background-color: #fff !important;
+    border-style: solid;
+    border-width: 4px;
+    border-image-source: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAFVJREFUOBFjZMAD9uzZ85+REUvExMTw69ev/0AYZALMBSBNoBjEByuA6YEqMAZiASZInICB0AtAmhkIuwCUmYFQC0CaGQi7AJidgVALQJoZCLuA8QAAsmccf99YPrAAAAAASUVORK5CYII=');
+    border-image-slice: 2;
+    border-image-repeat: stretch;
+    image-rendering: pixelated;
+
+    &:hover {
+      background-color: #e7e7e7 !important;
+    }
+    &:active {
+      padding-top: 8px;
+      padding-bottom: 4px;
+    }
+  }
+
+  div[class*="taskCard"], div[class*="MediaCard"] {
+    border-style: solid;
+    border-width: 4px;
+    border-image-source: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAFVJREFUOBFjZMAD9uzZ85+REUvExMTw69ev/0AYZALMBSBNoBjEByuA6YEqMAZiASZInICB0AtAmhkIuwCUmYFQC0CaGQi7AJidgVALQJoZCLuA8QAAsmccf99YPrAAAAAASUVORK5CYII=');
+    border-image-slice: 2;
+    background-color: white !important;
+    color: black !important;
+    border-radius: 0 !important;
+  }
+
+  div[class*="progressBar"] {
+    height: 24px !important;
+    background-color: #e7e7e7 !important;
+    border: 4px solid black;
+    border-radius: 0 !important;
+  }
+
+  div[class*="progressFill"] {
+    background-color: #212529 !important;
+  }
+}

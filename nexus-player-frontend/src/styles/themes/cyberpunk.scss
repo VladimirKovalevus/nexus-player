@@ -1,0 +1,100 @@
+@import url('https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700&family=Roboto+Mono:wght@400;700&display=swap');
+@import '@/styles/cyberpunk.scss';
+
+html[data-theme='cyberpunk'] {
+  --color-bg-primary: #f8ef02;
+  --color-bg-secondary: #000000;
+  --color-bg-sidebar: #000000;
+  --color-bg-player: #000000;
+  --color-bg-hover: #1a1a1a;
+
+  --color-text-primary: #000000;
+  --color-text-secondary: #333333;
+  --color-text-muted: #666666;
+
+  --color-border: #000000;
+  --color-border-light: #333333;
+
+  --color-accent-primary: #ff003c;
+  --color-accent-hover: #00ffd2;
+
+  --font-family-primary: 'Oxanium', cursive;
+  --font-size-xs: 0.8rem;
+  --font-size-sm: 0.9rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.1rem;
+  --font-size-xl: 1.3rem;
+  --font-size-2xl: 1.6rem;
+  --font-size-3xl: 2rem;
+
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+
+  --shadow-md: none;
+  --shadow-lg: none;
+
+  body {
+    background-color: #f8ef02 !important;
+  }
+
+  button {
+    background-color: #ff003c !important;
+    color: #fff !important;
+    font-family: 'Oxanium' !important;
+    font-weight: bold !important;
+    text-transform: uppercase;
+    padding: 10px 20px !important;
+    border: none !important;
+    clip-path: polygon(0 0, 100% 0, 100% 70%, 85% 100%, 0 100%);
+    transition: all 0.2s;
+    position: relative;
+
+    &:hover {
+      background-color: #00ffd2 !important;
+      color: #000 !important;
+      transform: skew(-2deg);
+    }
+  }
+
+  div[class*="taskCard"], div[class*="MediaCard"] {
+    background-color: #000 !important;
+    color: #f8ef02 !important;
+    border: 2px solid #00ffd2 !important;
+    clip-path: polygon(5% 0, 100% 0, 100% 90%, 95% 100%, 0 100%, 0 10%);
+    margin-bottom: 10px;
+    border-radius: 0 !important;
+  }
+
+  aside, [class*="sidebar"] {
+    background-color: #000 !important;
+    border-right: 4px solid #ff003c !important;
+    
+    * {
+        color: #f8ef02 !important;
+    }
+  }
+
+  div[class*="progressBar"] {
+    background-color: #333 !important;
+    border: 1px solid #ff003c;
+    height: 12px !important;
+    border-radius: 0 !important;
+  }
+
+  div[class*="progressFill"] {
+    background-color: #00ffd2 !important;
+    box-shadow: 0 0 10px #00ffd2;
+  }
+
+  h1, h2, h3, [class*="title"] {
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #000 !important;
+    
+    [class*="sidebar"] & {
+        color: #f8ef02 !important;
+    }
+  }
+}
