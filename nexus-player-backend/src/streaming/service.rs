@@ -96,6 +96,7 @@ impl StreamingService {
         if let Some(provider) = self.providers.get(source.system()) {
             let mut effective_options = options.unwrap_or(DownloadOptions {
                 user_agent: None,
+                meta: None,
                 on_start: None,
                 on_progress: None,
                 on_finish: None,
@@ -113,7 +114,8 @@ impl StreamingService {
                 )
                 .await
             {
-                Ok(url) => {
+                Ok((url, metadata)) => {
+                    effective_options.meta = Some(metadata.into());
                     match self
                         .download_manager
                         .add_download_task(url.as_str(), task_id, Some(effective_options))
@@ -268,6 +270,7 @@ impl StreamingService {
                 if let Some(provider) = self.providers.get(&system) {
                     let mut effective_options = options.unwrap_or(DownloadOptions {
                         user_agent: None,
+                        meta: None,
                         on_start: None,
                         on_progress: None,
                         on_finish: None,
@@ -291,7 +294,8 @@ impl StreamingService {
                             )
                             .await
                         {
-                            Ok(url) => {
+                            Ok((url, metadata)) => {
+                                effective_options.meta = Some(metadata.into());
                                 match self
                                     .download_manager
                                     .add_track(&url, track_id, Some(effective_options))

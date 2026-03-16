@@ -55,7 +55,7 @@ impl StreamProvider for SoundCloudProvider {
         &self,
         source: &TrackSource,
         _options: Option<ResolveOptions>,
-    ) -> StreamResult<String> {
+    ) -> StreamResult<(String, StreamMetadata)> {
         let url = match source {
             TrackSource::Http(url) => url.clone(),
             TrackSource::External { id, .. } => id.clone(),
@@ -90,7 +90,18 @@ impl StreamProvider for SoundCloudProvider {
             StreamError::Other(format!("Failed to get SoundCloud stream URL: {}", e))
         })?;
 
-        Ok(stream_url)
+        Ok((
+            stream_url,
+            StreamMetadata {
+                title: Some(track.track.title),
+                artist: Some(track.user.username),
+                album: None,
+                duration: Some(std::time::Duration::from_millis(track.track.duration as u64)),
+                artwork_url: track.track.artwork_url,
+                sample_rate: None,
+                channels: None,
+            },
+        ))
     }
 
     async fn fetch_metadata(&self, source: &TrackSource) -> StreamResult<StreamMetadata> {

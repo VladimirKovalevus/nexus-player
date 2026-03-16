@@ -3,7 +3,7 @@ mod dto;
 mod events;
 
 use nexus_player_backend::state::state::AppState;
-use streaming::state::types::{DefaultCallbacks, TaskInfo};
+use streaming::state::types::{DefaultCallbacks, TaskInfo, DefaultCallback};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{Manager, AppHandle, Emitter};
@@ -38,19 +38,22 @@ pub fn run() {
             let h3 = app_handle.clone();
 
             let default_callbacks = DefaultCallbacks {
-                on_start: Some(Arc::new(move |id, _res| {
-                    let _ = h1.emit("download-start", id);
-                })),
-                on_progress: Some(Arc::new(move |id, res| {
+                on_start: Some(Arc::new(move |id, _res, meta: Option<streaming::state::types::StreamMetadata>| {
+                    let title = meta.as_ref().and_then(|m| m.title.clone()).unwrap_or_else(|| format!("Track #{}", id));
+                    let _ = h1.emit("download-start", (id, title));
+                }) as Arc<DefaultCallback>),
+                on_progress: Some(Arc::new(move |id, res: Result<streaming::state::types::BufferType, streaming::error::StreamingError>, _meta| {
                     if let Ok(buffer) = res {
                         let progress = buffer.progress();
-                        let _ = h2.emit("download-progress", (id, progress));
+                        let byte_size = buffer.byte_size();
+                        let _ = h2.emit("download-progress", (id, progress, byte_size));
                     }
-                })),
-                on_finish: Some(Arc::new(move |id, res| {
+                }) as Arc<DefaultCallback>),
+                on_finish: Some(Arc::new(move |id, res: Result<streaming::state::types::BufferType, streaming::error::StreamingError>, meta: Option<streaming::state::types::StreamMetadata>| {
                     let success = res.is_ok();
-                    let _ = h3.emit("download-finish", (id, success));
-                })),
+                    let title = meta.and_then(|m| m.title).unwrap_or_else(|| format!("Track #{}", id));
+                    let _ = h3.emit("download-finish", (id, success, title));
+                }) as Arc<DefaultCallback>),
             };
 
             let state = tauri::async_runtime::block_on(async {

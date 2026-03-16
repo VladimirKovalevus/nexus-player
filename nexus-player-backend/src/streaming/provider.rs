@@ -15,7 +15,7 @@ pub trait StreamProvider: Send + Sync {
         &self,
         source: &TrackSource,
         options: Option<ResolveOptions>,
-    ) -> StreamResult<String>;
+    ) -> StreamResult<(String, StreamMetadata)>;
 
     async fn fetch_metadata(&self, source: &TrackSource) -> StreamResult<StreamMetadata>;
 

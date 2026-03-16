@@ -200,7 +200,7 @@ pub struct ChannelInfo {
     pub description: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamMetadata {
     pub title: Option<String>,
 
@@ -214,19 +214,33 @@ pub struct StreamMetadata {
 
     pub sample_rate: Option<u32>,
 
-    pub channels: Option<usize>,
+    pub channels: Option<u8>,
 }
 
-impl Default for StreamMetadata {
-    fn default() -> Self {
+impl From<streaming::state::types::StreamMetadata> for StreamMetadata {
+    fn from(meta: streaming::state::types::StreamMetadata) -> Self {
         Self {
-            title: None,
-            artist: None,
-            album: None,
-            duration: None,
-            artwork_url: None,
-            sample_rate: None,
-            channels: None,
+            title: meta.title,
+            artist: meta.artist,
+            album: meta.album,
+            duration: meta.duration,
+            artwork_url: meta.artwork_url,
+            sample_rate: meta.sample_rate,
+            channels: meta.channels,
+        }
+    }
+}
+
+impl From<StreamMetadata> for streaming::state::types::StreamMetadata {
+    fn from(meta: StreamMetadata) -> Self {
+        Self {
+            title: meta.title,
+            artist: meta.artist,
+            album: meta.album,
+            duration: meta.duration,
+            artwork_url: meta.artwork_url,
+            sample_rate: meta.sample_rate,
+            channels: meta.channels,
         }
     }
 }

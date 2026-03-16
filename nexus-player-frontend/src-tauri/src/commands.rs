@@ -912,10 +912,11 @@ pub async fn save_track_to_file(
     let has_track = state.streaming().has_track(track_id as u64).await;
     let options = streaming::state::types::DownloadOptions {
         user_agent: None,
-        on_start: Some(Box::new({
+        meta: None,
+        on_start: Some(Arc::new({
             let app_handle = app.clone();
             let track_title = track_title.clone();
-            move |_| {
+            move |_, _| {
                 let _ = app_handle.emit(
                     "audio-event",
                     FrontendEvent::DownloadStarted {
@@ -923,10 +924,10 @@ pub async fn save_track_to_file(
                     },
                 );
             }
-        })),
-        on_progress: Some(Box::new({
+        }) as Arc<streaming::state::types::TaskCallback>),
+        on_progress: Some(Arc::new({
             let app_handle = app.clone();
-            move |res| {
+            move |res: std::result::Result<streaming::state::types::BufferType, streaming::error::StreamingError>, _| {
                 if let Ok(buffer) = res {
                     let _ = app_handle.emit(
                         "audio-event",
@@ -937,11 +938,11 @@ pub async fn save_track_to_file(
                     );
                 }
             }
-        })),
-        on_finish: Some(Box::new({
+        }) as Arc<streaming::state::types::TaskCallback>),
+        on_finish: Some(Arc::new({
             let app_handle = app.clone();
             let state_arc = state_arc.clone();
-            move |res| {
+            move |res: std::result::Result<streaming::state::types::BufferType, streaming::error::StreamingError>, _| {
                 let success = res.is_ok();
                 if let Ok(buffer) = res {
                     let file_path = downloads_dir.join(format!(

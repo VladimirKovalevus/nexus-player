@@ -245,14 +245,36 @@ impl StreamProvider for YtDlpProvider {
         &self,
         source: &TrackSource,
         _options: Option<ResolveOptions>,
-    ) -> StreamResult<String> {
-        match source {
-            TrackSource::Http(url) => self.get_audio_url(url, AudioQuality::Best).await,
-            TrackSource::External { id, system } => {
-                self.get_audio_url(id, AudioQuality::Best).await
-            }
-            _ => Err(StreamError::NotSupported),
-        }
+    ) -> StreamResult<(String, StreamMetadata)> {
+        let url = match source {
+            TrackSource::Http(url) => url.as_str(),
+            TrackSource::External { id, .. } => id.as_str(),
+            _ => return Err(StreamError::NotSupported),
+        };
+
+        let meta = self.fetch_json(url, false).await?;
+        let thumbnail = meta
+            .thumbnails
+            .as_ref()
+            .and_then(|t| t.first().map(|t| t.url.clone()));
+
+        let audio_url = meta
+            .url
+            .clone()
+            .ok_or_else(|| StreamError::NoStreamAvailable("No URL in metadata".to_string()))?;
+
+        Ok((
+            audio_url,
+            StreamMetadata {
+                title: meta.title.clone(),
+                artist: meta.artist.clone().or(meta.uploader.clone()),
+                album: meta.album.clone(),
+                duration: meta.duration.map(|d| std::time::Duration::from_secs_f64(d)),
+                artwork_url: thumbnail,
+                sample_rate: meta.asr,
+                channels: None,
+            },
+        ))
     }
 
     async fn fetch_metadata(&self, source: &TrackSource) -> StreamResult<StreamMetadata> {

@@ -47,7 +47,7 @@ impl StreamProvider for VkProvider {
         &self,
         source: &TrackSource,
         _options: Option<ResolveOptions>,
-    ) -> StreamResult<String> {
+    ) -> StreamResult<(String, StreamMetadata)> {
         match source {
             TrackSource::External { id, system } if system == "vk" => {
                 let client = self.get_client().await?;
@@ -61,7 +61,18 @@ impl StreamProvider for VkProvider {
                     .first()
                     .ok_or_else(|| StreamError::NoStreamAvailable("Track not found".to_string()))?;
 
-                Ok(track.url.clone())
+                Ok((
+                    track.url.clone(),
+                    StreamMetadata {
+                        title: Some(track.title.clone()),
+                        artist: Some(track.artist.clone()),
+                        album: None,
+                        duration: Some(std::time::Duration::from_secs(track.duration as u64)),
+                        artwork_url: None, // VK API может не отдавать обложки в этом методе без доп. полей
+                        sample_rate: None,
+                        channels: None,
+                    },
+                ))
             }
             _ => Err(StreamError::NotSupported),
         }

@@ -83,14 +83,25 @@ impl StreamProvider for BandcampProvider {
         &self,
         source: &TrackSource,
         _options: Option<ResolveOptions>,
-    ) -> StreamResult<String> {
+    ) -> StreamResult<(String, StreamMetadata)> {
         let url = match source {
             TrackSource::Http(url) => url.clone(),
             TrackSource::External { id, .. } => id.clone(),
             _ => return Err(StreamError::NotSupported),
         };
         if url.contains("stream_redirect") {
-            return Ok(url.clone());
+            return Ok((
+                url.clone(),
+                StreamMetadata {
+                    title: Some("Без названия".to_string()),
+                    artist: Some("Неизвествен".to_string()),
+                    album: None,
+                    duration: None,
+                    artwork_url: None,
+                    sample_rate: None,
+                    channels: None,
+                },
+            ));
         }
 
         let album = bandcamp::track_from_url(&url)
@@ -106,7 +117,18 @@ impl StreamProvider for BandcampProvider {
                 StreamError::NoStreamAvailable("No streaming URL found".to_string())
             })?;
 
-        Ok(streaming_url.clone())
+        Ok((
+            streaming_url.clone(),
+            StreamMetadata {
+                title: Some(track.title.clone()),
+                artist: Some(album.band.name.clone()),
+                album: Some(album.title.clone()),
+                duration: None,
+                artwork_url: album.image.get_url(),
+                sample_rate: None,
+                channels: None,
+            },
+        ))
     }
 
     async fn fetch_metadata(&self, source: &TrackSource) -> StreamResult<StreamMetadata> {

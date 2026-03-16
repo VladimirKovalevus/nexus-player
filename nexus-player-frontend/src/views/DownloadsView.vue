@@ -11,13 +11,17 @@
     <div v-else :class="$style.taskList">
       <div v-for="task in sortedTasks" :key="task.trackId" :class="$style.taskCard">
         <div :class="$style.taskInfo">
-          <div :class="$style.taskTitle">Трек #{{ task.trackId }}</div>
-          <div :class="$style.taskUrl">{{ task.url }}</div>
+          <div :class="$style.taskTitle">{{ task.meta?.title || `Трек #${task.trackId}` }}</div>
+          <div :class="$style.taskArtist" v-if="task.meta?.artist">{{ task.meta.artist }}</div>
+          <div :class="$style.taskUrl" v-else>{{ task.url }}</div>
           <div :class="$style.taskMeta">
             <span :class="[$style.state, $style[`state-${task.state.toLowerCase()}`]]">
               {{ formatState(task.state) }}
             </span>
             <span :class="$style.size">{{ task.sizeHuman }}</span>
+            <span :class="$style.duration" v-if="task.meta?.durationSecs">
+              {{ formatDuration(task.meta.durationSecs) }}
+            </span>
           </div>
         </div>
 
@@ -79,6 +83,23 @@ const formatState = (state: string) => {
   }
 };
 
+const formatDuration = (secs: number) => {
+  const mins = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${mins}:${s.toString().padStart(2, '0')}`;
+};
+
+const formatBytes = (bytes: number) => {
+  const kb = 1024;
+  const mb = kb * 1024;
+  const gb = mb * 1024;
+
+  if (bytes >= gb) return `${(bytes / gb).toFixed(2)} GB`;
+  if (bytes >= mb) return `${(bytes / mb).toFixed(2)} MB`;
+  if (bytes >= kb) return `${(bytes / kb).toFixed(2)} KB`;
+  return `${bytes} B`;
+};
+
 let unlistenStart: any;
 let unlistenProgress: any;
 let unlistenFinish: any;
@@ -86,26 +107,22 @@ let unlistenFinish: any;
 onMounted(async () => {
   await fetchTasks();
 
-  unlistenStart = await listen<number>('download-start', (event) => {
-    const trackId = event.payload;
-    const existing = tasks.value.find(t => t.trackId === trackId);
-    if (!existing) {
-      fetchTasks(); // Refresh if new task
-    } else {
-      existing.state = 'Downloading';
-    }
+  unlistenStart = await listen<[number, string]>('download-start', () => {
+    fetchTasks(); // Refresh to get all meta
   });
 
-  unlistenProgress = await listen<[number, number]>('download-progress', (event) => {
-    const [trackId, progress] = event.payload;
+  unlistenProgress = await listen<[number, number, number]>('download-progress', (event) => {
+    const [trackId, progress, byteSize] = event.payload;
     const task = tasks.value.find(t => t.trackId === trackId);
     if (task) {
       task.progress = progress;
+      task.byteSize = byteSize;
+      task.sizeHuman = formatBytes(byteSize);
       task.state = 'Downloading';
     }
   });
 
-  unlistenFinish = await listen<[number, boolean]>('download-finish', (event) => {
+  unlistenFinish = await listen<[number, boolean, string]>('download-finish', (event) => {
     const [trackId, success] = event.payload;
     const task = tasks.value.find(t => t.trackId === trackId);
     if (task) {
@@ -173,6 +190,12 @@ onUnmounted(() => {
 
 .taskTitle {
   font-weight: $font-weight-bold;
+  margin-bottom: 2px;
+}
+
+.taskArtist {
+  font-size: $font-size-sm;
+  color: var(--color-text-secondary);
   margin-bottom: 4px;
 }
 
@@ -191,11 +214,15 @@ onUnmounted(() => {
 
 .state {
   font-weight: $font-weight-semibold;
-  
+
   &-pending { color: #f1c40f; }
   &-downloading { color: var(--color-accent-primary); }
   &-complete { color: #2ecc71; }
   &-failed { color: #e74c3c; }
+}
+
+.duration {
+  color: var(--color-text-secondary);
 }
 
 .progressContainer {
