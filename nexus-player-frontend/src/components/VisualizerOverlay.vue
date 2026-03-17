@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import WaveformBar from './common/WaveformBar.vue';
 
 // @ts-ignore
-import butterchurn from 'butterchurn';
+import butterchurn from '../../../../butterchurn/dist/butterchurn.min.js';
 // @ts-ignore
 import butterchurnPresets from 'butterchurn-presets';
 
@@ -25,12 +25,12 @@ const localVolume = ref(audioStore.volume);
 const butterchurnError = ref<string | null>(null);
 
 // Butterchurn state
-let audioContext: AudioContext | null = null;
 let visualizer: any = null;
 let animationFrameId: number | null = null;
 let presetInterval: number | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let onWindowResize: (() => void) | null = null;
+let lastRenderTime: number = 0;
 
 // Butterchurn expects raw PCM time-domain data (Uint8Array, 0-255).
 // It computes FFT internally. We pass mono data for all three channels.
@@ -39,6 +39,9 @@ const audioLevels = {
   timeByteArray: new Uint8Array(BCH_FFT_SIZE).fill(128),
   timeByteArrayL: new Uint8Array(BCH_FFT_SIZE).fill(128),
   timeByteArrayR: new Uint8Array(BCH_FFT_SIZE).fill(128),
+  freqArray: new Float32Array(BCH_FFT_SIZE / 2).fill(0),
+  freqArrayL: new Float32Array(BCH_FFT_SIZE / 2).fill(0),
+  freqArrayR: new Float32Array(BCH_FFT_SIZE / 2).fill(0),
 };
 
 const formatTime = (seconds: number): string => {
@@ -77,28 +80,63 @@ const loadRandomPreset = () => {
   console.log('[Butterchurn] New preset loaded');
 };
 
+const destroyVisualizer = () => {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+  if (presetInterval) {
+    clearInterval(presetInterval);
+    presetInterval = null;
+  }
+  if (visualizer) {
+    try {
+      visualizer.loseGLContext();
+    } catch (e) {
+      console.warn('[Butterchurn] Error losing GL context:', e);
+    }
+    visualizer = null;
+  }
+  lastRenderTime = 0;
+};
+
 const initButterchurn = () => {
   if (!canvasRef.value) return;
+  butterchurnError.value = null;
 
   try {
     const canvas = canvasRef.value;
-    // We still need an AudioContext instance for Butterchurn's internal nodes, 
-    // but we WON'T connect it to destination (no hardware access needed)
-    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+
+    if (width <= 0 || height <= 0) {
+      console.warn('[Butterchurn] Canvas dimensions are zero, delaying init:', { width, height });
+      return;
+    }
+
+    console.log('[Butterchurn] Attempting init with Raw Interface...', { width, height, pixelRatio: window.devicePixelRatio });
     
-    visualizer = butterchurn.createVisualizer(audioContext, canvas, {
-      width: canvas.clientWidth,
-      height: canvas.clientHeight,
+    // We use the new Raw interface from the fork:
+    // Passing null as the first argument disables internal AudioContext/Analyser creation.
+    visualizer = butterchurn.createVisualizer(null, canvas, {
+      width,
+      height,
       pixelRatio: window.devicePixelRatio || 1,
       textureRatio: 1,
     });
+
+    if (!visualizer || !visualizer.gl) {
+      console.error('[Butterchurn] Initialization failed: No GL context returned', { visualizer });
+      throw new Error('WebGL context could not be created. Check browser support.');
+    }
+
+    console.log('[Butterchurn] Initialization successful. GL Version:', visualizer.gl.getParameter(visualizer.gl.VERSION));
 
     loadRandomPreset();
     presetInterval = window.setInterval(loadRandomPreset, 30000);
 
     // Set initial canvas size and observe container for future resizes
-    resizeCanvas(canvas.clientWidth, canvas.clientHeight);
-
+    resizeCanvas(width, height);
     resizeObserver?.disconnect();
     resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
@@ -116,7 +154,7 @@ const initButterchurn = () => {
     window.addEventListener('resize', onWindowResize);
 
     butterchurnError.value = null;
-    console.log('[Butterchurn] Initialized with Mock Analyser');
+    console.log('[Butterchurn] Initialized with Raw Interface');
   } catch (e: any) {
     console.error('[Butterchurn] Init Error:', e);
     butterchurnError.value = e.message;
@@ -132,11 +170,16 @@ const resizeCanvas = (width: number, height: number) => {
 };
 
 const renderLoop = () => {
-
   if (!isCanvasActive.value || !visualizer) return;
 
-  // 2. Fill PCM time-domain data for butterchurn
+  const now = performance.now();
+  const deltaTime = lastRenderTime ? (now - lastRenderTime) / 1000 : 1/60;
+  lastRenderTime = now;
+
+  // 2. Fill PCM time-domain and FFT frequency data for butterchurn
   const pcm = audioStore.pcm;
+  const fft = audioStore.fft;
+
   if (audioStore.isPlaying && pcm && pcm.length > 0) {
     const src = pcm;
     for (let i = 0; i < BCH_FFT_SIZE; i++) {
@@ -152,8 +195,27 @@ const renderLoop = () => {
     audioLevels.timeByteArrayR.fill(128);
   }
 
-  // 3. Render — butterchurn computes FFT internally from PCM
-  visualizer.render({ audioLevels });
+  if (audioStore.isPlaying && fft && fft.length > 0) {
+    const halfSize = BCH_FFT_SIZE / 2;
+    for (let i = 0; i < halfSize; i++) {
+      const idx = Math.floor((i / halfSize) * fft.length);
+      const v = fft[idx];
+      audioLevels.freqArray[i] = v;
+      audioLevels.freqArrayL[i] = v;
+      audioLevels.freqArrayR[i] = v;
+    }
+  } else {
+    audioLevels.freqArray.fill(0);
+    audioLevels.freqArrayL.fill(0);
+    audioLevels.freqArrayR.fill(0);
+  }
+
+  // 3. Render using the new renderRaw method which accepts deltaTime
+  if (typeof visualizer.renderRaw === 'function') {
+    visualizer.renderRaw(audioLevels, deltaTime);
+  } else {
+    visualizer.render({ audioLevels });
+  }
   
   animationFrameId = requestAnimationFrame(renderLoop);
 };
@@ -163,17 +225,17 @@ const handleCanvasClick = () => {
 };
 
 const startVisualizer = async () => {
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
-  }
+  destroyVisualizer();
+  
   // Always reinit: canvas element may have been replaced by v-if
-  visualizer = null;
   let attempts = 0;
   const checkAndInit = async () => {
+    await nextTick();
     if (canvasRef.value) {
       initButterchurn();
-      renderLoop();
+      if (visualizer && visualizer.gl) {
+        renderLoop();
+      }
     } else if (attempts < 10) {
       attempts++;
       setTimeout(checkAndInit, 100);
@@ -187,21 +249,14 @@ watch(isCanvasActive, async (val) => {
   if (val) {
     await startVisualizer();
   } else {
-    if (animationFrameId) {
-      cancelAnimationFrame(animationFrameId);
-      animationFrameId = null;
-    }
+    destroyVisualizer();
   }
 });
 
 watch(() => props.isOpen, async (val) => {
   if (!val) {
     // Overlay closing: canvas DOM will be destroyed, invalidate visualizer
-    if (animationFrameId) {
-      cancelAnimationFrame(animationFrameId);
-      animationFrameId = null;
-    }
-    visualizer = null;
+    destroyVisualizer();
     resizeObserver?.disconnect();
     resizeObserver = null;
     if (onWindowResize) {
@@ -215,9 +270,7 @@ watch(() => props.isOpen, async (val) => {
 });
 
 onUnmounted(() => {
-  if (animationFrameId) cancelAnimationFrame(animationFrameId);
-  if (presetInterval) clearInterval(presetInterval);
-  if (audioContext) audioContext.close();
+  destroyVisualizer();
   resizeObserver?.disconnect();
   if (onWindowResize) window.removeEventListener('resize', onWindowResize);
 });

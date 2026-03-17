@@ -21,7 +21,7 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2.4.2",
     "@vueuse/core": "^14.1.0",
-    "butterchurn": "^2.6.7",
+    "butterchurn": "file:../../butterchurn",
     "butterchurn-presets": "^2.4.7",
     "pinia": "^3.0.4",
     "vue": "^3.5.13"
