@@ -96,7 +96,7 @@ export const useAudioStore = defineStore('audio', () => {
   const isLoading = computed(() => audioState.value.state === 'loading');
   const currentTrack = computed(() => audioState.value.currentTrack);
   const position = computed(() => currentPositionSecs.value);
-  const fft = computed(() => currentFft.value);
+  const fft = computed(() => currentPcm.value);
   const pcm = computed(() => currentPcm.value);
   const duration = computed(() => audioState.value.durationSecs);
   const bufferedRanges = computed(() => audioState.value.bufferedRanges);

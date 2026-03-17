@@ -5,7 +5,6 @@ use crate::error::AudioError;
 use anyhow::Error;
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, Sender};
-use rustfft::{num_complex::Complex, FftPlanner};
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
@@ -133,9 +132,7 @@ impl AudioEngine {
             }
         };
         let mut last_position_update = std::time::Instant::now();
-        let mut fft_planner = FftPlanner::<f32>::new();
         let fft_size = 1024;
-        let fft = fft_planner.plan_fft_forward(fft_size);
 
         loop {
             // Проверка необходимости пересоздания стрима (например, при смене устройства)
@@ -165,7 +162,6 @@ impl AudioEngine {
 
                     let waveforms = playback.waveforms();
 
-                    let mut fft_data: Option<Vec<f32>> = None;
                     let mut pcm_data: Option<Vec<u8>> = None;
                     if playback.is_playing() {
                         let samples = playback.get_recent_samples();
@@ -194,34 +190,12 @@ impl AudioEngine {
                             );
 
                             // FFT with Hann window
-                            let mut buffer: Vec<Complex<f32>> = mono_samples
-                                .iter()
-                                .enumerate()
-                                .map(|(i, &s)| {
-                                    let w = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / (fft_size - 1) as f32).cos());
-                                    Complex { re: s * w, im: 0.0 }
-                                })
-                                .collect();
-
-                            fft.process(&mut buffer);
-
-                            fft_data = Some(
-                                buffer
-                                    .iter()
-                                    .take(fft_size / 2)
-                                    .map(|c| (c.re.powi(2) + c.im.powi(2)).sqrt())
-                                    .collect(),
-                            );
                         }
                     }
 
                     {
                         let mut s = state.write().unwrap();
                         s.position = position;
-
-                        if let Some(ref fd) = fft_data {
-                            s.fft = fd.clone();
-                        }
 
                         if s.buffered_ranges != buffered_ranges {
                             s.buffered_ranges = buffered_ranges.clone();
@@ -239,7 +213,7 @@ impl AudioEngine {
                     if playback.is_playing() {
                         let _ = event_tx.send(AudioEvent::PositionUpdated {
                             position,
-                            fft: fft_data,
+                            fft: None,
                             pcm: pcm_data,
                         });
                     }
@@ -480,12 +454,20 @@ impl AudioEngine {
                             match playback.seek(position) {
                                 Ok(_) => {
                                     state.write().unwrap().position = position;
-                                    let _ = event_tx.send(AudioEvent::PositionUpdated { position, fft: None, pcm: None });
+                                    let _ = event_tx.send(AudioEvent::PositionUpdated {
+                                        position,
+                                        fft: None,
+                                        pcm: None,
+                                    });
                                 }
                                 Err(AudioError::InProgress) => {
                                     info!("Ошибка INPROGRESS:");
                                     state.write().unwrap().position = position;
-                                    let _ = event_tx.send(AudioEvent::PositionUpdated { position, fft: None, pcm: None });
+                                    let _ = event_tx.send(AudioEvent::PositionUpdated {
+                                        position,
+                                        fft: None,
+                                        pcm: None,
+                                    });
                                 }
                                 Err(AudioError::OutsideOfBuffer) => {
                                     info!("Ошибка OutsideOfBuffer:");
