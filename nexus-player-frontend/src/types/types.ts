@@ -58,6 +58,8 @@ export interface AudioState {
   currentTrack: TrackDto | null;
   bufferedRanges: BufferedRange[];
   waveforms: Waveform[];
+  fft: number[];
+  pcm: number[];
 }
 
 export interface ContainerMetaDto {

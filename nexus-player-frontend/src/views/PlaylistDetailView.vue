@@ -100,6 +100,7 @@
           show-action
           context="playlist"
           :track="item.track"
+          :active="audioStore.currentTrack?.id === item.track.id"
           @click="handleTrackClick(item.track)"
           @play="handleTrackPlay(index)"
           @refresh="fetchPlaylist"
@@ -114,6 +115,7 @@
             show-action
             context="playlist"
             container-mode
+            :active="audioStore.currentPlaylistId === item.playlist.id"
             :is-expanded="expanded[item.playlist.id]"
             @click="toggleExpand(item.playlist.id)"
             @toggle-expand="toggleExpand(item.playlist.id)"
@@ -165,7 +167,9 @@ import { ref, onMounted, inject, reactive, nextTick, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import MediaCard from '@/components/common/MediaCard.vue';
 import type { PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, TrackDto } from '@/types/types';
+import { useAudioStore } from '@/stores/audio';
 
+const audioStore = useAudioStore();
 const props = defineProps<{
   playlistId: number;
 }>();

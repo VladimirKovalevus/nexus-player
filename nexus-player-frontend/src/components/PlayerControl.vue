@@ -47,6 +47,7 @@ const handleDocumentClick = (e: MouseEvent) => {
 
 const emit = defineEmits<{
   toggleQueue: [];
+  toggleVisualizer: [];
 }>();
 
 const fetchAudioState = async () => {
@@ -270,6 +271,14 @@ onUnmounted(() => {
 
     <!-- Right: Volume + Queue -->
     <div class="right-section">
+      <button
+        class="visualizer-toggle-btn"
+        @click="emit('toggleVisualizer')"
+        title="Открыть визуализатор"
+      >
+        <span style="font-size: 1.2rem; filter: grayscale(1);">📊</span>
+      </button>
+
       <div class="volume-wrapper" ref="volumeWrapperRef" @wheel.stop.prevent="handleVolumeWheel">
         <button
           class="volume-btn"
@@ -344,9 +353,9 @@ onUnmounted(() => {
 }
 
 .current-track {
-  font-weight: 400;
-  font-size: 1.45rem;
-  color: var(--color-text-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
+  color: var(--color-accent-hover);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -357,8 +366,9 @@ onUnmounted(() => {
 
 }
 .track-artist {
-  font-size: 1.3rem;
-  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
+  color: var(--color-accent-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -463,6 +473,24 @@ onUnmounted(() => {
 }
 
 /* Volume popup */
+.visualizer-toggle-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+  opacity: 0.7;
+
+  &:hover {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
 .volume-wrapper {
   position: relative;
 }
@@ -603,7 +631,7 @@ onUnmounted(() => {
 }
 
 .time {
-  font-size: 2rem;
+  font-size: var(--font-size-lg);
   color: white;
   min-width: 35px;
 }

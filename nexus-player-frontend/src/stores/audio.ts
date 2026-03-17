@@ -9,16 +9,20 @@ export const useAudioStore = defineStore('audio', () => {
   
   // High-frequency state isolated to prevent unnecessary re-renders of the whole app
   const currentPositionSecs = ref(0);
+  const currentFft = ref<number[]>([]);
+  const currentPcm = ref<number[]>([]);
   let _lastPosUpdate = 0;
 
   const audioState = ref<AudioState>({
     state: 'stopped',
-    positionSecs: 0, // Keep for compatibility but we'll use currentPositionSecs mostly
+    positionSecs: 0,
     durationSecs: 0,
     volume: 1.0,
     currentTrack: null,
     bufferedRanges: [],
     waveforms: [],
+    fft: [],
+    pcm: [],
   });
 
   const queueState = ref<QueueState>({
@@ -92,6 +96,8 @@ export const useAudioStore = defineStore('audio', () => {
   const isLoading = computed(() => audioState.value.state === 'loading');
   const currentTrack = computed(() => audioState.value.currentTrack);
   const position = computed(() => currentPositionSecs.value);
+  const fft = computed(() => currentFft.value);
+  const pcm = computed(() => currentPcm.value);
   const duration = computed(() => audioState.value.durationSecs);
   const bufferedRanges = computed(() => audioState.value.bufferedRanges);
   const waveforms = computed(() => audioState.value.waveforms);
@@ -151,6 +157,12 @@ export const useAudioStore = defineStore('audio', () => {
           // Throttle reactive updates to 20fps max, but allow big jumps
           if (now - _lastPosUpdate > 50 || Math.abs(event.payload.positionSecs - currentPositionSecs.value) > 1) {
             currentPositionSecs.value = event.payload.positionSecs;
+            if (event.payload.fft) {
+              currentFft.value = event.payload.fft;
+            }
+            if (event.payload.pcm) {
+              currentPcm.value = event.payload.pcm;
+            }
             _lastPosUpdate = now;
           }
         }
@@ -190,9 +202,12 @@ export const useAudioStore = defineStore('audio', () => {
         break;
       case 'AudioStateUpdated':
         if (event.payload?.state) {
-          const { positionSecs, ...rest } = event.payload.state;
+          const { positionSecs, fft, ...rest } = event.payload.state;
           audioState.value = rest;
           currentPositionSecs.value = positionSecs;
+          if (fft) {
+            currentFft.value = fft;
+          }
           updateMediaSessionMetadata();
           updateMediaSessionPlaybackState();
           syncNativeBridge();
@@ -234,6 +249,14 @@ export const useAudioStore = defineStore('audio', () => {
     currentPositionSecs.value = positionSecs;
   }
 
+  function playNext() {
+    invoke('play_next');
+  }
+
+  function playPrevious() {
+    invoke('play_previous');
+  }
+
   return {
     audioState,
     queueState,
@@ -243,6 +266,8 @@ export const useAudioStore = defineStore('audio', () => {
     isLoading,
     currentTrack,
     position,
+    fft,
+    pcm,
     duration,
     bufferedRanges,
     waveforms,
@@ -260,5 +285,7 @@ export const useAudioStore = defineStore('audio', () => {
     updateAudioState,
     updateQueueState,
     setPosition,
+    playNext,
+    playPrevious,
   };
 });

@@ -334,6 +334,7 @@ defineExpose({ fetchQueue });
               type="track"
               :track="item.entry.track"
               :queue-index="item.index"
+              :active="item.isCurrentItem && audioStore.currentPosition?.trackWithinContainer == null"
               context="queue"
               showAction
               @click="playQueueItem(item.index)"
@@ -350,6 +351,7 @@ defineExpose({ fetchQueue });
             <MediaCard
               type="album"
               :album="item.entry.meta"
+              :active="item.isCurrentItem"
               show-action
               context="queue"
               container-mode
@@ -447,7 +449,7 @@ defineExpose({ fetchQueue });
 .title {
   font-size: $font-size-lg;
   font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
+  color: var(--color-accent-primary);
   margin: 0;
 }
 
@@ -591,6 +593,7 @@ defineExpose({ fetchQueue });
   position: relative;
   border-radius: $radius-md;
   transition: all $transition-fast;
+  color: var(--color-bg-primary) !important;
 }
 
 .searchBadge {

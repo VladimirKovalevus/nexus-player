@@ -19,6 +19,15 @@ const BAR_RADIUS = 1;
 
 let animationFrame: number | null = null;
 
+const getThemeColors = () => {
+  const styles = getComputedStyle(document.documentElement);
+  return {
+    background: styles.getPropertyValue('--color-accent-primary').trim() || '#667eea',
+    played: styles.getPropertyValue('--color-accent-hover').trim() || '#00ffd2',
+    buffered: styles.getPropertyValue('--color-border-light').trim() || '#333333',
+  };
+};
+
 const handleSeek = (event: MouseEvent) => {
   if (!containerRef.value || audioStore.duration === 0) return;
   const rect = containerRef.value.getBoundingClientRect();
@@ -68,14 +77,15 @@ const draw = () => {
   const waveforms = audioStore.waveforms;
 
   const totalBars = Math.floor(width / (BAR_WIDTH + BAR_GAP));
+  const colors = getThemeColors();
 
   if (duration === 0) {
-    // Draw placeholder grey bars at minimum height
+    // Draw placeholder bars using background color
     for (let i = 0; i < totalBars; i++) {
       const barHeight = 4;
       const x = i * (BAR_WIDTH + BAR_GAP);
       const y = (height - barHeight) / 2;
-      ctx.fillStyle = '#2a2a2a';
+      ctx.fillStyle = colors.background;
       const r = BAR_RADIUS;
       ctx.beginPath();
       ctx.moveTo(x + r, y);
@@ -128,7 +138,7 @@ const draw = () => {
       (startTime <= r.start && endTime >= r.end)
     );
 
-    ctx.fillStyle = startTime < position ? '#fff' : isBuffered ? '#777777' : '#333333';
+    ctx.fillStyle = startTime < position ? colors.played : isBuffered ? colors.buffered : colors.background;
 
     const r = BAR_RADIUS;
     ctx.beginPath();

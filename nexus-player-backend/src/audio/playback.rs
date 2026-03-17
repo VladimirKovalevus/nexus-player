@@ -132,6 +132,7 @@ pub struct PlaybackEngine {
     sample_buffer: Arc<Mutex<Vec<f32>>>,
     buffer_position: Arc<Mutex<usize>>,
     volume: Arc<Mutex<f32>>,
+    recent_samples: Arc<Mutex<Vec<f32>>>,
     needs_recreation: Arc<AtomicBool>,
 }
 
@@ -167,6 +168,7 @@ impl PlaybackEngine {
             sample_buffer: Arc::new(Mutex::new(Vec::new())),
             buffer_position: Arc::new(Mutex::new(0)),
             volume: Arc::new(Mutex::new(1.0)),
+            recent_samples: Arc::new(Mutex::new(Vec::with_capacity(8192))),
             needs_recreation: Arc::new(AtomicBool::new(false)),
         })
     }
@@ -278,6 +280,7 @@ impl PlaybackEngine {
         let sample_buffer = Arc::clone(&self.sample_buffer);
         let buffer_position = Arc::clone(&self.buffer_position);
         let volume = Arc::clone(&self.volume);
+        let recent_samples = Arc::clone(&self.recent_samples);
         let needs_recreation = Arc::clone(&self.needs_recreation);
 
         let config = self.config.clone();
@@ -371,6 +374,17 @@ impl PlaybackEngine {
                             .zip(resampled[..produced].iter())
                         {
                             *out = *sample * volume;
+                        }
+
+                        {
+                            if let Ok(mut recent) = recent_samples.try_lock() {
+                                let to_add = &resampled[..produced];
+                                recent.extend_from_slice(to_add);
+                                if recent.len() > 8192 {
+                                    let drain_len = recent.len() - 8192;
+                                    recent.drain(0..drain_len);
+                                }
+                            }
                         }
 
                         *buf_pos += consumed;
@@ -547,6 +561,19 @@ impl PlaybackEngine {
 
         info!("Перемотка завершена");
         Ok(())
+    }
+
+    pub fn get_recent_samples(&self) -> Vec<f32> {
+        self.recent_samples.lock().unwrap().clone()
+    }
+
+    pub fn channels(&self) -> usize {
+        let decoder_guard = self.decoder.lock().unwrap();
+        if let Some(ref dec) = *decoder_guard {
+            dec.channels()
+        } else {
+            2
+        }
     }
 
     pub fn position(&self) -> Duration {

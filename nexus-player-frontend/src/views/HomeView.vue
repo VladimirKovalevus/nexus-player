@@ -90,6 +90,7 @@
               type="track"
               show-action
               :track="track"
+              :active="audioStore.currentTrack?.id === track.id"
               @click="handleTrackClick(track)"
               @play="handleTrackPlay(track)"
               @refresh="fetchTracks"
@@ -111,7 +112,9 @@ import VirtualList from '@/components/common/VirtualList.vue';
 import VirtualHorizontalList from '@/components/common/VirtualHorizontalList.vue';
 import type { PlaylistDto, TrackDto, PlaylistWithItemsDto } from '@/types/types';
 import { useNotificationStore } from '@/stores/notifications';
+import { useAudioStore } from '@/stores/audio';
 
+const audioStore = useAudioStore();
 const emit = defineEmits<{
   'navigate-playlist': [playlistId: number];
 }>();

@@ -1,7 +1,12 @@
 <template>
   <div :class="$style.downloadsView">
     <header :class="$style.header">
-      <h1 :class="$style.title">Загрузки</h1>
+      <h1 :class="$style.title">
+        Загрузки
+        <span :class="$style.totalSize" v-if="tasks.length > 0">
+          ({{ formattedTotalSize }})
+        </span>
+      </h1>
     </header>
 
     <div v-if="tasks.length === 0" :class="$style.empty">
@@ -35,7 +40,7 @@
           <div :class="$style.progressText">{{ Math.round(task.progress * 100) }}%</div>
         </div>
 
-        <button :class="$style.removeBtn" @click="removeTask(task.trackId)" title="Удалить">
+        <button :class="$style.removeBtn" @click="removeTask(task)" title="Удалить">
           ✕
         </button>
       </div>
@@ -51,6 +56,14 @@ import type { TaskInfoDto } from '@/types/types';
 
 const tasks = ref<TaskInfoDto[]>([]);
 
+const totalSize = computed(() => {
+  return tasks.value.reduce((acc, task) => acc + (task.byteSize || 0), 0);
+});
+
+const formattedTotalSize = computed(() => {
+  return formatBytes(totalSize.value);
+});
+
 const sortedTasks = computed(() => {
   return [...tasks.value].sort((a, b) => b.trackId - a.trackId);
 });
@@ -63,10 +76,10 @@ const fetchTasks = async () => {
   }
 };
 
-const removeTask = async (trackId: number) => {
+const removeTask = async (track: TaskInfoDto) => {
   try {
-    await invoke('remove_download_task', { trackId });
-    tasks.value = tasks.value.filter(t => t.trackId !== trackId);
+    await invoke('remove_download_task', { trackId:track.meta.id });
+    tasks.value = tasks.value.filter(t => t?.meta?.id !== track.meta.id);
   } catch (e) {
     console.error('Failed to remove task:', e);
   }
@@ -157,6 +170,15 @@ onUnmounted(() => {
   font-size: $font-size-3xl;
   font-weight: $font-weight-bold;
   color: var(--color-text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: $spacing-md;
+}
+
+.totalSize {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-normal;
+  color: var(--color-text-secondary);
 }
 
 .empty {

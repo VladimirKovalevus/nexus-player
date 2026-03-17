@@ -9,42 +9,42 @@
     </div>
 
     <nav :class="$style.nav">
-        <div :class="$style.card">
-      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'home' }]" @click.prevent="$emit('changeView', 'home')">
-        <span :class="$style.icon">🏠</span>
-        <span>Главная</span>
-      </a>
-      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'vk' }]" @click.prevent="$emit('changeView', 'vk')">
-        <span :class="$style.icon">VK</span>
-        <span>VK Музыка</span>
-      </a>
-      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'search' }]" @click.prevent="$emit('changeView', 'search')">
-        <span :class="$style.icon">🔍</span>
-        <span>Поиск</span>
-      </a>
-      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'library' }]" @click.prevent="$emit('changeView', 'library')">
-        <span :class="$style.icon">🎵</span>
-        <span>Музыка</span>
-      </a>
-        </div>
-        <div :class="$style.card">
-      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'playlists' }]" @click.prevent="$emit('changeView', 'playlists')">
-        <span :class="$style.icon">📋</span>
-        <span>Плейлисты</span>
-      </a>
-      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'history' }]" @click.prevent="$emit('changeView', 'history')">
-        <span :class="$style.icon">🕒</span>
-        <span>История</span>
-      </a>
-      <a href="#" :class="[$style.navItem, { [$style.active]: activeView === 'downloads' }]" @click.prevent="$emit('changeView', 'downloads')">
-        <span :class="$style.icon">📥</span>
-        <span>Загрузки</span>
-      </a>
-      <button :class="$style.settingsButton" @click="isSettingsOpen = true">
-        <span :class="$style.icon">⚙️</span>
-        <span>Настройки</span>
-      </button>
-        </div>
+      <div :class="$style.card">
+        <button :class="[$style.navItem, { [$style.active]: activeView === 'home' }]" @click.prevent="$emit('changeView', 'home')">
+          <span :class="$style.icon">🏠</span>
+          <span>Главная</span>
+        </button>
+        <button :class="[$style.navItem, { [$style.active]: activeView === 'vk' }]" @click.prevent="$emit('changeView', 'vk')">
+          <span :class="$style.icon">VK</span>
+          <span>VK Музыка</span>
+        </button>
+        <button :class="[$style.navItem, { [$style.active]: activeView === 'search' }]" @click.prevent="$emit('changeView', 'search')">
+          <span :class="$style.icon">🔍</span>
+          <span>Поиск</span>
+        </button>
+        <button :class="[$style.navItem, { [$style.active]: activeView === 'library' }]" @click.prevent="$emit('changeView', 'library')">
+          <span :class="$style.icon">🎵</span>
+          <span>Музыка</span>
+        </button>
+      </div>
+      <div :class="$style.card">
+        <button :class="[$style.navItem, { [$style.active]: activeView === 'playlists' }]" @click.prevent="$emit('changeView', 'playlists')">
+          <span :class="$style.icon">📋</span>
+          <span>Плейлисты</span>
+        </button>
+        <button :class="[$style.navItem, { [$style.active]: activeView === 'history' }]" @click.prevent="$emit('changeView', 'history')">
+          <span :class="$style.icon">🕒</span>
+          <span>История</span>
+        </button>
+        <button :class="[$style.navItem, { [$style.active]: activeView === 'downloads' }]" @click.prevent="$emit('changeView', 'downloads')">
+          <span :class="$style.icon">📥</span>
+          <span>Загрузки</span>
+        </button>
+        <button :class="$style.navItem" @click="isSettingsOpen = true">
+          <span :class="$style.icon">⚙️</span>
+          <span>Настройки</span>
+        </button>
+      </div>
     </nav>
 
 
@@ -93,20 +93,20 @@ const isSettingsOpen = ref(false);
 .logoIcon {
   width: 40px;
   height: 40px;
-  background: black;
+  background: $color-bg-primary;
   border-radius: $radius-md;
 }
 
 .logoText {
-  font-size: $font-size-lg;
+  font-size: $font-size-xl;
   font-weight: $font-weight-semibold;
-  color: $color-text-primary;
+  color: $color-accent-primary;
 }
 
 .logoSubtext {
-  font-size: $font-size-xs;
+  font-size: $font-size-lg;
   font-weight: $font-weight-normal;
-  color: $color-text-secondary;
+  color: $color-accent-hover;
 }
 
 .nav {
@@ -116,25 +116,33 @@ const isSettingsOpen = ref(false);
 .navItem {
   @include flex-start;
   gap: $spacing-md;
-  padding: $spacing-md $spacing-lg;
+  font-size: $font-size-sm;
+  padding: $spacing-sm $spacing-md;
   color: $color-text-secondary;
   text-decoration: none;
   transition: all $transition-fast;
   cursor: pointer;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
 
   &:hover {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: $color-bg-hover;
     color: $color-text-primary;
   }
 
   &.active {
     color: $color-text-primary;
-    background-color: #151515;
+    background-color: $color-bg-primary;
   }
 }
 
 .icon {
   font-size: $font-size-xl;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .library {
@@ -156,27 +164,9 @@ const isSettingsOpen = ref(false);
   border-top: 1px solid $color-border;
 }
 
-.settingsButton {
-  @include flex-start;
-  gap: $spacing-md;
-  width: 100%;
-  padding: $spacing-md;
-  background: transparent;
-  border: none;
-  color: $color-text-secondary;
-  border-radius: $radius-md;
-  cursor: pointer;
-  transition: all $transition-fast;
-  font-size: $font-size-base;
-
-  &:hover {
-    background-color: rgba(255, 255, 255, 0.05);
-    color: $color-text-primary;
-  }
-}
 .card {
-  background-color: #474747;
+  background-color: $color-bg-player;
   margin: $spacing-md;
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  border: 1px solid $color-border;
 }
 </style>

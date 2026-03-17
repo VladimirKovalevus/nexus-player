@@ -47,7 +47,7 @@
               <label>Тема оформления</label>
               <div :class="$style.themeGrid">
                 <button 
-                  v-for="t in ['dark', 'light', 'cartoon', 'retro', 'cyberpunk']" 
+                  v-for="t in ['dark', 'light', 'retro', 'cyberpunk']" 
                   :key="t"
                   :class="[$style.themeButton, themeStore.activeTheme === t && $style.active]"
                   @click="themeStore.setTheme(t)"
@@ -57,7 +57,7 @@
               </div>
             </div>
             
-            <div :class="$style.field">
+            <div v-if="false" :class="$style.field">
               <label>Пользовательский CSS</label>
               <textarea 
                 v-model="themeStore.customCss" 
@@ -255,7 +255,6 @@ const formatThemeDisplayName = (theme: string) => {
   switch (theme) {
     case 'dark': return 'Темная';
     case 'light': return 'Светлая';
-    case 'cartoon': return 'Мультяшная';
     case 'retro': return 'Ретро (NES)';
     case 'cyberpunk': return 'Cyberpunk';
     default: return theme;
@@ -308,7 +307,7 @@ watch(
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-bg-primary);
 }
 
 .header {
@@ -322,7 +321,7 @@ watch(
 .title {
   margin: 0;
   font-size: $font-size-xl;
-  color: var(--color-text-primary);
+  color: var(--color-accent-primary);
 }
 
 .closeButton {
@@ -364,7 +363,7 @@ watch(
 
   label {
     font-size: $font-size-sm;
-    color: var(--color-text-secondary);
+    color: var(--color-bg-primary);
   }
 
   input[type="number"],
@@ -437,6 +436,7 @@ watch(
   font-size: $font-size-sm;
   font-weight: $font-weight-bold;
   margin-bottom: $spacing-xs;
+  color:var(--color-bg-primary);
 }
 
 .instructions {
@@ -539,6 +539,7 @@ watch(
 .themeButton {
   padding: $spacing-md;
   background-color: var(--color-bg-primary);
+  font-size: $font-size-xs;
   border: 2px solid var(--color-border);
   border-radius: $radius-md;
   color: var(--color-text-primary);

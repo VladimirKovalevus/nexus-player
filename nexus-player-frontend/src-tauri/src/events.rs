@@ -30,6 +30,8 @@ pub enum FrontendEvent {
     #[serde(rename_all = "camelCase")]
     PositionUpdated {
         position_secs: f64,
+        fft: Option<Vec<f32>>,
+        pcm: Option<Vec<u8>>,
     },
 
     #[serde(rename_all = "camelCase")]
@@ -114,8 +116,10 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                         emit_state_update = true;
                         FrontendEvent::TrackFinished { track_id: 0 }
                     }
-                    AudioEvent::PositionUpdated { position } => FrontendEvent::PositionUpdated {
+                    AudioEvent::PositionUpdated { position, fft, pcm } => FrontendEvent::PositionUpdated {
                         position_secs: position.as_secs_f64(),
+                        fft,
+                        pcm,
                     },
                     AudioEvent::DurationChanged { duration } => FrontendEvent::DurationChanged {
                         duration_secs: duration.as_secs_f64(),

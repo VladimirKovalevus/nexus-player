@@ -15,10 +15,12 @@ import HistoryView from './views/HistoryView.vue';
 import DownloadsView from './views/DownloadsView.vue';
 import StreamingSearch from './components/StreamingSearch.vue';
 import GlobalNotifications from './components/common/GlobalNotifications.vue';
+import VisualizerOverlay from './components/VisualizerOverlay.vue';
 
 const playbackQueueRef = ref<InstanceType<typeof PlaybackQueue> | null>(null);
 const playerControlRef = ref<InstanceType<typeof PlayerControl> | null>(null);
 const showQueue = ref(true);
+const showVisualizer = ref(false);
 const currentView = ref('home');
 const selectedPlaylistId = ref<number | null>(null);
 const playlistHistory = ref<number[]>([]);
@@ -94,6 +96,7 @@ provide('navigateToPlaylist', navigateToPlaylist);
         ref="playerControlRef"
         :queue-visible="showQueue"
         @toggle-queue="toggleQueue"
+        @toggle-visualizer="showVisualizer = !showVisualizer"
       />
     </template>
 
@@ -126,5 +129,6 @@ provide('navigateToPlaylist', navigateToPlaylist);
     </div>
   </AppLayout>
   <GlobalNotifications />
+  <VisualizerOverlay :is-open="showVisualizer" @close="showVisualizer = false" />
 </template>
 <style lang="scss" scoped></style>

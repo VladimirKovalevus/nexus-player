@@ -133,6 +133,7 @@ pub struct AudioStateDto {
     pub current_track: Option<TrackDto>,
     pub buffered_ranges: Vec<BufferedRangeDto>,
     pub waveforms: Vec<WaveformDto>,
+    pub fft: Vec<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -378,6 +379,7 @@ impl From<audio::AudioState> for AudioStateDto {
                 .map(BufferedRangeDto::from)
                 .collect(),
             waveforms: state.waveforms.into_iter().map(WaveformDto::from).collect(),
+            fft: state.fft,
         }
     }
 }

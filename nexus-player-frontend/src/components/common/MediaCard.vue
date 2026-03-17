@@ -1,5 +1,5 @@
 <template>
-  <div :class="[$style.mediaCard, $style[`type-${type}`], { [$style.dropdownActive]: dropdownOpen }]" :data-dropdown-open="dropdownOpen || undefined">
+  <div :class="[$style.mediaCard, $style[`type-${type}`], { [$style.dropdownActive]: dropdownOpen, [$style.active]: props.active }]" :data-dropdown-open="dropdownOpen || undefined">
     <div :class="$style.content" @click="handleClick">
     <div :class="$style.thumbnail">
       <img
@@ -19,7 +19,7 @@
     </div>
 
     <div :class="$style.info">
-      <div :class="$style.title" :title="entity.title">{{ entity.title }}</div>
+      <div :class="[props.active ? $style['title-active'] : $style.title]" :title="entity.title">{{ entity.title }}</div>
       <div :class="$style.meta">
         <span :class="$style.artist">{{ entity.artist }}</span>
 
@@ -113,16 +113,20 @@ interface Props {
   track?: TrackDto&{thumbnail:string};
   playlist?: PlaylistDto;
   album?: ContainerMetaDto;
-  showAction: boolean;
+  showAction?: boolean;
   context?: string;
   isLocal?: boolean;
   isInLibrary?: boolean;
   queueIndex?: number;
   containerMode?: boolean;
   isExpanded?: boolean;
+  active?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  showAction: true,
+  active: false
+});
 
 const emit = defineEmits<{
   click: [];
@@ -501,11 +505,19 @@ const handleAddToLibrary = async () => {
 };
 
 const handleToggleLike = async () => {
+console.log({
+...props.track,
+thumbnail: props?.track?.thumbnail || props.track?.artworkUrl, 
+    },"AAALO")
   if (props.type !== 'track' || !props.track) return;
   
   try {
     props.track.liked =  !props.track.liked
-    await invoke('toggle_liked', { track: props.track });
+
+    await invoke('toggle_liked', { track: {
+...props.track,
+artworkUrl: props.track.thumbnail || props.track?.artworkUrl, 
+    } });
     emit('refresh');
   } catch (e) {
     console.error('Failed to toggle like:', e);
@@ -520,21 +532,33 @@ const handleToggleLike = async () => {
 .mediaCard {
   display: flex;
   gap: $spacing-md;
-  padding: 0 $spacing-md 0 $spacing-md;
+  padding:  $spacing-md;
   background-color: var(--color-bg-primary);
+  color: var(--color-bg-secondary);
   transition: all $transition-fast;
   position: relative;
 
   &:hover {
-    background-color: var(--color-bg-secondary);
+
+    background-color: var(--color-accent-primary);
+    color: var(--color-accent-hover);
 
     .playOverlay {
       opacity: 1;
     }
-  }
+    }
 
   &.dropdownActive {
     z-index: 1000;
+  }
+
+  &.active {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-bg-primary);
+
+    .title {
+      color: var(--color-bg-primary);
+    }
   }
 }
 
@@ -560,7 +584,6 @@ const handleToggleLike = async () => {
 
 .thumbnail {
   position: relative;
-  margin-top: 1rem;
   width: 56px;
   height: 56px;
   flex-shrink: 0;
@@ -627,7 +650,11 @@ const handleToggleLike = async () => {
 .title {
   font-size: $font-size-base;
   font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
+  @include text-ellipsis;
+}
+.title-active {
+  font-size: $font-size-base;
+  font-weight: $font-weight-semibold;
   @include text-ellipsis;
 }
 
@@ -636,13 +663,14 @@ const handleToggleLike = async () => {
   align-items: center;
   gap: $spacing-xs;
   font-size: $font-size-sm;
-  color: var(--color-text-secondary);
   @include text-ellipsis;
 }
 
 .artist {
-    color: black;
   @include text-ellipsis;
+  .active & {
+    color: var(--color-bg-primary);
+  }
 }
 
 .separator {
@@ -653,7 +681,6 @@ const handleToggleLike = async () => {
 .trackCount,
 .year {
   white-space: nowrap;
-  color: var(--color-text-muted);
 }
 
 .actions {

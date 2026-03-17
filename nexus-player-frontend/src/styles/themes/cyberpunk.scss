@@ -56,23 +56,69 @@ html[data-theme='cyberpunk'] {
       color: #000 !important;
       transform: skew(-2deg);
     }
+
+    // Unify nav buttons (Sidebar and MobileNav)
+    &[class*="navItem"], &[class*="btn"] {
+      padding: 8px !important;
+      background-color: transparent !important;
+      color: #f8ef02 !important;
+      clip-path: none !important;
+      text-transform: none;
+      
+      &[class*="active"] {
+        background-color: #f8ef02 !important;
+        color: #000 !important;
+        
+        * { color: #000 !important; }
+      }
+
+      &:hover:not([class*="active"]) {
+        background-color: #1a1a1a !important;
+        color: #f8ef02 !important;
+        transform: none !important;
+      }
+    }
   }
 
-  div[class*="taskCard"], div[class*="MediaCard"] {
+  div[class*="taskCard"], 
+  div[class*="MediaCard"] {
     background-color: #000 !important;
     color: #f8ef02 !important;
     border: 2px solid #00ffd2 !important;
     clip-path: polygon(5% 0, 100% 0, 100% 90%, 95% 100%, 0 100%, 0 10%);
     margin-bottom: 10px;
     border-radius: 0 !important;
+
+    // Target ONLY the active state, not dropdownActive
+    &[class*="_active"] {
+      background-color: #f8ef02 !important;
+      color: #000 !important;
+      border-color: #ff003c !important;
+      
+      * {
+        color: inherit !important;
+      }
+    }
   }
 
   aside, [class*="sidebar"] {
     background-color: #000 !important;
     border-right: 4px solid #ff003c !important;
+    color: #f8ef02 !important;
     
-    * {
-        color: #f8ef02 !important;
+    // Target specific nav items that are active
+    [class*="navItem"][class*="_active"] {
+      background-color: #f8ef02 !important;
+      color: #000 !important;
+      
+      * {
+        color: inherit !important;
+      }
+    }
+
+    button:not([class*="_active"]), 
+    a:not([class*="_active"]) {
+      color: inherit;
     }
   }
 
@@ -91,7 +137,6 @@ html[data-theme='cyberpunk'] {
   h1, h2, h3, [class*="title"] {
     text-transform: uppercase;
     letter-spacing: 2px;
-    color: #000 !important;
     
     [class*="sidebar"] & {
         color: #f8ef02 !important;

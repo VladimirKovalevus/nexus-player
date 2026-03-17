@@ -26,6 +26,7 @@
       <button
         v-if="showAction"
         ref="actionButtonRef"
+        style="position:absolute !important"
         :class="$style.menuButton"
         @click.stop="toggleMenu"
       >
@@ -224,7 +225,8 @@ const handlePlay = () => {
   background-color: transparent;
 
   &:hover {
-    background-color: var(--color-bg-secondary);
+    background-color: var(--color-accent-primary);
+    color: var(--color-accent-hover);
     transform: translateY(-4px);
 
     .playOverlay {
@@ -405,13 +407,11 @@ const handlePlay = () => {
 .title {
   font-size: $font-size-sm;
   font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
   @include text-ellipsis;
 }
 
 .artist {
   font-size: $font-size-xs;
-  color: var(--color-text-primary);
   @include text-ellipsis;
 }
 </style>

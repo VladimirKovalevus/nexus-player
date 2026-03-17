@@ -6,8 +6,10 @@ import MediaCard from '@/components/common/MediaCard.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import { storeToRefs } from 'pinia';
 import { useStreamingStore } from '@/stores/streaming';
+import { useAudioStore } from '@/stores/audio';
 
 const store = useStreamingStore();
+const audioStore = useAudioStore();
 const {
   query,
   activeQuery,
@@ -266,30 +268,30 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
 </script>
 
 <template>
-  <div class="streaming-search">
-    <h2>Streaming Search</h2>
+  <div :class="$style.streamingSearch">
+    <h2 :class="$style.title">Streaming Search</h2>
 
-    <div class="search-controls">
-      <div class="search-input-group">
+    <div :class="$style.searchControls">
+      <div :class="$style.searchInputGroup">
         <input
           v-model="query"
           type="text"
           placeholder="Search for music..."
-          class="search-input"
+          :class="$style.searchInput"
           @keyup.enter="search_q"
         />
-        <button @click="search_q" :disabled="loading" class="search-btn">
+        <button @click="search_q" :disabled="loading" :class="$style.searchBtn">
           {{ loading ? 'Searching...' : 'Search' }}
         </button>
       </div>
 
-      <div class="filters">
-        <div class="filter-group">
+      <div :class="$style.filters">
+        <div :class="$style.filterGroup">
           <label for="provider-select">Provider:</label>
           <select
             id="provider-select"
             v-model="selectedProvider"
-            class="provider-select"
+            :class="$style.providerSelect"
           >
             <option
               v-for="provider in providers"
@@ -301,12 +303,12 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
           </select>
         </div>
 
-        <div class="filter-group">
+        <div :class="$style.filterGroup">
           <label for="content-type-select">Type:</label>
           <select
             id="content-type-select"
             v-model="selectedContentType"
-            class="provider-select"
+            :class="$style.providerSelect"
           >
             <option
               v-for="type in contentTypes"
@@ -318,9 +320,9 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
           </select>
         </div>
 
-        <div class="filter-group">
+        <div :class="$style.filterGroup">
           <label for="limit-select">Limit:</label>
-          <select id="limit-select" v-model="limit" class="provider-select">
+          <select id="limit-select" v-model="limit" :class="$style.providerSelect">
             <option :value="5">5</option>
             <option :value="10">10</option>
             <option :value="20">20</option>
@@ -330,19 +332,19 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
       </div>
     </div>
 
-    <div v-if="error" class="error-message">{{ error }}</div>
+    <div v-if="error" :class="$style.errorMessage">{{ error }}</div>
 
-    <div v-if="searchResults.length > 0" class="results">
-      <div class="results-header">
-        <button v-if="offset > 0" @click="prevPage" class="pagination-btn" title="Previous page">
+    <div v-if="searchResults.length > 0" :class="$style.results">
+      <div :class="$style.resultsHeader">
+        <button v-if="offset > 0" @click="prevPage" :class="$style.paginationBtn" title="Previous page">
           ←
         </button>
-        <h3>Results ({{ searchResults.length }}) - Page {{ currentPage }}</h3>
-        <button v-if="searchResults.length >= limit" @click="nextPage" class="pagination-btn" title="Next page">
+        <h3 :class="$style.resultsTitle">Results ({{ searchResults.length }}) - Page {{ currentPage }}</h3>
+        <button v-if="searchResults.length >= limit" @click="nextPage" :class="$style.paginationBtn" title="Next page">
           →
         </button>
       </div>
-      <div class="results-list">
+      <div :class="$style.resultsList">
         <MediaCard
           v-for="(result, index) in searchResults"
           :key="index"
@@ -351,6 +353,7 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
           :playlist="result.type === 'playlist' ? result : undefined"
           :album="result.type === 'album' || result.type === 'channel' ? result : undefined"
           show-action
+          :active="audioStore.currentTrack?.id === result.id"
           :container-mode="result.type !== 'track'"
           :is-expanded="isContainerExpanded(index)"
           @click=" handleResultClick(result, index) "
@@ -366,7 +369,7 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
 
     <div
       v-else-if="!loading && searchResults.length === 0 && query"
-      class="no-results"
+      :class="$style.noResults"
     >
       No results found for "{{ query }}"
     </div>
@@ -381,148 +384,164 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
   </div>
 </template>
 
-<style scoped>
-.streaming-search {
-  padding: 20px;
+<style module lang="scss">
+@import '@/styles/variables.scss';
+
+.streamingSearch {
+  padding: $spacing-xl;
   max-width: 1200px;
   margin: 0 auto;
 }
 
-h2 {
-  margin-bottom: 20px;
-  color: #333;
+.title {
+  margin-bottom: $spacing-lg;
+  color: var(--color-text-primary);
+  font-size: $font-size-2xl;
 }
 
-h3 {
-  margin-bottom: 15px;
-  color: #555;
+.resultsTitle {
+  margin-bottom: 0;
+  color: var(--color-text-secondary);
+  font-size: $font-size-lg;
 }
 
-.search-controls {
-  margin-bottom: 30px;
+.searchControls {
+  margin-bottom: $spacing-2xl;
 }
 
-.search-input-group {
+.searchInputGroup {
   display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
+  gap: $spacing-md;
+  margin-bottom: $spacing-lg;
 }
 
-.search-input {
+.searchInput {
   flex: 1;
-  padding: 12px 16px;
-  font-size: 36px;
-  border: 2px solid #ddd;
-  border-radius: 8px;
+  padding: $spacing-md $spacing-lg;
+  font-size: $font-size-lg;
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 2px solid var(--color-border);
+  border-radius: $radius-md;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color $transition-fast;
+
+  &:focus {
+    border-color: var(--color-accent-primary);
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
 }
 
-.search-input:focus {
-  border-color: #4caf50;
-}
-
-.search-btn {
-  padding: 12px 32px;
-  font-size: 36px;
-  background-color: #4caf50;
+.searchBtn {
+  padding: $spacing-md $spacing-2xl;
+  font-size: $font-size-lg;
+  background-color: var(--color-accent-primary);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: $radius-md;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color $transition-fast;
   min-width: 120px;
-}
 
-.search-btn:hover:not(:disabled) {
-  background-color: #45a049;
-}
+  &:hover:not(:disabled) {
+    background-color: var(--color-accent-hover);
+  }
 
-.search-btn:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
+  &:disabled {
+    background-color: var(--color-bg-hover);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+  }
 }
 
 .filters {
   display: flex;
-  gap: 20px;
+  gap: $spacing-xl;
   flex-wrap: wrap;
 }
 
-.filter-group {
+.filterGroup {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: $spacing-sm;
+
+  label {
+    font-weight: $font-weight-medium;
+    color: var(--color-text-secondary);
+    font-size: $font-size-sm;
+  }
 }
 
-.filter-group label {
-  font-weight: 500;
-  color: #666;
-}
-
-.provider-select {
-  padding: 8px 12px;
-  border: 2px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
+.providerSelect {
+  padding: $spacing-sm $spacing-md;
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 2px solid var(--color-border);
+  border-radius: $radius-sm;
+  font-size: $font-size-sm;
   cursor: pointer;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color $transition-fast;
+
+  &:focus {
+    border-color: var(--color-accent-primary);
+  }
+
+  option {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+  }
 }
 
-.provider-select:focus {
-  border-color: #4caf50;
+.errorMessage {
+  padding: $spacing-md;
+  background-color: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+  border-radius: $radius-sm;
+  margin-bottom: $spacing-lg;
+  border: 1px solid rgba(231, 76, 60, 0.2);
 }
 
-.error-message {
-  padding: 12px;
-  background-color: #ffebee;
-  color: #c62828;
-  border-radius: 6px;
-  margin-bottom: 20px;
-}
-
-.results-header {
+.resultsHeader {
   display: flex;
   align-items: center;
-  gap: 15px;
-  margin-bottom: 15px;
+  gap: $spacing-md;
+  margin-bottom: $spacing-lg;
 }
 
-.results-header h3 {
-  margin-bottom: 0;
-}
-
-.pagination-btn {
-  background: none;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 4px 12px;
+.paginationBtn {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: $radius-sm;
+  padding: $spacing-xs $spacing-md;
   cursor: pointer;
-  font-size: 20px;
-  color: #666;
-  transition: all 0.2s;
+  font-size: $font-size-lg;
+  color: var(--color-text-secondary);
+  transition: all $transition-fast;
   display: flex;
   align-items: center;
   justify-content: center;
+
+  &:hover {
+    background-color: var(--color-bg-hover);
+    border-color: var(--color-accent-primary);
+    color: var(--color-accent-primary);
+  }
 }
 
-.pagination-btn:hover {
-  background-color: #f5f5f5;
-  border-color: #4caf50;
-  color: #4caf50;
-}
-
-.results-list {
+.resultsList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: $spacing-md;
 }
 
-.no-results {
+.noResults {
   text-align: center;
-  padding: 40px;
-  color: #999;
-  font-size: 18px;
+  padding: $spacing-3xl;
+  color: var(--color-text-muted);
+  font-size: $font-size-lg;
 }
 </style>

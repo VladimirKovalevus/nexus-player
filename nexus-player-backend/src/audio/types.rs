@@ -76,7 +76,11 @@ pub enum AudioEvent {
 
     TrackFinished,
 
-    PositionUpdated { position: Duration },
+    PositionUpdated {
+        position: Duration,
+        fft: Option<Vec<f32>>,
+        pcm: Option<Vec<u8>>,
+    },
 
     DurationChanged { duration: Duration },
 
@@ -109,6 +113,8 @@ pub struct AudioState {
 
     pub waveforms: Vec<Waveform>,
 
+    pub fft: Vec<f32>,
+
     pub total_size_bytes: Option<u64>,
 
     pub current_track: Option<Track>,
@@ -123,6 +129,7 @@ impl Default for AudioState {
             volume: 1.0,
             buffered_ranges: Vec::new(),
             waveforms: Vec::new(),
+            fft: Vec::new(),
             total_size_bytes: None,
             current_track: None,
         }

@@ -4,7 +4,6 @@
       v-for="item in navItems"
       :key="item.view"
       :class="[$style.btn, { [$style.active]: activeView === item.view }]"
-      style="padding:8px"
       @click="$emit('changeView', item.view)"
       :title="item.label"
     >
@@ -63,22 +62,27 @@ const navItems = [
   justify-content: center;
   background: transparent;
   border: none;
-  color: var(--color-text-secondary);
+  color: $color-text-secondary;
   cursor: pointer;
-  transition: color $transition-fast, background-color $transition-fast;
+  padding: $spacing-sm;
+  transition: all $transition-fast;
 
   &:hover {
-    color: var(--color-text-primary);
-    background-color: rgba(255, 255, 255, 0.05);
+    color: $color-text-primary;
+    background-color: $color-bg-hover;
   }
 
   &.active {
-    color: var(--color-accent-primary);
+    color: $color-accent-primary;
+    background-color: $color-bg-primary;
   }
 }
 
 .icon {
-  font-size: 1.3rem;
+  font-size: $font-size-xl;
   line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>
