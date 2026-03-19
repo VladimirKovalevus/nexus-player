@@ -63,15 +63,34 @@ const formatTime = (seconds: number) => {
 };
 
 const togglePlay = async () => {
-  if (isPlaying.value) {
-    await invoke('pause');
-  } else {
-    await invoke('resume');
+  audioStore.startLoading();
+  try {
+    if (isPlaying.value) {
+      await invoke('pause');
+    } else {
+      await invoke('resume');
+    }
+  } catch (e) {
+    console.error('Failed to toggle play:', e);
+    audioStore.stopLoading();
   }
 };
 
-const playNext = () => invoke('play_next');
-const playPrevious = () => invoke('play_previous');
+const playNext = () => {
+  audioStore.startLoading();
+  invoke('play_next').catch(e => {
+    console.error('Failed to play next:', e);
+    audioStore.stopLoading();
+  });
+};
+
+const playPrevious = () => {
+  audioStore.startLoading();
+  invoke('play_previous').catch(e => {
+    console.error('Failed to play previous:', e);
+    audioStore.stopLoading();
+  });
+};
 </script>
 
 <style module lang="scss">

@@ -63,8 +63,10 @@ import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
 import type { TrackDto, PlaylistDto } from '@/types/types';
 import { useVkStore } from '@/stores/vk';
 import { useNotificationStore } from '@/stores/notifications';
+import { useAudioStore } from '@/stores/audio';
 
 const vkStore = useVkStore();
+const audioStore = useAudioStore();
 const notifications = useNotificationStore();
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
 
@@ -93,10 +95,16 @@ const handleTrackClick = async (track: TrackDto) => {
 };
 
 const handleTrackPlay = async (track: TrackDto) => {
-  await invoke('clear_queue');
-  await handleTrackClick(track);
-  await invoke('play_at_index', { index: 0 });
-  refreshQueue();
+  audioStore.startLoading();
+  try {
+    await invoke('clear_queue');
+    await handleTrackClick(track);
+    await invoke('play_at_index', { index: 0 });
+    refreshQueue();
+  } catch (e) {
+    console.error('Failed to play VK track:', e);
+    audioStore.stopLoading();
+  }
 };
 
 const handlePlaylistClick = async (playlist: PlaylistDto) => {
@@ -124,14 +132,21 @@ const handlePlaylistClick = async (playlist: PlaylistDto) => {
       refreshQueue();
     } catch (e) {
       console.error('Failed to expand playlist:', e);
+      throw e; // Re-throw to be caught by handlePlaylistPlay
     }
   }
 };
 
 const handlePlaylistPlay = async (playlist: PlaylistDto) => {
-  await handlePlaylistClick(playlist);
-  await invoke('play_at_index', { index: 0 });
-  refreshQueue();
+  audioStore.startLoading();
+  try {
+    await handlePlaylistClick(playlist);
+    await invoke('play_at_index', { index: 0 });
+    refreshQueue();
+  } catch (e) {
+    console.error('Failed to play VK playlist:', e);
+    audioStore.stopLoading();
+  }
 };
 
 const handleCreatePlaylist = async (playlist: PlaylistDto) => {

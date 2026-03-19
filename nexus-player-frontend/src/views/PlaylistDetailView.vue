@@ -393,22 +393,26 @@ const toggleExpand = async (childId: number) => {
 };
 
 const handlePlayAll = async () => {
+  audioStore.startLoading();
   try {
     await invoke('load_playlist_to_queue', { playlistId: props.playlistId });
     await invoke('play_at_index', { index: 0 });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play playlist:', e);
+    audioStore.stopLoading();
   }
 };
 
 const handlePlaySubPlaylist = async (sub: PlaylistDto) => {
+  audioStore.startLoading();
   try {
     await invoke('load_playlist_to_queue', { playlistId: sub.id });
     await invoke('play_at_index', { index: 0 });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play sub-playlist:', e);
+    audioStore.stopLoading();
   }
 };
 
@@ -422,6 +426,7 @@ const handleTrackClick = async (track: TrackDto) => {
 };
 
 const handleTrackPlay = async (index: number) => {
+  audioStore.startLoading();
   try {
     await invoke('load_playlist_to_queue', { playlistId: props.playlistId });
     
@@ -436,6 +441,7 @@ const handleTrackPlay = async (index: number) => {
     refreshQueue();
   } catch (e) {
     console.error('Failed to play track from playlist:', e);
+    audioStore.stopLoading();
   }
 };
 

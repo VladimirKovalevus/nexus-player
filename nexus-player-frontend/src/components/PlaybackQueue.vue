@@ -62,6 +62,7 @@ const fetchQueue = async () => {
 };
 
 const playQueueItem = async (itemIndex: number, trackIndexInContainer?: number) => {
+  audioStore.startLoading();
   try {
     await invoke('play_queue_item', {
       itemIndex,
@@ -70,6 +71,7 @@ const playQueueItem = async (itemIndex: number, trackIndexInContainer?: number) 
     await fetchQueue();
   } catch (e) {
     console.error('Failed to play queue item:', e);
+    audioStore.stopLoading();
   }
 };
 
@@ -97,11 +99,13 @@ const toggleContainer = (itemIndex: number) => {
 const isContainerExpanded = (itemIndex: number) => expandedContainers.value.has(itemIndex);
 
 const playAtIndex = async (index: number) => {
+  audioStore.startLoading();
   try {
     await invoke('play_queue_item', { itemIndex: index, trackIndexInContainer: null });
     await fetchQueue();
   } catch (e) {
     console.error('Failed to play at index:', e);
+    audioStore.stopLoading();
   }
 };
 

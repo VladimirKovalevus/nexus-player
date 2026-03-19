@@ -12,6 +12,7 @@ export const useAudioStore = defineStore('audio', () => {
   const currentFft = ref<number[]>([]);
   const currentPcm = ref<number[]>([]);
   let _lastPosUpdate = 0;
+  const isWaitingForAudio = ref(false);
 
   const audioState = ref<AudioState>({
     state: 'stopped',
@@ -93,7 +94,7 @@ export const useAudioStore = defineStore('audio', () => {
   const isPlaying = computed(() => audioState.value.state === 'playing');
   const isPaused = computed(() => audioState.value.state === 'paused');
   const isStopped = computed(() => audioState.value.state === 'stopped');
-  const isLoading = computed(() => audioState.value.state === 'loading');
+  const isLoading = computed(() => audioState.value.state === 'loading' || isWaitingForAudio.value);
   const currentTrack = computed(() => audioState.value.currentTrack);
   const position = computed(() => currentPositionSecs.value);
   const fft = computed(() => currentPcm.value);
@@ -136,16 +137,19 @@ export const useAudioStore = defineStore('audio', () => {
       case 'PlaybackStarted':
       case 'PlaybackResumed':
         audioState.value.state = 'playing';
+        isWaitingForAudio.value = false;
         updateMediaSessionPlaybackState();
         syncNativeBridge();
         break;
       case 'PlaybackPaused':
         audioState.value.state = 'paused';
+        isWaitingForAudio.value = false;
         updateMediaSessionPlaybackState();
         syncNativeBridge();
         break;
       case 'PlaybackStopped':
         audioState.value.state = 'stopped';
+        isWaitingForAudio.value = false;
         audioState.value.currentTrack = null;
         currentPositionSecs.value = 0;
         updateMediaSessionPlaybackState();
@@ -201,6 +205,7 @@ export const useAudioStore = defineStore('audio', () => {
         syncNativeBridge();
         break;
       case 'AudioStateUpdated':
+        isWaitingForAudio.value = false;
         if (event.payload?.state) {
           const { positionSecs, fft, ...rest } = event.payload.state;
           audioState.value = rest;
@@ -229,10 +234,19 @@ export const useAudioStore = defineStore('audio', () => {
         }
         break;
       case 'Error':
+        isWaitingForAudio.value = false;
         console.error('Audio error:', event.payload?.message);
         notificationStore.addNotification(`Audio Error: ${event.payload?.message}`, 'error');
         break;
     }
+  }
+
+  function startLoading() {
+    isWaitingForAudio.value = true;
+  }
+
+  function stopLoading() {
+    isWaitingForAudio.value = false;
   }
 
   function updateAudioState(newState: AudioState) {
@@ -250,11 +264,19 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   function playNext() {
-    invoke('play_next');
+    startLoading();
+    invoke('play_next').catch(e => {
+      console.error('Failed to play next:', e);
+      stopLoading();
+    });
   }
 
   function playPrevious() {
-    invoke('play_previous');
+    startLoading();
+    invoke('play_previous').catch(e => {
+      console.error('Failed to play previous:', e);
+      stopLoading();
+    });
   }
 
   return {
@@ -282,6 +304,8 @@ export const useAudioStore = defineStore('audio', () => {
     currentIndex,
     repeatIcon,
     handleAudioEvent,
+    startLoading,
+    stopLoading,
     updateAudioState,
     updateQueueState,
     setPosition,

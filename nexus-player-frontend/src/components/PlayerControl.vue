@@ -21,7 +21,6 @@ withDefaults(defineProps<Props>(), {
   queueVisible: true,
 });
 
-const isLoading = ref(false);
 const volumePopupOpen = ref(false);
 const volumeWrapperRef = ref<HTMLElement | null>(null);
 let updateInterval: number | null = null;
@@ -70,7 +69,7 @@ const fetchQueueState = async () => {
 };
 
 const togglePlayPause = async () => {
-  isLoading.value = true;
+  audioStore.startLoading();
   console.log(audioStore.isPlaying,audioStore.isStopped,"STORE");
   try {
     if (audioStore.isPlaying) {
@@ -84,30 +83,27 @@ const togglePlayPause = async () => {
     }
   } catch (e) {
     console.error('Failed to toggle play/pause:', e);
-  } finally {
-    isLoading.value = false;
+    audioStore.stopLoading();
   }
 };
 
 const playNext = async () => {
-  isLoading.value = true;
+  audioStore.startLoading();
   try {
     await invoke('play_next');
   } catch (e) {
     console.error('Failed to play next:', e);
-  } finally {
-    isLoading.value = false;
+    audioStore.stopLoading();
   }
 };
 
 const playPrevious = async () => {
-  isLoading.value = true;
+  audioStore.startLoading();
   try {
     await invoke('play_previous');
   } catch (e) {
     console.error('Failed to play previous:', e);
-  } finally {
-    isLoading.value = false;
+    audioStore.stopLoading();
   }
 };
 
@@ -233,7 +229,7 @@ onUnmounted(() => {
           class="control-btn medium-btn"
           @click="playPrevious"
           title="Previous"
-          :disabled="isLoading"
+          :disabled="audioStore.isLoading"
         >
             <img  src="/icon/prev.svg">
         </button>
@@ -241,9 +237,9 @@ onUnmounted(() => {
           class="control-btn play-btn"
           @click="togglePlayPause"
           title="Play/Pause"
-          :disabled="isLoading"
+          :disabled="audioStore.isLoading"
         >
-          <span v-if="isLoading" class="loader">●●●</span>
+          <span v-if="audioStore.isLoading" class="loader">●●●</span>
           <span v-else>
             <img v-if="!audioStore.isPlaying" src="/icon/play.svg" alt="Play">
             <span v-else>
@@ -255,7 +251,7 @@ onUnmounted(() => {
           class="control-btn medium-btn"
           @click="playNext"
           title="Next"
-          :disabled="isLoading"
+          :disabled="audioStore.isLoading"
         >
             <img src="/icon/next.svg">
         </button>

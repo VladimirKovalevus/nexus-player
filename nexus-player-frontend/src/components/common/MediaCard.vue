@@ -12,8 +12,9 @@
       </div>
 
       <div v-if="type === 'track'" :class="$style.playOverlay">
-        <button :class="$style.playButton" @click.stop="handlePlay">
-          <img src="/icon/play.svg" alt="Play">
+        <button :class="$style.playButton" @click.stop="handlePlay" :disabled="store.isLoading && props.active">
+          <span v-if="store.isLoading && props.active" class="mini-loader">●</span>
+          <img v-else src="/icon/play.svg" alt="Play">
         </button>
       </div>
     </div>
@@ -636,6 +637,22 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
     background-color: var(--color-accent-hover);
     transform: scale(1.1);
   }
+
+  &:disabled {
+    cursor: wait;
+    opacity: 0.8;
+  }
+}
+
+.mini-loader {
+  animation: pulse 1s infinite;
+  font-size: 1.5rem;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
 }
 
 .info {

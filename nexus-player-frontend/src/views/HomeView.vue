@@ -214,12 +214,14 @@ const handlePlaylistClick = (playlist: PlaylistDto) => {
 
 const handlePlaylistPlay = async (playlist: PlaylistDto) => {
   console.log('Play playlist clicked:', playlist);
+  audioStore.startLoading();
   try {
     await invoke('load_playlist_to_queue', { playlistId: playlist.id });
     await invoke('play_at_index', { index: 0 });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play playlist:', e);
+    audioStore.stopLoading();
   }
 };
 
@@ -290,6 +292,7 @@ const handleTrackClick = async (track: TrackDto) => {
 
 const handleTrackPlay = async (track: TrackDto) => {
   console.log('Play track clicked:', track);
+  audioStore.startLoading();
   try {
     await invoke('clear_queue');
     const index = await invoke<number>('add_to_queue', { trackId: track.id });
@@ -297,6 +300,7 @@ const handleTrackPlay = async (track: TrackDto) => {
     refreshQueue();
   } catch (e) {
     console.error('Failed to play track:', e);
+    audioStore.stopLoading();
   }
 };
 

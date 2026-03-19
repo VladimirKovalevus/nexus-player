@@ -63,11 +63,13 @@ const setVolume = async (event: Event) => {
 };
 
 const togglePlayPause = async () => {
+  audioStore.startLoading();
   try {
     if (audioStore.isPlaying) await invoke('pause');
     else if (audioStore.isPaused) await invoke('resume');
   } catch (e) {
     console.error('Playback toggle failed:', e);
+    audioStore.stopLoading();
   }
 };
 

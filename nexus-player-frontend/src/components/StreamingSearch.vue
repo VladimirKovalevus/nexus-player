@@ -146,19 +146,31 @@ const handleResultClick = async (result: SearchResult, index: number) => {
     });
   } catch (e) {
     console.warn('handle_search failed, falling back:', e);
-    await invoke('handle_streaming_track', {
-      searchResult: result,
-      strategy: 'cache',
-      query: activeQuery.value,
-      searchType: activeContentType.value,
-    });
+    try {
+      await invoke('handle_streaming_track', {
+        searchResult: result,
+        strategy: 'cache',
+        query: activeQuery.value,
+        searchType: activeContentType.value,
+      });
+    } catch (innerE) {
+        console.error('fallback handle_streaming_track failed:', innerE);
+        throw innerE;
+    }
   }
   emit('refetch');
 };
 
 const handleResultPlay = async (result: SearchResult, index: number) => {
-  await invoke('clear_queue');
-  await handleResultClick(result, index);
+  audioStore.startLoading();
+  try {
+    await invoke('clear_queue');
+    await handleResultClick(result, index);
+    await invoke('play_at_index', { index: 0 });
+  } catch (e) {
+    console.error('Failed to play search result:', e);
+    audioStore.stopLoading();
+  }
 };
 
 // Loads a streaming container into queue and expands it to get its tracks.
