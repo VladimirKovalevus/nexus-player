@@ -78,8 +78,8 @@ const fetchTasks = async () => {
 
 const removeTask = async (track: TaskInfoDto) => {
   try {
-    await invoke('remove_download_task', { trackId:track.meta.id });
-    tasks.value = tasks.value.filter(t => t?.meta?.id !== track.meta.id);
+    await invoke('remove_download_task', { trackId: track.trackId });
+    tasks.value = tasks.value.filter(t => t.trackId !== track.trackId);
   } catch (e) {
     console.error('Failed to remove task:', e);
   }

@@ -16,15 +16,15 @@
             <h3 :class="$style.sectionTitle">Сеть и Буферизация</h3>
             <div :class="$style.field">
               <label>Timeout (сек)</label>
-              <input type="number" v-model.number="config.network.timeout_seconds" />
+              <input type="number" v-model.number="config.network.timeoutSeconds" />
             </div>
             <div :class="$style.field">
               <label>Chunk Size (байт)</label>
-              <input type="number" v-model.number="config.network.chunk_size" />
+              <input type="number" v-model.number="config.network.chunkSize" />
             </div>
             <div :class="$style.field">
               <label>Buffer Size (байт)</label>
-              <input type="number" v-model.number="config.network.buffer_size" />
+              <input type="number" v-model.number="config.network.bufferSize" />
             </div>
           </section>
 
@@ -37,6 +37,11 @@
                 Включить анализ формы волны (Waveform)
               </label>
               <p :class="$style.hint">Анализирует трек во время загрузки для отображения столбиков звука.</p>
+            </div>
+            <div :class="$style.field">
+              <label>Лимит памяти для кэша (байт)</label>
+              <input type="number" v-model.number="config.audio.memLimit" />
+              <p :class="$style.hint">Например, 104857600 для 100MB.</p>
             </div>
           </section>
 
@@ -165,12 +170,12 @@ const config = ref<AppConfig>({
     soundcloud: { enabled: true },
     bandcamp: { enabled: true },
     vk: { enabled: false, credentials: null },
-    youtube: { enabled: true },
   },
   audio: {
-    waveformEnabled: true
+    waveformEnabled: true,
+    memLimit: 104857600
   },
-  network: { timeout_seconds: 30, chunk_size: 1048576, buffer_size: 10485760 },
+  network: { timeoutSeconds: 30, chunkSize: 1048576, bufferSize: 10485760 },
 });
 
 const fetchConfig = async () => {

@@ -153,7 +153,6 @@ export interface ProviderSettings {
 }
 
 export interface ProviderConfig {
-  youtube: ProviderSettings;
   soundcloud: ProviderSettings;
   bandcamp: ProviderSettings;
   vk: ProviderSettings;
@@ -161,12 +160,13 @@ export interface ProviderConfig {
 
 export interface AudioConfig {
   waveformEnabled: boolean;
+  memLimit: number;
 }
 
 export interface NetworkConfig {
-  timeout_seconds: number;
-  chunk_size: number;
-  buffer_size: number;
+  timeoutSeconds: number;
+  chunkSize: number;
+  bufferSize: number;
 }
 
 export interface AppConfig {

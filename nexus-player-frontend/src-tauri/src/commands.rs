@@ -923,25 +923,30 @@ pub async fn save_track_to_file(
                         title: track_title.clone(),
                     },
                 );
+                let _ = app_handle.emit("download-start", (track_id, track_title.clone()));
             }
         }) as Arc<streaming::state::types::TaskCallback>),
         on_progress: Some(Arc::new({
             let app_handle = app.clone();
             move |res: std::result::Result<streaming::state::types::BufferType, streaming::error::StreamingError>, _| {
                 if let Ok(buffer) = res {
+                    let progress = buffer.progress();
+                    let byte_size = buffer.byte_size();
                     let _ = app_handle.emit(
                         "audio-event",
                         FrontendEvent::DownloadProgress {
                             track_id,
-                            progress: buffer.progress() as f32,
+                            progress: progress as f32,
                         },
                     );
+                    let _ = app_handle.emit("download-progress", (track_id, progress, byte_size));
                 }
             }
         }) as Arc<streaming::state::types::TaskCallback>),
         on_finish: Some(Arc::new({
             let app_handle = app.clone();
             let state_arc = state_arc.clone();
+            let track_title = track_title.clone();
             move |res: std::result::Result<streaming::state::types::BufferType, streaming::error::StreamingError>, _| {
                 let success = res.is_ok();
                 if let Ok(buffer) = res {
@@ -975,12 +980,13 @@ pub async fn save_track_to_file(
                     "audio-event",
                     FrontendEvent::DownloadFinished {
                         track_id,
-                        title: track.title.clone(),
+                        title: track_title.clone(),
                         success,
                     },
                 );
+                let _ = app_handle.emit("download-finish", (track_id, success, track_title.clone()));
             }
-        })),
+        }) as Arc<streaming::state::types::TaskCallback>),
     };
 
     if has_track {
