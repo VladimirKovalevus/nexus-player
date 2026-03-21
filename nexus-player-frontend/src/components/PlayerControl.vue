@@ -273,7 +273,7 @@ onUnmounted(() => {
         @click="emit('toggleVisualizer')"
         title="Открыть визуализатор"
       >
-        <span style="font-size: 1.2rem; filter: grayscale(1);">📊</span>
+        <span style="filter: grayscale(1);">📊</span>
       </button>
 
       <div class="volume-wrapper" ref="volumeWrapperRef" @wheel.stop.prevent="handleVolumeWheel">
@@ -336,6 +336,21 @@ onUnmounted(() => {
 @media (max-width: 480px) {
   .player-control {
     padding: 0.5rem 0.5rem;
+  }
+
+  .visualizer-toggle-btn {
+    display: none;
+  }
+
+  .right-section {
+    flex: 0 0 auto;
+    gap: 0.5rem;
+  }
+
+  .volume-btn,
+  .queue-toggle-btn {
+    width: 28px;
+    height: 28px;
   }
 }
 

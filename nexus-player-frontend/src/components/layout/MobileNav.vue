@@ -1,5 +1,8 @@
 <template>
   <nav :class="$style.nav">
+    <button :class="$style.btn" title="Настройки" @click="isSettingsOpen = true">
+      <span :class="$style.icon">⚙️</span>
+    </button>
     <button
       v-for="item in navItems"
       :key="item.view"
@@ -10,9 +13,6 @@
       <span :class="$style.icon">{{ item.icon }}</span>
     </button>
 
-    <button :class="$style.btn" title="Настройки" @click="isSettingsOpen = true">
-      <span :class="$style.icon">⚙️</span>
-    </button>
 
     <SettingsModal :is-open="isSettingsOpen" @close="isSettingsOpen = false" />
   </nav>
@@ -56,6 +56,7 @@ const navItems = [
 
 .btn {
   flex: 1;
+  min-width: 0;
   height: 100%;
   display: flex;
   align-items: center;

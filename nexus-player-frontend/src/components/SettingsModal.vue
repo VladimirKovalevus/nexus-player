@@ -108,7 +108,7 @@
                  <div :class="$style.field">
                    <label>Token</label>
                    <div :class="$style.inputGroup">
-                     <input type="password" v-model="config.providers.vk.credentials" placeholder="Введите токен или войдите" />
+                     <input  v-model="config.providers.vk.credentials" placeholder="Введите токен или войдите" />
                      <button @click="handleVkAuth" :class="$style.smallButton">Войти</button>
                    </div>
                  </div>

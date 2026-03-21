@@ -470,12 +470,25 @@ emit("close");
   display: flex;
   flex-direction: column;
   padding: $spacing-xl;
+  padding-top: calc($spacing-xl + env(safe-area-inset-top));
+  padding-bottom: calc($spacing-xl + env(safe-area-inset-bottom));
+  padding-left: calc($spacing-xl + env(safe-area-inset-left));
+  padding-right: calc($spacing-xl + env(safe-area-inset-right));
   color: $color-text-primary;
+  overflow-y: auto;
+
+  @media (max-width: $mobile-breakpoint) {
+    padding: $spacing-md;
+    padding-top: calc($spacing-lg + env(safe-area-inset-top));
+    padding-bottom: calc($spacing-lg + env(safe-area-inset-bottom));
+    padding-left: calc($spacing-md + env(safe-area-inset-left));
+    padding-right: calc($spacing-md + env(safe-area-inset-right));
+  }
 }
 
 .close-btn, .fullscreen-btn {
   position: absolute;
-  top: $spacing-md;
+  top: calc($spacing-md + env(safe-area-inset-top));
   background: rgba(0, 0, 0, 0.45);
   border: none;
   color: #fff;
@@ -517,7 +530,7 @@ emit("close");
 
 .visualizer-tools {
   position: absolute;
-  top: $spacing-md;
+  top: calc($spacing-md + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   display: flex;

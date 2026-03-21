@@ -256,14 +256,14 @@ onUnmounted(() => {
 .progressBar {
   flex: 1;
   height: 6px;
-  background: var(--color-bg-hover);
+  background: var(--waveform-bg, var(--color-bg-hover));
   border-radius: 3px;
   overflow: hidden;
 }
 
 .progressFill {
   height: 100%;
-  background: var(--color-accent-primary);
+  background: var(--waveform-played, var(--color-accent-primary));
   transition: width 0.3s ease;
 }
 

@@ -19,6 +19,22 @@ impl SeaOrmTrackRepository {
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
     }
+
+    async fn get_next_liked_position(&self) -> Result<i64> {
+        let max_position = track::Entity::find()
+            .filter(track::Column::Liked.eq(1))
+            .select_only()
+            .column(track::Column::LikedPosition)
+            .order_by_desc(track::Column::LikedPosition)
+            .into_tuple::<(Option<i64>,)>()
+            .one(&self.db)
+            .await
+            .context("Failed to find max liked_position")?
+            .and_then(|t| t.0)
+            .unwrap_or(-1);
+
+        Ok(max_position + 1)
+    }
 }
 
 #[async_trait]
@@ -31,12 +47,7 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
             chrono::DateTime::from_timestamp(now, 0).context("Invalid timestamp")?;
 
         if domain_track.liked && domain_track.liked_position.is_none() {
-            let count = track::Entity::find()
-                .filter(track::Column::Liked.eq(1))
-                .count(&self.db)
-                .await
-                .context("Failed to count liked tracks")?;
-            domain_track.liked_position = Some(count as i64);
+            domain_track.liked_position = Some(self.get_next_liked_position().await?);
         }
 
         let entity_model: track::Model = domain_track.into();
@@ -313,12 +324,7 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
 
     async fn set_liked(&self, id: TrackId, liked: bool) -> Result<()> {
         if liked {
-            let count = track::Entity::find()
-                .filter(track::Column::Liked.eq(1))
-                .count(&self.db)
-                .await
-                .context("Failed to count liked tracks")?;
-            let position = count as i64;
+            let position = self.get_next_liked_position().await?;
 
             let active_model = track::ActiveModel {
                 id: ActiveValue::Unchanged(id.0),

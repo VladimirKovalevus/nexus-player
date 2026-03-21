@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 @import '@/styles/nes.scss';
 
 html[data-theme='retro'] {
@@ -34,14 +33,17 @@ html[data-theme='retro'] {
   --waveform-played: #209cee;
   --waveform-buffered: #adafae;
 
-  --font-family-primary: 'Press Start 2P', cursive;
-  --font-size-xs: 0.7rem;
-  --font-size-sm: 0.8rem;
-  --font-size-base: 0.9rem;
-  --font-size-lg: 1rem;
-  --font-size-xl: 1.2rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 2rem;
+  --font-family-primary: 'Press Start 2P', monospace;
+  --font-size-xs: 0.55rem;
+  --font-size-sm: 0.65rem;
+  --font-size-base: 0.72rem;
+  --font-size-lg: 0.8rem;
+  --font-size-xl: 0.95rem;
+  --font-size-2xl: 1.2rem;
+  --font-size-3xl: 1.6rem;
+
+  overflow-wrap: break-word;
+  word-break: break-word;
 
   --radius-sm: 0px;
   --radius-md: 0px;

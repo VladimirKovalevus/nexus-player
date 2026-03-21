@@ -85,7 +85,7 @@ onUnmounted(() => resizeObserver?.disconnect());
   grid-template-columns: $sidebar-width 1fr minmax(0, 50vh);
   grid-template-rows: $topbar-height 1fr $player-height;
   height: 100vh;
-  width: 100vw;
+  width: 100%;
   overflow: hidden;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
@@ -161,7 +161,7 @@ onUnmounted(() => resizeObserver?.disconnect());
       'main'
       'player'
       'mobilenav';
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto 1fr $player-height auto;
   }
 
@@ -171,7 +171,7 @@ onUnmounted(() => resizeObserver?.disconnect());
       'main'
       'player'
       'mobilenav';
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto 1fr $player-height auto;
   }
 

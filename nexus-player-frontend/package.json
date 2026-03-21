@@ -18,6 +18,7 @@
     "start": "tauri dev"
   },
   "dependencies": {
+    "@fontsource/oxanium": "^5.2.8",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2.4.2",
     "@vueuse/core": "^14.1.0",
