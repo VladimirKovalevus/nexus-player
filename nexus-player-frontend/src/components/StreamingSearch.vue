@@ -431,8 +431,8 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
   flex: 1;
   padding: $spacing-md $spacing-lg;
   font-size: $font-size-lg;
-  background-color: var(--color-bg-secondary) ;
-  color: var(--color-accent-hover) !important;
+  background-color: var(--search-input-bg);
+  color: var(--search-input-color);
   border: 2px solid var(--color-border);
   border-radius: $radius-md;
   outline: none;
@@ -443,7 +443,8 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
   }
 
   &::placeholder {
-  color: var(--color-accent-hover) !important;
+    color: var(--search-input-color);
+    opacity: 0.6;
   }
 }
 
@@ -492,8 +493,8 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  background: var(--color-bg-secondary) !important;
-  color: var(--color-accent-hover)  !important;
+  background: var(--search-input-bg);
+  color: var(--search-input-color);
   border: 2px solid var(--color-border);
   border-radius: $radius-sm;
   font-size: $font-size-sm;
@@ -506,8 +507,8 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
   }
 
   option {
-    background-color: var(--color-accent-primary);
-    // color: #000000;
+    background-color: var(--search-input-bg);
+    color: var(--search-input-color);
   }
 }
 

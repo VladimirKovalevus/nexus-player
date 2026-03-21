@@ -50,6 +50,18 @@ pub enum AudioCommand {
         source: HlsSource,
     },
 
+    Preload(Track),
+
+    PreloadSource {
+        track: Track,
+        source: Box<dyn MediaSource>,
+    },
+
+    PreloadHLS {
+        track: Track,
+        source: HlsSource,
+    },
+
     SetLoading(Track),
 
     Pause,
@@ -75,6 +87,8 @@ pub enum AudioEvent {
     PlaybackStopped,
 
     TrackFinished,
+
+    PreloadNextTrack { current_track_id: usize },
 
     PositionUpdated {
         position: Duration,
@@ -118,6 +132,8 @@ pub struct AudioState {
     pub total_size_bytes: Option<u64>,
 
     pub current_track: Option<Track>,
+
+    pub next_track: Option<Track>,
 }
 
 impl Default for AudioState {
@@ -132,6 +148,7 @@ impl Default for AudioState {
             fft: Vec::new(),
             total_size_bytes: None,
             current_track: None,
+            next_track: None,
         }
     }
 }

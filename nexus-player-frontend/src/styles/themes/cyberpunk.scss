@@ -43,6 +43,31 @@ html[data-theme='cyberpunk'] {
   --shadow-md: none;
   --shadow-lg: none;
 
+  --ellipsis-v-align: center;
+  --ellipsis-offset-bottom: 0;
+  --player-time-color: white;
+  --playback-queue-pulse: rgba(0, 255, 210, 0.1);
+  --waveform-bg: #000000;
+  --waveform-played: #00ffd2;
+  --waveform-buffered: #ff003c;
+  --media-card-action-hover-bg: #00ffd2;
+  --media-card-action-hover-color: #000000;
+
+  --search-input-bg: #000000;
+  --search-input-color: #f8ef02;
+  --search-input-placeholder: #ff003c;
+
+  --modal-bg: #000000;
+  --modal-border: #f8ef02;
+  --modal-header-border: #ff003c;
+  --modal-label-color: #f8ef02;
+  --modal-input-bg: #f8ef02;
+  --modal-input-color: #000000;
+  --modal-input-border: #ff003c;
+  --modal-card-bg: #f8ef02;
+  --modal-hint-color: #f8ef02;
+  --modal-section-title-color: #f8ef02;
+
   body {
     background-color: #f8ef02 !important;
   }

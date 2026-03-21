@@ -67,52 +67,49 @@ const handleClose = () => {
 
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="modal-overlay" @click="handleClose">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h2>Сформировать плейлист</h2>
-          <button class="close-btn" @click="handleClose">✕</button>
+    <div v-if="isOpen" :class="$style.overlay" @click="handleClose">
+      <div :class="$style.modal" @click.stop>
+        <div :class="$style.header">
+          <h2 :class="$style.title">Сформировать плейлист</h2>
+          <button :class="$style.closeButton" @click="handleClose">✕</button>
         </div>
 
-        <div class="modal-body">
-          <div class="form-group">
+        <div :class="$style.content">
+          <div :class="$style.field">
             <label for="playlist-title">Название плейлиста *</label>
             <input
               id="playlist-title"
               v-model="title"
               type="text"
               placeholder="Новый плейлист"
-              class="form-input"
               :disabled="isLoading"
             />
           </div>
 
-          <div class="form-group">
+          <div :class="$style.field">
             <label for="playlist-description">Описание</label>
             <textarea
               id="playlist-description"
               v-model="description"
               placeholder="О чем этот плейлист?"
-              class="form-textarea"
               :disabled="isLoading"
-              rows="2"
+              rows="3"
             />
           </div>
 
-          <div class="form-group">
+          <div :class="$style.field">
             <label for="playlist-artwork">URL обложки</label>
-            <div class="input-group">
+            <div :class="$style.inputGroup">
               <input
                 id="playlist-artwork"
                 v-model="artworkUrl"
                 type="text"
                 placeholder="https://example.com/image.jpg"
-                class="form-input"
                 :disabled="isLoading"
               />
               <button 
                 type="button" 
-                class="btn btn-secondary btn-small" 
+                :class="$style.smallButton" 
                 @click="handleSelectArtwork"
                 :disabled="isLoading"
               >
@@ -122,11 +119,11 @@ const handleClose = () => {
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="handleClose" :disabled="isLoading">
+        <div :class="$style.footer">
+          <button :class="$style.buttonSecondary" @click="handleClose" :disabled="isLoading">
             Отмена
           </button>
-          <button class="btn btn-primary" @click="handleSave" :disabled="isLoading">
+          <button :class="$style.buttonPrimary" @click="handleSave" :disabled="isLoading">
             {{ isLoading ? 'Сохранение...' : 'Сохранить' }}
           </button>
         </div>
@@ -135,16 +132,17 @@ const handleClose = () => {
   </Teleport>
 </template>
 
-<style scoped lang="scss">
+<style module lang="scss">
 @import '@/styles/variables.scss';
+@import '@/styles/mixins.scss';
 
-.modal-overlay {
+.overlay {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -152,153 +150,166 @@ const handleClose = () => {
   backdrop-filter: blur(4px);
 }
 
-.modal-content {
-  background-color: var(--color-bg-primary);
-  border-radius: 12px;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+.modal {
+  background-color: var(--color-bg-secondary);
+  width: 600px;
+  max-width: 90%;
+  max-height: 90vh;
+  border-radius: $radius-lg;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  border: 1px solid var(--color-bg-primary);
 }
 
-.modal-header {
+.header {
+  padding: $spacing-lg;
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: $spacing-lg;
-  border-bottom: 1px solid var(--color-border);
 }
 
-.modal-header h2 {
+.title {
   margin: 0;
-  font-size: $font-size-lg;
-  color: var(--color-text-primary);
+  font-size: $font-size-xl;
+  color: var(--color-accent-primary);
 }
 
-.close-btn {
+.closeButton {
   background: none;
   border: none;
-  font-size: 1.25rem;
-  cursor: pointer;
   color: var(--color-text-secondary);
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s;
-}
+  font-size: 24px;
+  cursor: pointer;
+  transition: color $transition-fast;
 
-.close-btn:hover {
-  background-color: var(--color-bg-hover);
-  color: var(--color-text-primary);
-}
-
-.modal-body {
-  padding: $spacing-lg;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.form-group {
-  margin-bottom: $spacing-md;
-
-  label {
-    display: block;
-    margin-bottom: $spacing-xs;
-    font-weight: 600;
+  &:hover {
     color: var(--color-text-primary);
-    font-size: $font-size-sm;
   }
 }
 
-.form-input,
-.form-textarea {
-  width: 100%;
-  padding: $spacing-sm;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  font-size: $font-size-base;
-  background-color: var(--color-bg-secondary);
-  color: var(--color-text-primary);
-  transition: all 0.2s;
-  font-family: inherit;
+.content {
+  padding: $spacing-lg;
+  overflow-y: auto;
+  flex: 1;
 }
 
-.form-textarea {
-  resize: vertical;
-  min-height: 60px;
-}
-
-.input-group {
+.field {
+  margin-bottom: $spacing-md;
   display: flex;
+  flex-direction: column;
   gap: $spacing-xs;
 
-  .form-input {
+  label {
+    font-size: $font-size-sm;
+    color: var(--color-bg-primary);
+  }
+
+  input[type="text"],
+  textarea {
+    padding: $spacing-sm;
+    border-radius: $radius-sm;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-family: inherit;
+
+    &:focus {
+      outline: none;
+      border-color: var(--color-accent-primary);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 80px;
+  }
+}
+
+.inputGroup {
+  display: flex;
+  gap: $spacing-sm;
+  
+  input {
     flex: 1;
   }
 }
 
-.form-input:focus,
-.form-textarea:focus {
-  outline: none;
-  border-color: var(--color-accent-primary);
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+.smallButton {
+  padding: $spacing-xs $spacing-sm;
+  background-color: var(--color-accent-secondary);
+  color: white;
+  border: none;
+  border-radius: $radius-sm;
+  cursor: pointer;
+  font-size: $font-size-sm;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    background-color: lighten(#764ba2, 5%);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 }
 
-.form-input:disabled,
-.form-textarea:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: $spacing-sm;
+.footer {
   padding: $spacing-lg;
   border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: $spacing-md;
 }
 
-.btn {
-  padding: $spacing-sm $spacing-lg;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: $font-size-sm;
+.buttonPrimary,
+.buttonSecondary {
+  padding: $spacing-sm $spacing-xl;
+  border-radius: $radius-md;
+  font-size: $font-size-base;
+  font-weight: $font-weight-semibold;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all $transition-fast;
   border: none;
 }
 
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background-color: var(--color-bg-secondary);
-  color: var(--color-text-primary);
+.buttonSecondary {
+  background-color: transparent;
+  color: var(--color-text-secondary);
   border: 1px solid var(--color-border);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-text-primary);
+    color: var(--color-text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 }
 
-.btn-secondary:hover:not(:disabled) {
-  background-color: var(--color-bg-hover);
-}
-
-.btn-small {
-  padding: $spacing-xs $spacing-md;
-  font-size: $font-size-xs;
-  white-space: nowrap;
-}
-
-.btn-primary {
-  background: var(--color-accent-primary);
+.buttonPrimary {
+  background: black;
   color: white;
-}
 
-.btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  filter: brightness(1.1);
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
 }
 </style>

@@ -536,6 +536,7 @@ onMounted(() => {
 .actionButton {
   width: 32px;
   height: 32px;
+  padding: 0 !important;
   border-radius: 50%;
   background: transparent;
   border: none;

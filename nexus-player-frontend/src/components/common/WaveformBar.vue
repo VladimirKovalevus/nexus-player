@@ -22,9 +22,9 @@ let animationFrame: number | null = null;
 const getThemeColors = () => {
   const styles = getComputedStyle(document.documentElement);
   return {
-    background: styles.getPropertyValue('--color-accent-primary').trim() || '#667eea',
-    played: styles.getPropertyValue('--color-accent-hover').trim() || '#00ffd2',
-    buffered: styles.getPropertyValue('--color-border-light').trim() || '#333333',
+    background: styles.getPropertyValue('--waveform-bg').trim() || '#333333',
+    played: styles.getPropertyValue('--waveform-played').trim() || '#ffffff',
+    buffered: styles.getPropertyValue('--waveform-buffered').trim() || '#888888',
   };
 };
 

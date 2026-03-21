@@ -82,7 +82,7 @@ onUnmounted(() => resizeObserver?.disconnect());
     'sidebar topbar topbar'
     'sidebar main queue'
     'player player player';
-  grid-template-columns: $sidebar-width 1fr minmax(0, 400px);
+  grid-template-columns: $sidebar-width 1fr minmax(0, 50vh);
   grid-template-rows: $topbar-height 1fr $player-height;
   height: 100vh;
   width: 100vw;
@@ -126,9 +126,10 @@ onUnmounted(() => resizeObserver?.disconnect());
 }
 
 .rightSidebar {
+  border-right: none !important;
   grid-area: queue;
   background-color: var(--color-bg-secondary);
-  border-left: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-accent-primary);
   overflow-y: auto;
 }
 

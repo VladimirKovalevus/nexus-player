@@ -207,7 +207,7 @@ onUnmounted(() => {
     <div class="left-section">
       <div class="track-info">
         <div v-if="audioStore.currentTrack?.artworkUrl" class="track-art">
-            <img height="64" width="64" :src="audioStore.currentTrack?.artworkUrl">
+            <img height="64" width="64" :src="audioStore.currentTrack?.artworkUrl" style="filter:none !important;">
         </div>
         <div style="display:flex; flex-direction: column;">
         <div v-if="audioStore.currentTrack" class="current-track">
@@ -359,7 +359,7 @@ onUnmounted(() => {
 
 .track-art {
     width:64px;
-
+filter:none !important;
 }
 .track-artist {
   font-weight: var(--font-weight-bold);
@@ -628,7 +628,7 @@ onUnmounted(() => {
 
 .time {
   font-size: var(--font-size-lg);
-  color: white;
+  color: var(--player-time-color, white);
   min-width: 35px;
 }
 </style>

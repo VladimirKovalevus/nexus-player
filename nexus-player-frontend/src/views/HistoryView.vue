@@ -1,7 +1,7 @@
 <template>
   <div :class="$style.historyView" class="history-scroll-container">
     <header :class="$style.header">
-      <h1 :class="$style.title">История воспроизведения</h1>
+      <h1 :class="$style.title">История</h1>
       <button :class="$style.refreshButton" @click="fetchHistory" :disabled="loading">
         {{ loading ? 'Загрузка...' : 'Обновить' }}
       </button>
@@ -151,13 +151,14 @@ onMounted(fetchHistory);
 
 .entry {
   @include flex-between;
-  padding: 0 $spacing-md 0 $spacing-md;
+  padding: $spacing-md;
   background-color: var(--color-bg-primary);
   cursor: pointer;
   transition: background-color $transition-fast;
 
   &:hover {
-    background-color: var(--color-bg-secondary);
+    background-color: var(--color-accent-primary);
+    color: var(--color-accent-hover);
   }
 }
 
@@ -179,7 +180,7 @@ onMounted(fetchHistory);
   width: 48px;
   height: 48px;
   border-radius: $radius-sm;
-  background-color: var(--color-bg-tertiary);
+  background-color: var(--color-bg-secondary);
   @include flex-center;
   font-size: $font-size-xl;
 }
@@ -191,13 +192,12 @@ onMounted(fetchHistory);
 
 .trackTitle {
   font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
   @include text-ellipsis;
+
 }
 
 .trackArtist {
   font-size: $font-size-sm;
-  color: var(--color-text-secondary);
   @include text-ellipsis;
 }
 
@@ -208,14 +208,12 @@ onMounted(fetchHistory);
 
 .system {
   font-size: $font-size-xs;
-  color: var(--color-accent-primary);
   text-transform: uppercase;
   margin-bottom: 2px;
 }
 
 .playedAt {
   font-size: $font-size-xs;
-  color: var(--color-text-secondary);
 }
 
 

@@ -1,0 +1,11 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Top digital segments -->
+  <path d="M4 8h4V6h2V4h4v2h2v2h2V4h4v2h2v2h4v5H4V8z" fill="black"/>
+  <!-- Middle shifted segment -->
+  <path d="M6 14h24v3H6v-3z" fill="black"/>
+  <!-- Bottom pointed segment -->
+  <path d="M4 18h24v2h-2v2h-2v2h-2v2h-4v2h-4v-2h-4v-2h-2v-2h-2v-2h-2v-2z" fill="black"/>
+  <!-- Extra tech bit -->
+  <rect x="2" y="10" width="1" height="6" fill="black"/>
+  <rect x="30" y="12" width="1" height="4" fill="black"/>
+</svg>

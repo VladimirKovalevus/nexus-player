@@ -464,13 +464,17 @@ defineExpose({ fetchQueue });
     background: transparent;
     border: 1px solid var(--color-border);
     border-radius: $radius-md;
+    padding: 0 !important;
     color: var(--color-text-secondary);
     cursor: pointer;
-    font-size: 1.5rem;
-    line-height: 1;
+    font-size: $font-size-xl;
+    line-height: 1 !important;
+    padding-bottom: var(--ellipsis-offset-bottom) !important;
     width: 36px;
     height: 36px;
-    transition: all $transition-fast;
+    @include flex-center;
+    align-items: var(--ellipsis-v-align, center) !important;
+    // transition: all $transition-fast;
 
     &:hover {
       background-color: var(--color-bg-hover);
@@ -615,7 +619,7 @@ defineExpose({ fetchQueue });
   
   // Делаем фон MediaCard прозрачным, чтобы была видна анимация обертки
   & > div {
-    background-color: transparent !important;
+    background-color: var(--media-card-current-playing) !important;
   }
 }
 .currentlyPlayingList {
@@ -695,10 +699,10 @@ defineExpose({ fetchQueue });
 
 @keyframes bg-pulse {
   0%, 100% {
-    background-color: rgba(76, 175, 80, 0.1);
+    background-color: var(--playback-queue-pulse, rgba(76, 175, 80, 0.1));
   }
   50% {
-    background-color: rgba(76, 175, 80, 0.05);
+    background-color: transparent;
   }
 }
 </style>

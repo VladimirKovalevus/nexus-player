@@ -1,15 +1,12 @@
 use crate::audio::hls_decoder::HlsAudioDecoder;
 use crate::audio::types::MediaSource;
 use crate::error::AudioError;
-use lofty::probe;
-use std::io::{Read, Seek};
-use std::path::Path;
-use streaming::multi_downloader::source::HlsSource;
+use resampler::{ResamplerFir, SampleRate};
 use symphonia::core::audio::AudioBufferRef;
 use symphonia::core::codecs::{Decoder, DecoderOptions};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
-use symphonia::core::io::{MediaSourceStream, ReadOnlySource};
+use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
@@ -17,22 +14,18 @@ use tracing::{debug, info, warn};
 
 pub struct AudioDecoder {
     format_reader: Box<dyn FormatReader>,
-
     decoder: Box<dyn Decoder>,
-
     reader: Option<Box<dyn MediaSource>>,
-
     track_id: u32,
-
     sample_rate: u32,
-
     channels: usize,
-
     total_frames: Option<u64>,
+    resampler: Option<ResamplerFir>,
+    output_sample_rate: u32,
 }
 
 impl AudioDecoder {
-    pub fn new(path: &Path) -> Result<Self, AudioError> {
+    pub fn new(path: &std::path::Path, output_sample_rate: u32) -> Result<Self, AudioError> {
         info!("Создание декодера для файла: {:?}", path);
 
         if !path.exists() {
@@ -87,6 +80,18 @@ impl AudioDecoder {
             .make(codec_params, &DecoderOptions::default())
             .map_err(|e| AudioError::DecodingError(format!("Не удалось создать декодер: {}", e)))?;
 
+        let resampler = if sample_rate != output_sample_rate {
+            Some(ResamplerFir::new(
+                channels,
+                SampleRate::try_from(sample_rate).unwrap_or(SampleRate::Hz44100),
+                SampleRate::try_from(output_sample_rate).unwrap_or(SampleRate::Hz44100),
+                resampler::Latency::Sample64,
+                resampler::Attenuation::Db120,
+            ))
+        } else {
+            None
+        };
+
         Ok(Self {
             format_reader,
             decoder,
@@ -95,12 +100,15 @@ impl AudioDecoder {
             sample_rate,
             channels,
             total_frames,
+            resampler,
+            output_sample_rate,
         })
     }
 
     pub fn from_reader(
         mut reader: Box<dyn MediaSource>,
         hint: Option<Hint>,
+        output_sample_rate: u32,
     ) -> Result<Self, AudioError> {
         let reader_clone = reader.clone_box();
         let mss = MediaSourceStream::new(reader, Default::default());
@@ -143,6 +151,18 @@ impl AudioDecoder {
             .make(codec_params, &DecoderOptions::default())
             .map_err(|e| AudioError::DecodingError(format!("Не удалось создать декодер: {}", e)))?;
 
+        let resampler = if sample_rate != output_sample_rate {
+            Some(ResamplerFir::new(
+                channels,
+                SampleRate::try_from(sample_rate).unwrap_or(SampleRate::Hz44100),
+                SampleRate::try_from(output_sample_rate).unwrap_or(SampleRate::Hz44100),
+                resampler::Latency::Sample64,
+                resampler::Attenuation::Db120,
+            ))
+        } else {
+            None
+        };
+
         Ok(Self {
             format_reader,
             decoder,
@@ -151,7 +171,28 @@ impl AudioDecoder {
             sample_rate,
             channels,
             total_frames,
+            resampler,
+            output_sample_rate,
         })
+    }
+
+    pub fn set_output_sample_rate(&mut self, output_sample_rate: u32) {
+        if self.output_sample_rate == output_sample_rate {
+            return;
+        }
+
+        self.output_sample_rate = output_sample_rate;
+        self.resampler = if self.sample_rate != output_sample_rate {
+            Some(ResamplerFir::new(
+                self.channels,
+                SampleRate::try_from(self.sample_rate).unwrap_or(SampleRate::Hz44100),
+                SampleRate::try_from(output_sample_rate).unwrap_or(SampleRate::Hz44100),
+                resampler::Latency::Sample64,
+                resampler::Attenuation::Db120,
+            ))
+        } else {
+            None
+        };
     }
 
     pub fn seek(&mut self, time_secs: f64) -> Result<u64, AudioError> {
@@ -168,6 +209,16 @@ impl AudioDecoder {
         ) {
             Ok(seeked_to) => {
                 self.decoder.reset();
+                // Recreate resampler to clear history
+                if self.sample_rate != self.output_sample_rate {
+                    self.resampler = Some(ResamplerFir::new(
+                        self.channels,
+                        SampleRate::try_from(self.sample_rate).unwrap_or(SampleRate::Hz44100),
+                        SampleRate::try_from(self.output_sample_rate).unwrap_or(SampleRate::Hz44100),
+                        resampler::Latency::Sample64,
+                        resampler::Attenuation::Db120,
+                    ));
+                }
                 info!("Перемотка выполнена на позицию: {:?}", seeked_to.actual_ts);
                 Ok(seeked_to.actual_ts)
             }
@@ -262,13 +313,27 @@ impl AudioDecoder {
         match self.decoder.decode(&packet) {
             Ok(decoded) => {
                 let samples = Self::convert_to_f32(decoded)?;
-                Ok(Some(samples))
+
+                if let Some(ref mut resampler) = self.resampler {
+                    let ratio = self.output_sample_rate as f32 / self.sample_rate as f32;
+                    let out_capacity =
+                        ((samples.len() as f32 / self.channels as f32) * ratio).ceil() as usize
+                            * self.channels;
+                    let mut resampled = vec![0.0f32; out_capacity];
+
+                    let (_consumed, produced) = resampler
+                        .resample(&samples, &mut resampled)
+                        .map_err(|e| AudioError::DecodingError(format!("Resample error: {}", e)))?;
+
+                    resampled.truncate(produced);
+                    Ok(Some(resampled))
+                } else {
+                    Ok(Some(samples))
+                }
             }
             Err(Error::ResetRequired) => {
                 debug!("Decoder requires reset, resetting and skipping this packet.");
                 self.decoder.reset();
-                // We return an empty block instead of error to keep the stream alive
-                // The next call will pick up the next packet.
                 Ok(Some(vec![]))
             }
             Err(Error::DecodeError(e)) => {
@@ -311,6 +376,13 @@ impl DecoderType {
         match self {
             Self::Standard(d) => d.decode_next_block(),
             Self::Hls(d) => d.decode_next_block(),
+        }
+    }
+
+    pub fn set_output_sample_rate(&mut self, output_sample_rate: u32) {
+        match self {
+            Self::Standard(d) => d.set_output_sample_rate(output_sample_rate),
+            Self::Hls(d) => d.set_output_sample_rate(output_sample_rate),
         }
     }
 

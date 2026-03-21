@@ -75,6 +75,16 @@ impl CursorQueue {
         Some(prev)
     }
 
+    pub fn peek_next(&self) -> Option<Track> {
+        // 1. Try manual queue first
+        if let Some(track) = self.manual_queue.front() {
+            return Some(track.clone());
+        }
+
+        // 2. We don't peek into cursor because it's async and stateful
+        None
+    }
+
     pub fn current(&self) -> Option<&Track> {
         self.current_track.as_ref()
     }
@@ -252,7 +262,12 @@ impl SearchQueue {
     pub fn jump_to_with_track_index(&mut self, index: usize, track_idx: usize) {
         if index < self.items.len() {
             self.current_index = Some(index);
-            if let Some(SearchQueueItem::Container { play_index, expanded_tracks, .. }) = self.items.get_mut(index) {
+            if let Some(SearchQueueItem::Container {
+                play_index,
+                expanded_tracks,
+                ..
+            }) = self.items.get_mut(index)
+            {
                 if let Some(tracks) = expanded_tracks {
                     if track_idx < tracks.len() {
                         *play_index = track_idx;
@@ -266,10 +281,47 @@ impl SearchQueue {
         let idx = self.current_index?;
         match self.items.get(idx)? {
             SearchQueueItem::Track(track) => Some(track.clone()),
-            SearchQueueItem::Container { expanded_tracks, play_index, .. } => {
-                expanded_tracks.as_ref()?.get(*play_index).cloned()
+            SearchQueueItem::Container {
+                expanded_tracks,
+                play_index,
+                ..
+            } => expanded_tracks.as_ref()?.get(*play_index).cloned(),
+        }
+    }
+
+    pub fn peek_next(&self) -> Option<Track> {
+        let current = self.current_index?;
+
+        // 1. If current is a container, check if there's a next track within it
+        if let Some(SearchQueueItem::Container {
+            expanded_tracks: Some(tracks),
+            play_index,
+            ..
+        }) = self.items.get(current)
+        {
+            if *play_index + 1 < tracks.len() {
+                return Some(tracks[*play_index + 1].clone());
             }
         }
+
+        // 2. Otherwise, check the next item in the queue
+        let next_idx = current + 1;
+        if next_idx < self.items.len() {
+            match &self.items[next_idx] {
+                SearchQueueItem::Track(track) => return Some(track.clone()),
+                SearchQueueItem::Container {
+                    expanded_tracks: Some(tracks),
+                    ..
+                } => {
+                    if !tracks.is_empty() {
+                        return Some(tracks[0].clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        None
     }
 
     pub fn next(&mut self) -> NextResult {
@@ -289,10 +341,20 @@ impl SearchQueue {
         };
 
         // If current is a container with tracks, try advancing within it
-        if let Some(SearchQueueItem::Container { expanded_tracks: Some(tracks), play_index, .. }) = self.items.get(current) {
+        if let Some(SearchQueueItem::Container {
+            expanded_tracks: Some(tracks),
+            play_index,
+            ..
+        }) = self.items.get(current)
+        {
             if *play_index + 1 < tracks.len() {
                 // Advance within container
-                if let Some(SearchQueueItem::Container { play_index, expanded_tracks: Some(tracks), .. }) = self.items.get_mut(current) {
+                if let Some(SearchQueueItem::Container {
+                    play_index,
+                    expanded_tracks: Some(tracks),
+                    ..
+                }) = self.items.get_mut(current)
+                {
                     *play_index += 1;
                     return NextResult::Track(tracks[*play_index].clone());
                 }
@@ -319,9 +381,19 @@ impl SearchQueue {
         };
 
         // If current is a container with tracks, try going back within it
-        if let Some(SearchQueueItem::Container { expanded_tracks: Some(_), play_index, .. }) = self.items.get(current) {
+        if let Some(SearchQueueItem::Container {
+            expanded_tracks: Some(_),
+            play_index,
+            ..
+        }) = self.items.get(current)
+        {
             if *play_index > 0 {
-                if let Some(SearchQueueItem::Container { play_index, expanded_tracks: Some(tracks), .. }) = self.items.get_mut(current) {
+                if let Some(SearchQueueItem::Container {
+                    play_index,
+                    expanded_tracks: Some(tracks),
+                    ..
+                }) = self.items.get_mut(current)
+                {
                     *play_index -= 1;
                     return NextResult::Track(tracks[*play_index].clone());
                 }
@@ -341,8 +413,15 @@ impl SearchQueue {
     fn return_current_or_expand(&self, idx: usize) -> NextResult {
         match &self.items[idx] {
             SearchQueueItem::Track(track) => NextResult::Track(track.clone()),
-            SearchQueueItem::Container { expanded_tracks: None, .. } => NextResult::NeedExpand(idx),
-            SearchQueueItem::Container { expanded_tracks: Some(tracks), play_index, .. } => {
+            SearchQueueItem::Container {
+                expanded_tracks: None,
+                ..
+            } => NextResult::NeedExpand(idx),
+            SearchQueueItem::Container {
+                expanded_tracks: Some(tracks),
+                play_index,
+                ..
+            } => {
                 if tracks.is_empty() {
                     // Empty container, skip conceptually — but return End for now
                     NextResult::End
@@ -354,7 +433,12 @@ impl SearchQueue {
     }
 
     pub fn set_container_tracks(&mut self, index: usize, tracks: Vec<Track>) {
-        if let Some(SearchQueueItem::Container { expanded_tracks, play_index, .. }) = self.items.get_mut(index) {
+        if let Some(SearchQueueItem::Container {
+            expanded_tracks,
+            play_index,
+            ..
+        }) = self.items.get_mut(index)
+        {
             *expanded_tracks = Some(tracks);
             *play_index = 0;
         }
@@ -367,20 +451,30 @@ impl SearchQueue {
     }
 
     pub fn snapshot(&self) -> (Vec<QueueEntry>, Option<CurrentPosition>) {
-        let entries: Vec<QueueEntry> = self.items.iter().map(|item| match item {
-            SearchQueueItem::Track(track) => QueueEntry::Track(track.clone()),
-            SearchQueueItem::Container { info, expanded_tracks, play_index } => {
-                QueueEntry::Container {
+        let entries: Vec<QueueEntry> = self
+            .items
+            .iter()
+            .map(|item| match item {
+                SearchQueueItem::Track(track) => QueueEntry::Track(track.clone()),
+                SearchQueueItem::Container {
+                    info,
+                    expanded_tracks,
+                    play_index,
+                } => QueueEntry::Container {
                     info: info.clone(),
                     tracks: expanded_tracks.clone(),
                     play_index: *play_index,
-                }
-            }
-        }).collect();
+                },
+            })
+            .collect();
 
         let position = self.current_index.map(|idx| {
             let track_within = match &self.items[idx] {
-                SearchQueueItem::Container { expanded_tracks: Some(_), play_index, .. } => Some(*play_index),
+                SearchQueueItem::Container {
+                    expanded_tracks: Some(_),
+                    play_index,
+                    ..
+                } => Some(*play_index),
                 _ => None,
             };
             CurrentPosition {
@@ -402,6 +496,12 @@ pub enum ActiveQueue {
 impl ActiveQueue {
     pub fn new_cursor() -> Self {
         ActiveQueue::Cursor(CursorQueue::new())
+    }
+    pub fn peek_next(&self) -> Option<Track> {
+        match self {
+            ActiveQueue::Cursor(o) => o.peek_next(),
+            ActiveQueue::Search(o) => o.peek_next(),
+        }
     }
 }
 

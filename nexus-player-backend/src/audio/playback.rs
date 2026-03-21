@@ -4,15 +4,11 @@ use crate::audio::types::{AudioSource, MediaSource, SampleRate as MSR, TrackSour
 use crate::error::AudioError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
-use resampler::{ResamplerFir, SampleRate};
 use std::io::{Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
-use std::result;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use streaming::multi_downloader::source::HlsSource;
-use symphonia::core::sample;
 use tracing::{info, warn};
 
 #[derive(Debug, Clone)]
@@ -121,12 +117,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct PlaybackEngine {
     decoder: Arc<Mutex<Option<DecoderType>>>,
+    next_decoder: Arc<Mutex<Option<DecoderType>>>,
+    track_switched: Arc<AtomicBool>,
     stream: Option<Stream>,
     device: Device,
     config: StreamConfig,
     is_playing: Arc<Mutex<bool>>,
     current_position: Arc<Mutex<Duration>>,
-    duration: Option<Duration>,
+    duration: Arc<Mutex<Option<Duration>>>,
     sample_rate: Arc<Mutex<u32>>,
     samples_played: Arc<Mutex<u64>>,
     sample_buffer: Arc<Mutex<Vec<f32>>>,
@@ -157,12 +155,14 @@ impl PlaybackEngine {
 
         Ok(Self {
             decoder: Arc::new(Mutex::new(None)),
+            next_decoder: Arc::new(Mutex::new(None)),
+            track_switched: Arc::new(AtomicBool::new(false)),
             stream: None,
             device,
             config,
             is_playing: Arc::new(Mutex::new(false)),
             current_position: Arc::new(Mutex::new(Duration::ZERO)),
-            duration: None,
+            duration: Arc::new(Mutex::new(None)),
             sample_rate: Arc::new(Mutex::new(MSR::LOW.as_u32())),
             samples_played: Arc::new(Mutex::new(0)),
             sample_buffer: Arc::new(Mutex::new(Vec::new())),
@@ -176,12 +176,7 @@ impl PlaybackEngine {
     pub fn play(&mut self, path: &TrackSource) -> Result<(), AudioError> {
         match path {
             TrackSource::Local(p) => self.play_local(&p),
-            TrackSource::Http(p) => todo!(),
-            TrackSource::External { system, id } => todo!(),
-            TrackSource::Cached {
-                cache_path,
-                original_url,
-            } => todo!(),
+            _ => todo!(),
         }
     }
 
@@ -191,7 +186,8 @@ impl PlaybackEngine {
     ) -> Result<(), AudioError> {
         info!("Загрузка аудио из AudioSource");
 
-        let decoder = AudioDecoder::from_reader(audio_source, None)?;
+        let output_sample_rate = self.config.sample_rate.0;
+        let decoder = AudioDecoder::from_reader(audio_source, None, output_sample_rate)?;
         let duration = decoder.duration().map(Duration::from_secs_f64);
         let sample_rate = decoder.sample_rate();
         let channels = decoder.channels();
@@ -201,7 +197,7 @@ impl PlaybackEngine {
             sample_rate, channels, duration
         );
 
-        self.duration = duration;
+        *self.duration.lock().unwrap() = duration;
         *self.decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
         *self.is_playing.lock().unwrap() = true;
         *self.current_position.lock().unwrap() = Duration::ZERO;
@@ -211,7 +207,7 @@ impl PlaybackEngine {
         self.sample_buffer.lock().unwrap().clear();
         *self.buffer_position.lock().unwrap() = 0;
 
-        self.create_stream(sample_rate, channels)?;
+        self.create_stream()?;
 
         Ok(())
     }
@@ -219,8 +215,8 @@ impl PlaybackEngine {
     pub fn play_hls(&mut self, hls_source: HlsSource) -> Result<(), AudioError> {
         info!("Загрузка HLS потока");
 
-        // Prepare source (wait for metadata/first segment)
-        let decoder = HlsAudioDecoder::new(hls_source)?;
+        let output_sample_rate = self.config.sample_rate.0;
+        let decoder = HlsAudioDecoder::new(hls_source, output_sample_rate)?;
         let duration = decoder.duration().map(Duration::from_secs_f64);
         let sample_rate = decoder.sample_rate();
         let channels = decoder.channels();
@@ -230,7 +226,7 @@ impl PlaybackEngine {
             sample_rate, channels, duration
         );
 
-        self.duration = duration;
+        *self.duration.lock().unwrap() = duration;
         *self.decoder.lock().unwrap() = Some(DecoderType::from_hls(decoder));
         *self.is_playing.lock().unwrap() = true;
         *self.current_position.lock().unwrap() = Duration::ZERO;
@@ -240,14 +236,82 @@ impl PlaybackEngine {
         self.sample_buffer.lock().unwrap().clear();
         *self.buffer_position.lock().unwrap() = 0;
 
-        self.create_stream(sample_rate, channels)?;
+        self.create_stream()?;
 
         Ok(())
     }
-    fn play_local(&mut self, path: &Path) -> Result<(), AudioError> {
+
+    pub fn preload_local(&mut self, path: &std::path::Path) -> Result<(), AudioError> {
+        info!("[PlaybackEngine] Начало предзагрузки локального файла: {:?}", path);
+        let output_sample_rate = self.config.sample_rate.0;
+        info!("[PlaybackEngine] Инициализация декодера для локального файла, output_sample_rate: {}", output_sample_rate);
+        let decoder = AudioDecoder::new(path, output_sample_rate)?;
+        info!("[PlaybackEngine] Декодер создан успешно. Сохранение в next_decoder.");
+        *self.next_decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
+        info!("[PlaybackEngine] Предзагрузка локального файла завершена.");
+        Ok(())
+    }
+
+    pub fn preload_hls(&mut self, source: HlsSource) -> Result<(), AudioError> {
+        info!("[PlaybackEngine] Начало предзагрузки HLS потока");
+        let output_sample_rate = self.config.sample_rate.0;
+        info!("[PlaybackEngine] Инициализация HLS декодера, output_sample_rate: {}", output_sample_rate);
+        let decoder = HlsAudioDecoder::new(source, output_sample_rate)?;
+        info!("[PlaybackEngine] HLS декодер создан успешно. Сохранение в next_decoder.");
+        *self.next_decoder.lock().unwrap() = Some(DecoderType::from_hls(decoder));
+        info!("[PlaybackEngine] Предзагрузка HLS потока завершена.");
+        Ok(())
+    }
+
+    pub fn preload_audio_source(
+        &mut self,
+        source: Box<dyn MediaSource>,
+    ) -> Result<(), AudioError> {
+        info!("[PlaybackEngine] Начало предзагрузки из AudioSource");
+        let output_sample_rate = self.config.sample_rate.0;
+        info!("[PlaybackEngine] Инициализация декодера для AudioSource, output_sample_rate: {}", output_sample_rate);
+        let decoder = AudioDecoder::from_reader(source, None, output_sample_rate)?;
+        info!("[PlaybackEngine] Декодер для AudioSource создан успешно. Сохранение в next_decoder.");
+        *self.next_decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
+        info!("[PlaybackEngine] Предзагрузка из AudioSource завершена.");
+        Ok(())
+    }
+
+    pub fn use_preloaded(&mut self) -> Result<(), AudioError> {
+        let next = {
+            let mut next_guard = self.next_decoder.lock().unwrap();
+            next_guard.take()
+        };
+
+        if let Some(next) = next {
+            info!("[PlaybackEngine] Использование предзагруженного трека");
+            let duration = next.duration().map(Duration::from_secs_f64);
+            let sample_rate = next.sample_rate();
+
+            *self.duration.lock().unwrap() = duration;
+            *self.decoder.lock().unwrap() = Some(next);
+            *self.is_playing.lock().unwrap() = true;
+            *self.current_position.lock().unwrap() = Duration::ZERO;
+            *self.sample_rate.lock().unwrap() = sample_rate;
+            *self.samples_played.lock().unwrap() = 0;
+
+            self.sample_buffer.lock().unwrap().clear();
+            *self.buffer_position.lock().unwrap() = 0;
+
+            self.create_stream()?;
+            Ok(())
+        } else {
+            Err(AudioError::DecodingError(
+                "No preloaded track found".to_string(),
+            ))
+        }
+    }
+
+    fn play_local(&mut self, path: &std::path::Path) -> Result<(), AudioError> {
         info!("Загрузка файла: {:?}", path);
 
-        let decoder = AudioDecoder::new(path)?;
+        let output_sample_rate = self.config.sample_rate.0;
+        let decoder = AudioDecoder::new(path, output_sample_rate)?;
         let duration = decoder.duration().map(Duration::from_secs_f64);
         let sample_rate = decoder.sample_rate();
         let channels = decoder.channels();
@@ -257,7 +321,7 @@ impl PlaybackEngine {
             sample_rate, channels, duration
         );
 
-        self.duration = duration;
+        *self.duration.lock().unwrap() = duration;
         *self.decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
         *self.is_playing.lock().unwrap() = true;
         *self.current_position.lock().unwrap() = Duration::ZERO;
@@ -267,15 +331,23 @@ impl PlaybackEngine {
         self.sample_buffer.lock().unwrap().clear();
         *self.buffer_position.lock().unwrap() = 0;
 
-        self.create_stream(sample_rate, channels)?;
+        self.create_stream()?;
 
         Ok(())
     }
-    fn create_stream(&mut self, sample_rate: u32, channels: usize) -> Result<(), AudioError> {
+
+    fn create_stream(&mut self) -> Result<(), AudioError> {
+        if self.stream.is_some() {
+            return Ok(());
+        }
+
         let decoder = Arc::clone(&self.decoder);
+        let next_decoder = Arc::clone(&self.next_decoder);
+        let track_switched = Arc::clone(&self.track_switched);
         let is_playing = Arc::clone(&self.is_playing);
         let samples_played = Arc::clone(&self.samples_played);
         let current_position = Arc::clone(&self.current_position);
+        let duration_arc = Arc::clone(&self.duration);
         let sample_rate_arc = Arc::clone(&self.sample_rate);
         let sample_buffer = Arc::clone(&self.sample_buffer);
         let buffer_position = Arc::clone(&self.buffer_position);
@@ -284,34 +356,31 @@ impl PlaybackEngine {
         let needs_recreation = Arc::clone(&self.needs_recreation);
 
         let config = self.config.clone();
-        // config.sample_rate = cpal::SampleRate(sample_rate);
-        // config.channels = channels as u16;
+        let sample_rate = config.sample_rate.0;
+        let mut current_ramp_gain = 0.0f32;
+        // 10ms ramp
+        let ramp_step = 1.0 / (sample_rate as f32 * 0.01);
 
         let err_fn = move |err| {
             warn!("Ошибка стрима: {}", err);
             needs_recreation.store(true, Ordering::SeqCst);
         };
-        let i = sample_rate;
-        let o = config.sample_rate.0;
-        let mut resampler = resampler::ResamplerFir::new(
-            channels,
-            SampleRate::try_from(i).unwrap_or(SampleRate::Hz44100),
-            SampleRate::try_from(o).unwrap_or(SampleRate::Hz44100),
-            resampler::Latency::Sample64,
-            resampler::Attenuation::Db120,
-        );
 
         let stream = self
             .device
             .build_output_stream(
                 &config,
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    if !*is_playing.lock().unwrap() {
+                    let playing = *is_playing.lock().unwrap();
+
+                    // If not playing and already faded out, just fill with silence
+                    if !playing && current_ramp_gain <= 0.0 {
                         data.fill(0.0);
                         return;
                     }
 
                     let mut output_pos = 0;
+                    let channels = config.channels as usize;
 
                     while output_pos < data.len() {
                         let mut buffer = sample_buffer.lock().unwrap();
@@ -329,9 +398,31 @@ impl PlaybackEngine {
                                         *buffer_position.lock().unwrap() = 0;
                                     }
                                     Ok(None) => {
-                                        data[output_pos..].fill(0.0);
-                                        *is_playing.lock().unwrap() = false;
-                                        return;
+                                        // Текущий трек закончился. Проверяем наличие следующего.
+                                        let mut next_guard = next_decoder.lock().unwrap();
+                                        if let Some(next) = next_guard.take() {
+                                            info!("Бесшовный переход на следующий трек");
+                                            let next_duration = next.duration().map(Duration::from_secs_f64);
+                                            let next_sr = next.sample_rate();
+                                            
+                                            *dec = next;
+                                            *duration_arc.lock().unwrap() = next_duration;
+                                            *samples_played.lock().unwrap() = 0;
+                                            *sample_rate_arc.lock().unwrap() = next_sr;
+                                            track_switched.store(true, Ordering::SeqCst);
+                                            // Продолжаем цикл для нового декодера
+                                            continue;
+                                        } else {
+                                            // No more tracks, but let it fade out if still has gain
+                                            if current_ramp_gain > 0.0 {
+                                                // We'll fill the rest with silence and let the ramp handle it
+                                                data[output_pos..].fill(0.0);
+                                            } else {
+                                                data[output_pos..].fill(0.0);
+                                                *is_playing.lock().unwrap() = false;
+                                            }
+                                            break;
+                                        }
                                     }
                                     Err(AudioError::InProgress) => {
                                         data[output_pos..].fill(0.0);
@@ -354,47 +445,42 @@ impl PlaybackEngine {
 
                         let available = buffer.len() - *buf_pos;
                         let needed = data.len() - output_pos;
-
-                        let to_copy = (available.min(needed) / channels) * channels;
+                        let to_copy = available.min(needed);
 
                         let input = &buffer[*buf_pos..*buf_pos + to_copy];
+                        
+                        // Volume will be applied in the final ramp loop below
+                        data[output_pos..output_pos + to_copy].copy_from_slice(input);
 
-                        let ratio = o as u64 as f32 / i as u64 as f32;
-                        let out_capacity = ((to_copy as f32) * ratio).ceil() as usize * channels;
-
-                        let mut resampled = vec![0.0f32; out_capacity];
-
-                        let (consumed, produced) =
-                            resampler.resample(input, &mut resampled).unwrap();
-
-                        let volume = *volume.lock().unwrap();
-
-                        for (out, sample) in data[output_pos..output_pos + produced]
-                            .iter_mut()
-                            .zip(resampled[..produced].iter())
-                        {
-                            *out = *sample * volume;
-                        }
-
-                        {
-                            if let Ok(mut recent) = recent_samples.try_lock() {
-                                let to_add = &resampled[..produced];
-                                recent.extend_from_slice(to_add);
-                                if recent.len() > 8192 {
-                                    let drain_len = recent.len() - 8192;
-                                    recent.drain(0..drain_len);
-                                }
-                            }
-                        }
-
-                        *buf_pos += consumed;
-                        output_pos += produced;
+                        *buf_pos += to_copy;
+                        output_pos += to_copy;
 
                         let num_frames = to_copy / channels;
                         *samples_played.lock().unwrap() += num_frames as u64;
                         let sr = *sample_rate_arc.lock().unwrap();
-                        let position_secs = *samples_played.lock().unwrap() as f64 / sr as f64;
+                        let position_secs = *samples_played.lock().unwrap() as f64 / config.sample_rate.0 as f64;
                         *current_position.lock().unwrap() = Duration::from_secs_f64(position_secs);
+                    }
+
+                    // Apply volume ramp and master volume
+                    let vol = *volume.lock().unwrap();
+                    for sample in data.iter_mut() {
+                        if playing {
+                            current_ramp_gain = (current_ramp_gain + ramp_step).min(1.0);
+                        } else {
+                            current_ramp_gain = (current_ramp_gain - ramp_step).max(0.0);
+                        }
+                        *sample *= current_ramp_gain * vol;
+                    }
+
+                    {
+                        if let Ok(mut recent) = recent_samples.try_lock() {
+                            recent.extend_from_slice(&data);
+                            if recent.len() > 8192 {
+                                let drain_len = recent.len() - 8192;
+                                recent.drain(0..drain_len);
+                            }
+                        }
                     }
                 },
                 err_fn,
@@ -412,6 +498,10 @@ impl PlaybackEngine {
         Ok(())
     }
 
+    pub fn track_switched(&self) -> bool {
+        self.track_switched.swap(false, Ordering::SeqCst)
+    }
+
     pub fn needs_recreation(&self) -> bool {
         self.needs_recreation.load(Ordering::SeqCst)
     }
@@ -419,7 +509,6 @@ impl PlaybackEngine {
     pub fn recreate_stream(&mut self) -> Result<(), AudioError> {
         info!("Попытка пересоздания стрима (возможно смена устройства)...");
 
-        // Пытаемся получить новое аудио устройство по умолчанию
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -439,21 +528,24 @@ impl PlaybackEngine {
 
         self.device = device;
         self.config = config;
+        self.stream = None;
 
-        // Получаем текущие параметры из декодера, если он есть
-        let (sr, channels) = {
-            let decoder_guard = self.decoder.lock().unwrap();
-            if let Some(ref dec) = *decoder_guard {
-                (dec.sample_rate(), dec.channels())
-            } else {
-                return Ok(()); // Нет декодера - ничего не делаем
+        let output_sample_rate = self.config.sample_rate.0;
+        {
+            let mut decoder_guard = self.decoder.lock().unwrap();
+            if let Some(ref mut dec) = *decoder_guard {
+                dec.set_output_sample_rate(output_sample_rate);
             }
-        };
+        }
+        {
+            let mut next_guard = self.next_decoder.lock().unwrap();
+            if let Some(ref mut dec) = *next_guard {
+                dec.set_output_sample_rate(output_sample_rate);
+            }
+        }
 
-        // Пересоздаем стрим
-        self.create_stream(sr, channels)?;
+        self.create_stream()?;
 
-        // Если мы должны были играть - запускаем
         if *self.is_playing.lock().unwrap() {
             if let Some(ref stream) = self.stream {
                 let _ = stream.play();
@@ -480,8 +572,10 @@ impl PlaybackEngine {
 
     pub fn stop(&mut self) {
         *self.is_playing.lock().unwrap() = false;
+        
         self.stream = None;
         *self.decoder.lock().unwrap() = None;
+        *self.next_decoder.lock().unwrap() = None;
         *self.current_position.lock().unwrap() = Duration::ZERO;
         *self.samples_played.lock().unwrap() = 0;
         self.sample_buffer.lock().unwrap().clear();
@@ -491,32 +585,27 @@ impl PlaybackEngine {
     pub fn seek(&mut self, position: Duration) -> Result<(), AudioError> {
         info!("Запрос перемотки на {:?}", position);
 
-        // Сохраняем состояние воспроизведения
         let was_playing = *self.is_playing.lock().unwrap();
 
-        // Приостанавливаем стрим на время перемотки
-        if let Some(ref stream) = self.stream {
-            let _ = stream.pause();
+        if was_playing {
+            // Start fade out in callback (it will happen as long as stream is not paused)
+            *self.is_playing.lock().unwrap() = false;
         }
 
         let mut decoder_guard = self.decoder.lock().unwrap();
         if let Some(ref mut dec) = *decoder_guard {
             info!("Выполнение перемотки в декодере...");
 
-            // Очищаем буферы СРАЗУ, чтобы не играть старый звук
             self.sample_buffer.lock().unwrap().clear();
             *self.buffer_position.lock().unwrap() = 0;
 
             let res = dec.seek(position.as_secs_f64());
             if let Err(AudioError::OutsideOfBuffer) = res {
                 if was_playing {
-                    if let Some(ref stream) = self.stream {
-                        let _ = stream.play();
-                    }
+                    *self.is_playing.lock().unwrap() = true;
                 }
                 return Err(AudioError::OutsideOfBuffer);
             }
-            // Цикл ожидания данных
             info!("Ожидание загрузки данных для новой позиции...");
             loop {
                 match dec.decode_next_block() {
@@ -534,7 +623,6 @@ impl PlaybackEngine {
                         break;
                     }
                     Err(AudioError::InProgress) => {
-                        // Данные еще не загружены, ждем
                         std::thread::sleep(std::time::Duration::from_millis(50));
                         continue;
                     }
@@ -545,18 +633,15 @@ impl PlaybackEngine {
                 }
             }
 
-            // Обновляем позицию и счетчик сэмплов
             *self.current_position.lock().unwrap() = position;
-            let sr = *self.sample_rate.lock().unwrap();
+            let sr = self.config.sample_rate.0;
             let new_samples = (position.as_secs_f64() * sr as f64) as u64;
             *self.samples_played.lock().unwrap() = new_samples;
         }
 
-        // Возобновляем стрим, если он был активен
         if was_playing {
-            if let Some(ref stream) = self.stream {
-                let _ = stream.play();
-            }
+            // Start fade in
+            *self.is_playing.lock().unwrap() = true;
         }
 
         info!("Перемотка завершена");
@@ -568,12 +653,7 @@ impl PlaybackEngine {
     }
 
     pub fn channels(&self) -> usize {
-        let decoder_guard = self.decoder.lock().unwrap();
-        if let Some(ref dec) = *decoder_guard {
-            dec.channels()
-        } else {
-            2
-        }
+        self.config.channels as usize
     }
 
     pub fn position(&self) -> Duration {
@@ -581,7 +661,7 @@ impl PlaybackEngine {
     }
 
     pub fn duration(&self) -> Option<Duration> {
-        self.duration
+        *self.duration.lock().unwrap()
     }
 
     pub fn buffered_ranges(&self) -> Vec<(f64, f64)> {

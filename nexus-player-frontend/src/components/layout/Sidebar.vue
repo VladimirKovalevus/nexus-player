@@ -114,6 +114,7 @@ const isSettingsOpen = ref(false);
 }
 
 .navItem {
+    margin: 0!important;
   @include flex-start;
   gap: $spacing-md;
   font-size: $font-size-sm;

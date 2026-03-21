@@ -739,13 +739,16 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
   border: none;
   color: var(--color-text-secondary);
   font-size: $font-size-xl;
+  line-height: 1 !important;
+  padding-bottom: var(--ellipsis-offset-bottom) !important;
   cursor: pointer;
   @include flex-center;
+  align-items: var(--ellipsis-v-align, center) !important;
   transition: all $transition-fast;
 
   &:hover {
-    background-color: var(--color-bg-primary);
-    color: var(--color-text-primary);
+    background-color: var(--media-card-action-hover-bg);
+    color: var(--media-card-action-hover-color);
   }
 }
 
@@ -756,6 +759,7 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
   border-radius: 50%;
   background: transparent;
   border: none;
+  border-style:none !important;
   cursor: pointer;
   @include flex-center;
   transition: all $transition-fast;

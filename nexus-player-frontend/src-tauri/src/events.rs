@@ -116,11 +116,20 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                         emit_state_update = true;
                         FrontendEvent::TrackFinished { track_id: 0 }
                     }
-                    AudioEvent::PositionUpdated { position, fft, pcm } => FrontendEvent::PositionUpdated {
-                        position_secs: position.as_secs_f64(),
-                        fft,
-                        pcm,
-                    },
+                    AudioEvent::PreloadNextTrack { current_track_id: _ } => {
+                        let cl = state.clone();
+                        tokio::spawn(async move {
+                            cl.preload_next_track().await;
+                        });
+                        continue;
+                    }
+                    AudioEvent::PositionUpdated { position, fft, pcm } => {
+                        FrontendEvent::PositionUpdated {
+                            position_secs: position.as_secs_f64(),
+                            fft,
+                            pcm,
+                        }
+                    }
                     AudioEvent::DurationChanged { duration } => FrontendEvent::DurationChanged {
                         duration_secs: duration.as_secs_f64(),
                     },
@@ -142,6 +151,9 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                         continue;
                     }
                     AudioEvent::BufferingFinished => {
+                        continue;
+                    }
+                    _ => {
                         continue;
                     }
                 };

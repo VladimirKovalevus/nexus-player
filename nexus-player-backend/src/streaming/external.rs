@@ -28,6 +28,42 @@ impl StreamingSourceWrapper {
             StreamingSourceWrapper::Local(_) => Ok(()),
         }
     }
+
+    pub fn play(
+        self,
+        engine: &crate::audio::engine::AudioEngine,
+        track: crate::audio::types::Track,
+    ) {
+        match self {
+            StreamingSourceWrapper::Streaming(source) => {
+                engine.play_source(track, Box::new(source));
+            }
+            StreamingSourceWrapper::Hls(hls) => {
+                engine.play_hls(track, hls);
+            }
+            StreamingSourceWrapper::Local(source) => {
+                engine.play_source(track, source);
+            }
+        }
+    }
+
+    pub fn preload(
+        self,
+        engine: &crate::audio::engine::AudioEngine,
+        track: crate::audio::types::Track,
+    ) {
+        match self {
+            StreamingSourceWrapper::Streaming(source) => {
+                engine.preload_source(track, Box::new(source));
+            }
+            StreamingSourceWrapper::Hls(hls) => {
+                engine.preload_hls(track, hls);
+            }
+            StreamingSourceWrapper::Local(source) => {
+                engine.preload_source(track, source);
+            }
+        }
+    }
 }
 
 impl Read for StreamingMediaSource {

@@ -349,22 +349,24 @@ emit("close");
           </div>
           <span class="time">{{ formatTime(audioStore.duration) }}</span>
         </div>
-      </div>
 
-      <div class="volume-section">
-        <input
-          type="range"
-          class="volume-slider"
-          :value="localVolume"
-          min="0"
-          max="1"
-          step="0.01"
-          @input="setVolume"
-          :style="{
-            background: `linear-gradient(to right, var(--color-text-primary) ${localVolume * 100}%, var(--color-bg-secondary) ${localVolume * 100}%)`
-          }"
-        />
-        <img src="/icon/volume.svg" class="volume-icon">
+        <div class="volume-section">
+          <img src="/icon/volume.svg" class="volume-icon">
+          <input
+            type="range"
+            class="volume-slider"
+            :value="localVolume"
+            min="0"
+            max="1"
+            step="0.01"
+            @input="setVolume"
+            :style="{
+              '--volume-fill-color': 'var(--color-accent-hover, #00ffd2)',
+              '--volume-bg-color': 'var(--color-bg-secondary, #333)',
+              background: `linear-gradient(to right, var(--volume-fill-color) ${localVolume * 100}%, var(--volume-bg-color) ${localVolume * 100}%)`
+            }"
+          />
+        </div>
       </div>
     </div>
   </Transition>
@@ -500,24 +502,25 @@ canvas { width: 100%; height: 100%; display: block; }
 .playback-controls {
   display: flex; align-items: center; gap: $spacing-xl;
   .control-btn {
-    background: $color-bg-secondary; border: 1px solid $color-border;
+    background: none; border: 1px solid transparent;
     cursor: pointer; width: 48px; height: 48px; border-radius: 50%;
+    padding: 0 !important;
     display: flex; align-items: center; justify-content: center;
     transition: $transition-fast;
     img { width: 24px; height: 24px; }
-    &:hover { transform: scale(1.1); background: $color-bg-hover; }
+    &:hover { transform: scale(1.1); background: var(--color-bg-hover); }
   }
   .play-btn {
-    background: $color-accent-primary; border-color: $color-accent-primary;
-    img { width: 32px; height: 32px; margin-left: 2px; filter: brightness(0) invert(1); }
-    &:hover { background: $color-accent-hover; border-color: $color-accent-hover; }
+    background: none; border: 2px solid var(--color-accent-primary);
+    img { width: 32px; height: 32px; margin-left: 2px; }
+    &:hover { background: var(--color-bg-hover); border-color: var(--color-accent-hover); }
   }
 }
 
 .waveform-section {
   width: 100%; display: flex; align-items: center; 
   gap: $spacing-md;
-  .time { font-size: $font-size-sm; color: $color-text-secondary; min-width: 40px; }
+  .time { font-size: var(--font-size-lg); color: var(--player-time-color, white); min-width: 40px; }
   .waveform-wrapper {
     flex: 1; height: 48px; 
     border-radius: $radius-md; overflow: hidden;
@@ -525,14 +528,15 @@ canvas { width: 100%; height: 100%; display: block; }
 }
 
 .volume-section {
-  position: absolute; right: $spacing-lg; bottom: $spacing-xl;
-  display: flex; flex-direction: column; align-items: center; width: 32px;
-  .volume-icon { width: 20px; height: 20px; opacity: 0.8; }
+  width: 100%;
+  display: flex; align-items: center; gap: $spacing-md;
+  margin-top: $spacing-lg;
+  .volume-icon { width: 20px; height: 20px; opacity: 0.8; flex-shrink: 0; }
   .volume-slider {
-    -webkit-appearance: none; width: 150px; height: 8px;
+    -webkit-appearance: none; flex: 1; height: 8px;
     border-radius: $radius-sm; outline: none; cursor: pointer;
-    transform: rotate(-90deg); margin-bottom: 70px; padding: 0;
-    display: block; background: $color-bg-secondary;
+    background: $color-bg-secondary;
+    padding: 0; margin: 0;
     &::-webkit-slider-thumb {
       -webkit-appearance: none; width: 20px; height: 20px;
       background: $color-text-primary; border-radius: 50%; box-shadow: $shadow-md;

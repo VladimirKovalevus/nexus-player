@@ -1,4 +1,3 @@
-use crate::audio;
 use crate::audio::engine::AudioEngine;
 use crate::audio::types::Track;
 use crate::audio::types::Track as AudioTrack;
@@ -10,22 +9,21 @@ use crate::library::types::TrackOrder;
 use crate::library::{LibraryService, PlaylistId, TrackId};
 use crate::playlist::cursor::{AppCursorResolver, ContainerContext, PlayerCursor};
 use crate::playlist::playback_queue::{
-    ActiveQueue, ContainerKind, ContainerMeta, CursorQueue, NextResult, PlaybackQueue, RepeatMode,
+    ActiveQueue, ContainerKind, ContainerMeta, CursorQueue, NextResult, RepeatMode,
     SearchQueue, SearchQueueItem,
 };
 use crate::playlist::playlist::Playlist;
 use crate::streaming::StreamingService;
-use crate::streaming::{external::StreamingSourceWrapper, types::ContentType};
-use streaming::state::types::DefaultCallbacks;
+use crate::streaming::types::ContentType;
 use anyhow::{Context, Result};
-use chrono::Utc;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use streaming::state::types::DefaultCallbacks;
 use tokio::sync::Mutex;
 
 pub struct AppState {
-    audio_engine: AudioEngine,
+    audio_engine: Arc<AudioEngine>,
 
     pub queue: Arc<Mutex<ActiveQueue>>,
 
@@ -50,7 +48,7 @@ impl AppState {
 
         let config = config_manager.get();
 
-        let audio_engine = AudioEngine::new()?;
+        let audio_engine = Arc::new(AudioEngine::new()?);
 
         let _cache_dir = db_path.parent().unwrap().join("cache");
         let streaming = StreamingService::new(
@@ -169,6 +167,37 @@ impl AppState {
         }
     }
 
+    pub async fn preload_next_track(&self) {
+        let next_track = {
+            let queue = self.queue.lock().await;
+            match &*queue {
+                ActiveQueue::Cursor(cq) => cq.peek_next(),
+                ActiveQueue::Search(sq) => sq.peek_next(),
+            }
+        };
+
+        if let Some(track) = next_track {
+            tracing::info!("Preloading next track: {}", track.id);
+            match self
+                .streaming()
+                .resolve(track.source.clone(), track.id as u64, None)
+                .await
+            {
+                Ok(wrapper) => {
+                    if let Err(e) = wrapper.prepare().await {
+                        tracing::warn!("Preload prepare failed: {}", e);
+                        return;
+                    }
+
+                    wrapper.preload(self.audio_engine(), track);
+                }
+                Err(e) => {
+                    tracing::warn!("Error resolving track for preload: {}", e);
+                }
+            }
+        }
+    }
+
     pub async fn play_previous(&self) {
         loop {
             let result = {
@@ -206,7 +235,6 @@ impl AppState {
 
     async fn play(&self, track: Option<Track>) {
         if let Some(track) = track {
-            // МГНОВЕННО переключаем контекст в движке, чтобы остановить старый звук
             self.audio_engine().set_loading(track.clone());
 
             // Record play history without blocking the playback path
@@ -227,18 +255,23 @@ impl AppState {
             // Get next track for preloading context
             let next_track = {
                 let queue = self.queue.lock().await;
-                match &*queue {
-                    ActiveQueue::Cursor(cq) => cq.manual_queue.front().cloned(),
-                    ActiveQueue::Search(_) => None, // No preload for search queue
-                }
+                queue.peek_next()
             };
             let next_track_id = next_track.as_ref().map(|t| t.id as u64);
 
             // Trigger resolution for next track to start its download/init process
             if let Some(next) = next_track {
                 let streaming = self.streaming.clone();
+                let nx = next.clone();
+                let engine = self.audio_engine.clone();
                 tokio::spawn(async move {
-                    let _ = streaming.resolve(next.source, next.id as u64, None).await;
+                    match streaming
+                        .resolve(nx.source.clone(), nx.id.clone() as u64, None)
+                        .await
+                    {
+                        Ok(wrapper) => wrapper.preload(&engine, nx),
+                        Err(_) => {}
+                    }
                 });
             }
 
@@ -259,20 +292,7 @@ impl AppState {
                         return;
                     }
 
-                    match wrapper {
-                        StreamingSourceWrapper::Streaming(source) => {
-                            tracing::info!("STREAMING");
-                            self.audio_engine().play_source(track, Box::new(source));
-                        }
-                        StreamingSourceWrapper::Hls(hls) => {
-                            tracing::info!("HLS");
-                            self.audio_engine().play_hls(track, hls);
-                        }
-                        StreamingSourceWrapper::Local(source) => {
-                            tracing::info!("LOCAL");
-                            self.audio_engine().play_source(track, source);
-                        }
-                    }
+                    wrapper.play(self.audio_engine(), track);
                 }
                 Err(e) => {
                     tracing::warn!("Error resolving track source: {}", e);

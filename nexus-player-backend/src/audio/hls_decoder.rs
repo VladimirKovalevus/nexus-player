@@ -1,5 +1,6 @@
 use crate::audio::playback::HlsReaderAdapter;
 use crate::error::AudioError;
+use resampler::{ResamplerFir, SampleRate};
 use std::io::Cursor;
 use streaming::multi_downloader::source::HlsSource;
 use symphonia::core::audio::AudioBufferRef;
@@ -12,49 +13,24 @@ use symphonia::core::probe::Hint;
 use symphonia::core::units::Time;
 use tracing::{debug, info, warn};
 
-/// HLS Audio Decoder
-///
-/// This decoder handles HLS streams by creating a separate FormatReader
-/// for each segment, following the VLC architecture approach.
-/// FormatReaders are cached in a Vec to avoid recreating them when seeking back.
 pub struct HlsAudioDecoder {
-    /// HLS source providing access to segments
     source: HlsSource,
-
-    /// Cached FormatReaders for each segment (None if not yet created)
     format_readers: Vec<Option<Box<dyn FormatReader>>>,
-
-    /// Reader for continuous mode (e.g. OGG)
     continuous_reader: Option<Box<dyn FormatReader>>,
-
-    /// Current segment index being played
     current_segment_index: usize,
-
-    /// Audio decoder
     decoder: Box<dyn Decoder>,
-
-    /// Track ID
     track_id: u32,
-
-    /// Sample rate
     sample_rate: u32,
-
-    /// Number of channels
     channels: usize,
-
-    /// Timeline tracking (like VLC approach)
     accumulated_duration: f64,
     total_duration: f64,
-
     is_continuous: bool,
+    resampler: Option<ResamplerFir>,
+    output_sample_rate: u32,
 }
 
 impl HlsAudioDecoder {
-    /// Create HLS decoder from HlsSource
-    ///
-    /// # Arguments
-    /// * `source` - HlsSource providing access to segments
-    pub fn new(source: HlsSource) -> Result<Self, AudioError> {
+    pub fn new(source: HlsSource, output_sample_rate: u32) -> Result<Self, AudioError> {
         info!("Создание HLS декодера");
 
         let durations = source.durations();
@@ -62,10 +38,8 @@ impl HlsAudioDecoder {
         let total_duration: f64 = durations.iter().sum();
 
         let is_continuous = source.is_continuous();
-        // Enable contiguous seek restriction by default for OGG
 
         let (mut format_reader, track_id, sample_rate, channels) = if is_continuous {
-            // For continuous streams (OGG), wrap the whole HlsSource
             let adapter = HlsReaderAdapter::new(source.clone());
             let mss = MediaSourceStream::new(Box::new(adapter), Default::default());
             let hint = Hint::new();
@@ -103,7 +77,6 @@ impl HlsAudioDecoder {
 
             (format_reader, track_id, sample_rate, channels)
         } else {
-            // For segmented streams, probe first segment
             let (first_segment_data, _first_duration) = source.get_segment(0).ok_or_else(|| {
                 AudioError::DecodingError("No segments available in HlsSource".to_string())
             })?;
@@ -130,6 +103,18 @@ impl HlsAudioDecoder {
             (readers, None)
         };
 
+        let resampler = if sample_rate != output_sample_rate {
+            Some(ResamplerFir::new(
+                channels,
+                SampleRate::try_from(sample_rate).unwrap_or(SampleRate::Hz44100),
+                SampleRate::try_from(output_sample_rate).unwrap_or(SampleRate::Hz44100),
+                resampler::Latency::Sample64,
+                resampler::Attenuation::Db120,
+            ))
+        } else {
+            None
+        };
+
         info!(
             "HLS декодер создан (continuous={}): segments={}, sample_rate={}, channels={}, duration={:.2}s",
             is_continuous, segment_count, sample_rate, channels, total_duration
@@ -147,168 +132,190 @@ impl HlsAudioDecoder {
             accumulated_duration: 0.0,
             total_duration,
             is_continuous,
+            resampler,
+            output_sample_rate,
         })
     }
 
-    pub fn buffered_ranges(&self) -> Vec<(f64, f64)> {
-        self.source.get_buffered_ranges()
-    }
+    pub fn set_output_sample_rate(&mut self, output_sample_rate: u32) {
+        if self.output_sample_rate == output_sample_rate {
+            return;
+        }
 
-    pub fn waveforms(&self) -> Vec<crate::audio::types::Waveform> {
-        self.source
-            .get_waveforms()
-            .into_iter()
-            .map(|w| crate::audio::types::Waveform {
-                data: w.data,
-                start_time: w.start_time,
-                end_time: w.end_time,
-                byte_start: w.byte_start,
-                byte_end: w.byte_end,
-            })
-            .collect()
+        self.output_sample_rate = output_sample_rate;
+        self.resampler = if self.sample_rate != output_sample_rate {
+            Some(ResamplerFir::new(
+                self.channels,
+                SampleRate::try_from(self.sample_rate).unwrap_or(SampleRate::Hz44100),
+                SampleRate::try_from(output_sample_rate).unwrap_or(SampleRate::Hz44100),
+                resampler::Latency::Sample64,
+                resampler::Attenuation::Db120,
+            ))
+        } else {
+            None
+        };
     }
 
     pub fn decode_next_block(&mut self) -> Result<Option<Vec<f32>>, AudioError> {
-        if self.is_continuous {
-            loop {
-                let format_reader = self.continuous_reader.as_mut().unwrap();
+        let result = if self.is_continuous {
+            self.decode_continuous()
+        } else {
+            self.decode_segmented()
+        };
 
-                match format_reader.next_packet() {
-                    Ok(packet) => {
-                        if packet.track_id() == self.track_id {
-                            match self.decoder.decode(&packet) {
-                                Ok(decoded) => {
-                                    let samples = Self::convert_to_f32(decoded)?;
-                                    return Ok(Some(samples));
-                                }
-                                Err(Error::ResetRequired) => {
-                                    debug!(
-                                        "Decoder requires reset, resetting and skipping this packet."
-                                    );
-                                    self.decoder.reset();
-                                    return Ok(Some(vec![]));
-                                }
-                                Err(Error::IoError(e))
-                                    if e.kind() == std::io::ErrorKind::WouldBlock =>
-                                {
-                                    return Err(AudioError::InProgress);
-                                }
-                                Err(Error::DecodeError(e)) => {
-                                    warn!("Decode error (skipping): {}", e);
-                                    return Ok(Some(vec![]));
-                                }
-                                Err(e) => {
-                                    return Err(AudioError::DecodingError(format!(
-                                        "Decoder error: {}",
-                                        e
-                                    )));
-                                }
-                            }
-                        }
-                        continue;
-                    }
+        match result {
+            Ok(Some(samples)) => {
+                if let Some(ref mut resampler) = self.resampler {
+                    let ratio = self.output_sample_rate as f32 / self.sample_rate as f32;
+                    let out_capacity =
+                        ((samples.len() as f32 / self.channels as f32) * ratio).ceil() as usize
+                            * self.channels;
+                    let mut resampled = vec![0.0f32; out_capacity];
 
-                    Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                        return Ok(None);
-                    }
+                    let (_consumed, produced) = resampler
+                        .resample(&samples, &mut resampled)
+                        .map_err(|e| AudioError::DecodingError(format!("Resample error: {}", e)))?;
 
-                    Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        return Err(AudioError::InProgress);
-                    }
-
-                    Err(Error::ResetRequired) => {
-                        debug!("Format reader requires reset, resetting decoder...");
-                        self.decoder.reset();
-                        continue;
-                    }
-
-                    Err(e) => {
-                        return Err(AudioError::DecodingError(format!(
-                            "Failed to read packet: {}",
-                            e
-                        )));
-                    }
+                    resampled.truncate(produced);
+                    Ok(Some(resampled))
+                } else {
+                    Ok(Some(samples))
                 }
             }
-        } else {
-            loop {
-                // Pre-warm the next segment's FormatReader while still decoding the current one.
-                // This way, by the time we hit EOF, the reader is already built and the switch
-                // becomes nearly free (just an index update + decoder reset).
-                let prewarm_idx = self.current_segment_index + 1;
-                if prewarm_idx < self.format_readers.len()
-                    && self.format_readers[prewarm_idx].is_none()
-                {
-                    info!("WARMUP:{prewarm_idx}");
-                    let _ = self.get_or_create_format_reader(prewarm_idx);
-                }
+            res => res,
+        }
+    }
 
-                let format_reader = self.format_readers[self.current_segment_index]
-                    .as_mut()
-                    .ok_or_else(|| {
-                        AudioError::DecodingError(
-                            "Format reader not available for current segment".to_string(),
-                        )
-                    })?;
+    fn decode_continuous(&mut self) -> Result<Option<Vec<f32>>, AudioError> {
+        loop {
+            let format_reader = self.continuous_reader.as_mut().unwrap();
 
-                match format_reader.next_packet() {
-                    Ok(packet) => {
-                        if packet.track_id() == self.track_id {
-                            match self.decoder.decode(&packet) {
-                                Ok(decoded) => {
-                                    let samples = Self::convert_to_f32(decoded)?;
-                                    return Ok(Some(samples));
-                                }
-                                Err(Error::ResetRequired) => {
-                                    debug!(
-                                        "Decoder requires reset, resetting and skipping this packet."
-                                    );
-                                    self.decoder.reset();
-                                    return Ok(Some(vec![]));
-                                }
-                                Err(Error::IoError(e))
-                                    if e.kind() == std::io::ErrorKind::WouldBlock =>
-                                {
-                                    return Err(AudioError::InProgress);
-                                }
-                                Err(Error::DecodeError(e)) => {
-                                    warn!("Decode error (skipping): {}", e);
-                                    return Ok(Some(vec![]));
-                                }
-                                Err(e) => {
-                                    return Err(AudioError::DecodingError(format!(
-                                        "Decoder error: {}",
-                                        e
-                                    )));
-                                }
+            match format_reader.next_packet() {
+                Ok(packet) => {
+                    if packet.track_id() == self.track_id {
+                        match self.decoder.decode(&packet) {
+                            Ok(decoded) => {
+                                return Ok(Some(Self::convert_to_f32(decoded)?));
+                            }
+                            Err(Error::ResetRequired) => {
+                                debug!(
+                                    "Decoder requires reset, resetting and skipping this packet."
+                                );
+                                self.decoder.reset();
+                                return Ok(Some(vec![]));
+                            }
+                            Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                                return Err(AudioError::InProgress);
+                            }
+                            Err(Error::DecodeError(e)) => {
+                                warn!("Decode error (skipping): {}", e);
+                                return Ok(Some(vec![]));
+                            }
+                            Err(e) => {
+                                return Err(AudioError::DecodingError(format!(
+                                    "Decoder error: {}",
+                                    e
+                                )));
                             }
                         }
-                        continue;
                     }
+                    continue;
+                }
 
-                    Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                        if !self.switch_to_next_segment()? {
-                            return Ok(None);
+                Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    return Ok(None);
+                }
+
+                Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    return Err(AudioError::InProgress);
+                }
+
+                Err(Error::ResetRequired) => {
+                    debug!("Format reader requires reset, resetting decoder...");
+                    self.decoder.reset();
+                    continue;
+                }
+
+                Err(e) => {
+                    return Err(AudioError::DecodingError(format!(
+                        "Failed to read packet: {}",
+                        e
+                    )));
+                }
+            }
+        }
+    }
+
+    fn decode_segmented(&mut self) -> Result<Option<Vec<f32>>, AudioError> {
+        loop {
+            let prewarm_idx = self.current_segment_index + 1;
+            if prewarm_idx < self.format_readers.len() && self.format_readers[prewarm_idx].is_none()
+            {
+                let _ = self.get_or_create_format_reader(prewarm_idx);
+            }
+
+            let format_reader = self.format_readers[self.current_segment_index]
+                .as_mut()
+                .ok_or_else(|| {
+                    AudioError::DecodingError(
+                        "Format reader not available for current segment".to_string(),
+                    )
+                })?;
+
+            match format_reader.next_packet() {
+                Ok(packet) => {
+                    if packet.track_id() == self.track_id {
+                        match self.decoder.decode(&packet) {
+                            Ok(decoded) => {
+                                return Ok(Some(Self::convert_to_f32(decoded)?));
+                            }
+                            Err(Error::ResetRequired) => {
+                                debug!(
+                                    "Decoder requires reset, resetting and skipping this packet."
+                                );
+                                self.decoder.reset();
+                                return Ok(Some(vec![]));
+                            }
+                            Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                                return Err(AudioError::InProgress);
+                            }
+                            Err(Error::DecodeError(e)) => {
+                                warn!("Decode error (skipping): {}", e);
+                                return Ok(Some(vec![]));
+                            }
+                            Err(e) => {
+                                return Err(AudioError::DecodingError(format!(
+                                    "Decoder error: {}",
+                                    e
+                                )));
+                            }
                         }
-                        continue;
                     }
+                    continue;
+                }
 
-                    Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        return Err(AudioError::InProgress);
+                Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    if !self.switch_to_next_segment()? {
+                        return Ok(None);
                     }
+                    continue;
+                }
 
-                    Err(Error::ResetRequired) => {
-                        debug!("Format reader requires reset, resetting decoder...");
-                        self.decoder.reset();
-                        continue;
-                    }
+                Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    return Err(AudioError::InProgress);
+                }
 
-                    Err(e) => {
-                        return Err(AudioError::DecodingError(format!(
-                            "Failed to read packet: {}",
-                            e
-                        )));
-                    }
+                Err(Error::ResetRequired) => {
+                    debug!("Format reader requires reset, resetting decoder...");
+                    self.decoder.reset();
+                    continue;
+                }
+
+                Err(e) => {
+                    return Err(AudioError::DecodingError(format!(
+                        "Failed to read packet: {}",
+                        e
+                    )));
                 }
             }
         }
@@ -333,7 +340,6 @@ impl HlsAudioDecoder {
                 return Err(AudioError::OutsideOfBuffer);
             }
 
-            // Explicitly tell source to seek to this time to trigger download if needed
             self.source
                 .seek((time_secs * 1000.0) as u64)
                 .map_err(|e| AudioError::DecodingError(format!("HLS source seek failed: {}", e)))?;
@@ -350,7 +356,6 @@ impl HlsAudioDecoder {
                 )
                 .map_err(|e| AudioError::DecodingError(format!("Seek failed: {}", e)))?;
 
-            // self.decoder.reset();
             info!("HLS continuous seek completed to {:.2}s", time_secs);
             return Ok(seeked_to.actual_ts);
         }
@@ -361,7 +366,6 @@ impl HlsAudioDecoder {
 
         let durations = self.source.durations();
 
-        // Find which segment contains the target time
         let mut accumulated = 0.0;
         let mut target_segment = 0;
 
@@ -403,24 +407,50 @@ impl HlsAudioDecoder {
 
         self.decoder.reset();
 
+        // Recreate resampler to clear history
+        if self.sample_rate != self.output_sample_rate {
+            self.resampler = Some(ResamplerFir::new(
+                self.channels,
+                SampleRate::try_from(self.sample_rate).unwrap_or(SampleRate::Hz44100),
+                SampleRate::try_from(self.output_sample_rate).unwrap_or(SampleRate::Hz44100),
+                resampler::Latency::Sample64,
+                resampler::Attenuation::Db120,
+            ));
+        }
+
         info!("HLS seek completed to {:.2}s", time_secs);
         Ok((time_secs * 1000.0) as u64)
     }
+
     pub fn duration(&self) -> Option<f64> {
         Some(self.total_duration)
     }
 
-    /// Get sample rate
     pub fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
 
-    /// Get number of channels
     pub fn channels(&self) -> usize {
         self.channels
     }
 
-    // Private helper methods
+    pub fn buffered_ranges(&self) -> Vec<(f64, f64)> {
+        self.source.get_buffered_ranges()
+    }
+
+    pub fn waveforms(&self) -> Vec<crate::audio::types::Waveform> {
+        self.source
+            .get_waveforms()
+            .into_iter()
+            .map(|w| crate::audio::types::Waveform {
+                data: w.data,
+                start_time: w.start_time,
+                end_time: w.end_time,
+                byte_start: w.byte_start,
+                byte_end: w.byte_end,
+            })
+            .collect()
+    }
 
     fn create_format_reader_for_segment(
         segment_data: Vec<u8>,
@@ -429,7 +459,6 @@ impl HlsAudioDecoder {
         let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
 
         let mut hint = Hint::new();
-        // Don't hardcode extension, let Symphonia sniff from data
 
         let format_opts = FormatOptions::default();
         let metadata_opts = MetadataOptions::default();
@@ -466,12 +495,8 @@ impl HlsAudioDecoder {
             return Ok(false);
         }
 
-        // Пытаемся подготовить следующий сегмент.
-        // Если он не готов, вернется AudioError::InProgress, и мы останемся на текущем индексе (который EOF).
-        // Это заставит движок подождать и вызвать decode_next_block снова.
         self.get_or_create_format_reader(next_index)?;
 
-        // Только если ридер успешно создан, обновляем состояние
         let durations = self.source.durations();
         let current_duration = durations
             .get(self.current_segment_index)
@@ -482,12 +507,9 @@ impl HlsAudioDecoder {
         self.current_segment_index = next_index;
 
         info!("Переключение на сегмент {}", self.current_segment_index);
-        // self.decoder.reset();
 
-        // Pre-warm the segment after next so the following switch is also free.
         let prewarm_idx = next_index + 1;
         if prewarm_idx < self.format_readers.len() {
-            info!("WARMUP RECREATE:{prewarm_idx}");
             let _ = self.get_or_create_format_reader(prewarm_idx);
         }
 
@@ -502,7 +524,7 @@ impl HlsAudioDecoder {
         let (segment_data, _duration) = self
             .source
             .get_segment(segment_index)
-            .ok_or(AudioError::InProgress)?; // Возвращаем InProgress вместо ошибки, если данных еще нет
+            .ok_or(AudioError::InProgress)?;
 
         let (format_reader, _, _, _) = Self::create_format_reader_for_segment(segment_data)?;
         self.format_readers[segment_index] = Some(format_reader);

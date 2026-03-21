@@ -52,11 +52,35 @@
   // MediaCard Colors (Current default)
   --media-card-bg: var(--color-bg-primary);
   --media-card-color: var(--color-text-primary);
-  --media-card-hover-bg: var(--color-text-primary);
+  --media-card-hover-bg: var(--color-bg-hover);
   --media-card-hover-color: var(--color-bg-primary);
   --media-card-active-bg: var(--color-bg-secondary);
   --media-card-active-color: var(--color-bg-hover);
   --media-card-current-playing: #888;
+
+  --ellipsis-v-align: center;
+  --ellipsis-offset-bottom: 4px;
+  --player-time-color: white;
+  --playback-queue-pulse: rgba(76, 175, 80, 0.1);
+  --waveform-bg: #000000;
+  --waveform-played: #ffffff;
+  --waveform-buffered: #888888;
+  --media-card-action-hover-bg: var(--color-bg-primary);
+  --media-card-action-hover-color: var(--color-text-primary);
+
+  --search-input-bg: var(--color-bg-secondary);
+  --search-input-color: var(--color-text-primary);
+  --search-input-placeholder: var(--color-text-muted);
+
+  --modal-bg: var(--color-bg-secondary);
+  --modal-border: var(--color-bg-primary);
+  --modal-header-border: var(--color-border);
+  --modal-label-color: var(--color-text-primary);
+  --modal-input-bg: var(--color-bg-primary);
+  --modal-input-border: var(--color-border);
+  --modal-card-bg: var(--color-bg-primary);
+  --modal-hint-color: var(--color-text-muted);
+  --modal-section-title-color: var(--color-text-primary);
 }
 
 // Light theme
@@ -82,4 +106,26 @@
   --media-card-hover-color: var(--color-bg-primary);
   --media-card-active-bg: var(--color-bg-secondary);
   --media-card-active-color: var(--color-bg-hover);
+
+  --ellipsis-v-align: center;
+  --ellipsis-offset-bottom: 4px;
+  --player-time-color: white;
+  --playback-queue-pulse: rgba(76, 175, 80, 0.1);
+  --waveform-bg: #d1d1d1;
+  --waveform-played: #45375a;
+  --waveform-buffered: #9b8fa5;
+
+  --search-input-bg: var(--color-bg-secondary);
+  --search-input-color: var(--color-text-primary);
+  --search-input-placeholder: var(--color-text-muted);
+
+  --modal-bg: var(--color-bg-secondary);
+  --modal-border: var(--color-bg-primary);
+  --modal-header-border: var(--color-border);
+  --modal-label-color: var(--color-text-primary);
+  --modal-input-bg: var(--color-bg-primary);
+  --modal-input-border: var(--color-border);
+  --modal-card-bg: var(--color-bg-primary);
+  --modal-hint-color: var(--color-text-muted);
+  --modal-section-title-color: var(--color-text-primary);
 }

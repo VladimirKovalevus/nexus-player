@@ -52,7 +52,7 @@
               <label>Тема оформления</label>
               <div :class="$style.themeGrid">
                 <button 
-                  v-for="t in ['dark', 'light', 'retro', 'cyberpunk']" 
+                  v-for="t in ['dark', 'retro', 'cyberpunk']" 
                   :key="t"
                   :class="[$style.themeButton, themeStore.activeTheme === t && $style.active]"
                   @click="themeStore.setTheme(t)"
@@ -303,7 +303,7 @@ watch(
 }
 
 .modal {
-  background-color: var(--color-bg-secondary);
+  background-color: var(--modal-bg);
   width: 600px;
   max-width: 90%;
   max-height: 90vh;
@@ -312,12 +312,12 @@ watch(
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--color-bg-primary);
+  border: 1px solid var(--modal-border);
 }
 
 .header {
   padding: $spacing-lg;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--modal-header-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -355,8 +355,8 @@ watch(
 .sectionTitle {
   font-size: $font-size-lg;
   margin-bottom: $spacing-md;
-  color: var(--color-accent-primary);
-  border-bottom: 1px solid var(--color-border);
+  color: var(--modal-section-title-color);
+  border-bottom: 1px solid var(--modal-header-border);
   padding-bottom: $spacing-xs;
 }
 
@@ -368,7 +368,7 @@ watch(
 
   label {
     font-size: $font-size-sm;
-    color: var(--color-bg-primary);
+    color: var(--modal-label-color);
   }
 
   input[type="number"],
@@ -376,9 +376,9 @@ watch(
   input[type="password"] {
     padding: $spacing-sm;
     border-radius: $radius-sm;
-    border: 1px solid var(--color-border);
-    background-color: var(--color-bg-primary);
-    color: var(--color-text-primary);
+    border: 1px solid var(--modal-input-border);
+    background-color: var(--modal-input-bg);
+    color: var(--modal-input-color, var(--color-text-primary));
     font-family: inherit;
 
     &:focus {
@@ -391,7 +391,7 @@ watch(
 .provider {
   margin-bottom: $spacing-md;
   padding: $spacing-md;
-  background-color: var(--color-bg-primary);
+  background-color: var(--modal-card-bg);
   border-radius: $radius-md;
 }
 
@@ -441,7 +441,7 @@ watch(
   font-size: $font-size-sm;
   font-weight: $font-weight-bold;
   margin-bottom: $spacing-xs;
-  color:var(--color-bg-primary);
+  color: var(--modal-hint-color);
 }
 
 .instructions {
@@ -543,9 +543,9 @@ watch(
 
 .themeButton {
   padding: $spacing-md;
-  background-color: var(--color-bg-primary);
+  background-color: var(--modal-card-bg);
   font-size: $font-size-xs;
-  border: 2px solid var(--color-border);
+  border: 2px solid var(--modal-input-border);
   border-radius: $radius-md;
   color: var(--color-text-primary);
   cursor: pointer;
@@ -555,12 +555,14 @@ watch(
   &:hover {
     border-color: var(--color-accent-primary);
     background-color: var(--color-bg-hover);
+    color: var(--color-text-primary);
   }
 
   &.active {
     border-color: var(--color-accent-primary);
     background-color: var(--color-bg-hover);
     box-shadow: 0 0 0 1px var(--color-accent-primary);
+    color: var(--color-text-primary);
   }
 }
 

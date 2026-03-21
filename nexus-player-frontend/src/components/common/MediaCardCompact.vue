@@ -1,6 +1,6 @@
 <template>
   <div
-    :class="[$style.mediaCardCompact, $style[`type-${type}`]]"
+    :class="[$style.mediaCardCompact, $style[`type-${type}`], { [$style.active]: props.active }]"
     @click="handleClick"
   >
     <div :class="$style.thumbnail">
@@ -219,14 +219,15 @@ const handlePlay = () => {
   flex-direction: column;
   gap: $spacing-sm;
   cursor: pointer;
-  transition: background-color $transition-fast, transform $transition-fast;
+  transition: all $transition-fast;
   border-radius: $radius-md;
   padding: $spacing-sm;
-  background-color: transparent;
+  background-color: var(--media-card-bg, transparent);
+  color: var(--media-card-color, inherit);
 
   &:hover {
-    background-color: var(--color-accent-primary);
-    color: var(--color-accent-hover);
+    background-color: var(--media-card-hover-bg);
+    color: var(--media-card-hover-color);
     transform: translateY(-4px);
 
     .playOverlay {
@@ -235,6 +236,10 @@ const handlePlay = () => {
 
     .thumbnail {
       box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    .title, .artist {
+      color: var(--media-card-hover-color);
     }
   }
 
@@ -288,8 +293,11 @@ const handlePlay = () => {
 .playButton {
   width: 48px;
   height: 48px;
+  padding: 0px !important;
   border-radius: 50%;
-  background-color: var(--color-accent-primary);
+  background-color: transparent !important;
+  position: relative;
+  isolation: isolate;
   color: white;
   border: none;
   @include flex-center;
@@ -298,9 +306,24 @@ const handlePlay = () => {
   transition: all $transition-fast;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: var(--color-accent-primary);
+    border-radius: 50%;
+    z-index: -1;
+    transition: all $transition-fast;
+  }
+
   &:hover {
-    background-color: var(--color-accent-hover);
     transform: scale(1.15);
+    &::before {
+      background-color: var(--media-card-hover-color);
+    }
+    img {
+      filter: none;
+    }
   }
 }
 
@@ -324,6 +347,7 @@ const handlePlay = () => {
   position: absolute;
   top: $spacing-sm;
   left: $spacing-sm;
+  padding: 0 !important;
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -331,14 +355,18 @@ const handlePlay = () => {
   color: white;
   border: none;
   @include flex-center;
+  align-items: var(--ellipsis-v-align, center) !important;
   font-size: $font-size-lg;
+  line-height: 1 !important;
+  padding-bottom: var(--ellipsis-offset-bottom) !important;
   cursor: pointer;
   opacity: 0;
-  transition: opacity $transition-fast, background-color $transition-fast;
+  transition: opacity $transition-fast, background-color $transition-fast, color $transition-fast;
   backdrop-filter: blur(4px);
 
   &:hover {
-    background-color: rgba(0, 0, 0, 0.9);
+    background-color: var(--media-card-action-hover-bg, rgba(0, 0, 0, 0.9));
+    color: var(--media-card-action-hover-color, white);
   }
 }
 
