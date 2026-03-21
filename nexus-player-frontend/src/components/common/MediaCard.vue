@@ -20,9 +20,13 @@
     </div>
 
     <div :class="$style.info">
-      <div :class="[props.active ? $style['title-active'] : $style.title]" :title="entity.title">{{ entity.title }}</div>
+      <div :class="[props.active ? $style['title-active'] : $style.title]" :title="entity.title">
+        <MarqueeText :active="props.active">{{ entity.title }}</MarqueeText>
+      </div>
       <div :class="$style.meta">
-        <span :class="$style.artist">{{ entity.artist }}</span>
+        <div :class="$style.artist">
+          <MarqueeText :active="props.active">{{ entity.artist }}</MarqueeText>
+        </div>
 
         <template v-if="type === 'track' && entity.duration !== undefined">
           <span :class="$style.separator">•</span>
@@ -107,6 +111,7 @@ import { computed, ref, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { TrackDto, PlaylistDto, ContainerMetaDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
+import MarqueeText from './MarqueeText.vue';
 const store = useAudioStore()
 
 interface Props {
@@ -704,10 +709,14 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
   gap: $spacing-xs;
   font-size: $font-size-sm;
   @include text-ellipsis;
+  min-width: 0;
 }
 
 .artist {
   @include text-ellipsis;
+  display: block;
+  flex: 1;
+  min-width: 0;
   .active & {
     color: var(--media-card-active-color);
   }
@@ -715,12 +724,14 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
 
 .separator {
   color: var(--color-text-muted);
+  flex-shrink: 0;
 }
 
 .duration,
 .trackCount,
 .year {
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .actions {

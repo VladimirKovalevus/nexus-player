@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import MediaCard from './common/MediaCard.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import VirtualList from './common/VirtualList.vue';
+import MarqueeText from './common/MarqueeText.vue';
 import { useAudioStore } from '../stores/audio';
 import type { QueueEntryDto } from '@/types/types';
 
@@ -387,8 +388,16 @@ defineExpose({ fetchQueue });
               >
                 <span :class="$style.trackNumber">{{ trackIdx + 1 }}</span>
                 <div :class="$style.trackInfo">
-                  <div :class="$style.trackTitle">{{ track.title }}</div>
-                  <div :class="$style.trackArtist">{{ track.artist }}</div>
+                  <div :class="$style.trackTitle">
+                    <MarqueeText :active="item.isCurrentItem && audioStore.currentPosition?.trackWithinContainer === trackIdx">
+                      {{ track.title }}
+                    </MarqueeText>
+                  </div>
+                  <div :class="$style.trackArtist">
+                    <MarqueeText :active="item.isCurrentItem && audioStore.currentPosition?.trackWithinContainer === trackIdx">
+                      {{ track.artist }}
+                    </MarqueeText>
+                  </div>
                 </div>
               </div>
             </div>
@@ -680,14 +689,13 @@ defineExpose({ fetchQueue });
 .trackTitle {
   color: var(--color-text-primary);
   font-size: $font-size-sm;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  @include text-ellipsis;
 }
 
 .trackArtist {
   color: var(--color-text-secondary);
   font-size: $font-size-xs;
+  @include text-ellipsis;
 }
 
 .containerLoading {

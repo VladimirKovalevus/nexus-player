@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useAudioStore } from '../stores/audio';
 import WaveformBar from './common/WaveformBar.vue';
+import MarqueeText from './common/MarqueeText.vue';
 
 const audioStore = useAudioStore();
 const localVolume = ref(audioStore.volume);
@@ -209,13 +210,13 @@ onUnmounted(() => {
         <div v-if="audioStore.currentTrack?.artworkUrl" class="track-art">
             <img height="64" width="64" :src="audioStore.currentTrack?.artworkUrl" style="filter:none !important;">
         </div>
-        <div style="display:flex; flex-direction: column;">
+        <div style="display:flex; flex-direction: column; min-width: 0; flex: 1;">
         <div v-if="audioStore.currentTrack" class="current-track">
-          {{ audioStore.currentTrack.title }}
+          <MarqueeText active>{{ audioStore.currentTrack.title }}</MarqueeText>
         </div>
         <div v-else class="no-track">No track playing</div>
         <div v-if="audioStore.currentTrack" class="track-artist">
-          {{ audioStore.currentTrack.artist || 'Unknown Artist' }}
+          <MarqueeText active>{{ audioStore.currentTrack.artist || 'Unknown Artist' }}</MarqueeText>
         </div>
         </div>
       </div>
@@ -316,6 +317,9 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="scss">
+@import '@/styles/variables.scss';
+@import '@/styles/mixins.scss';
+
 .player-control {
   width: 100%;
   height: 100px;
@@ -352,9 +356,7 @@ onUnmounted(() => {
   font-weight: var(--font-weight-bold);
   font-size: var(--font-size-lg);
   color: var(--color-accent-hover);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  @include text-ellipsis;
 }
 
 .track-art {
@@ -365,9 +367,7 @@ filter:none !important;
   font-weight: var(--font-weight-bold);
   font-size: var(--font-size-lg);
   color: var(--color-accent-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  @include text-ellipsis;
 }
 
 .no-track {

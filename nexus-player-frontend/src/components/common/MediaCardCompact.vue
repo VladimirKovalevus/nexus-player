@@ -67,8 +67,12 @@
     </Teleport>
 
     <div :class="$style.info">
-      <div :class="$style.title" :title="title">{{ title }}</div>
-      <div :class="$style.artist" :title="artist">{{ artist }}</div>
+      <div :class="$style.title" :title="title">
+        <MarqueeText :active="props.active">{{ title }}</MarqueeText>
+      </div>
+      <div :class="$style.artist" :title="artist">
+        <MarqueeText :active="props.active">{{ artist }}</MarqueeText>
+      </div>
     </div>
   </div>
 </template>
@@ -76,6 +80,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import MarqueeText from './MarqueeText.vue';
 
 interface Props {
   type: 'track' | 'playlist' | 'album';

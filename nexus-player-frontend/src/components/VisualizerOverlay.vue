@@ -24,6 +24,12 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const localVolume = ref(audioStore.volume);
 const butterchurnError = ref<string | null>(null);
 
+// Preset selector state
+const showPresetList = ref(false);
+const isRandomMode = ref(true);
+const selectedPresetName = ref('Random');
+const presetList = ref<string[]>([]);
+
 // Butterchurn state
 let visualizer: any = null;
 let animationFrameId: number | null = null;
@@ -77,9 +83,41 @@ const loadRandomPreset = () => {
   if (!visualizer) return;
   const presets = butterchurnPresets.getPresets();
   const presetNames = Object.keys(presets);
-  const randomPreset = presets[presetNames[Math.floor(Math.random() * presetNames.length)]];
+  const name = presetNames[Math.floor(Math.random() * presetNames.length)];
+  const randomPreset = presets[name];
   visualizer.loadPreset(randomPreset, 2.7);
-  console.log('[Butterchurn] New preset loaded');
+  
+  // Update the name even if in random mode so user sees what's playing
+  selectedPresetName.value = name;
+  
+  console.log('[Butterchurn] New random preset loaded:', name);
+};
+
+const selectPreset = (name: string) => {
+  if (!visualizer) return;
+  
+  if (name === 'Random') {
+    isRandomMode.value = true;
+    selectedPresetName.value = 'Random';
+    loadRandomPreset();
+    if (!presetInterval) {
+      presetInterval = window.setInterval(loadRandomPreset, 30000);
+    }
+  } else {
+    isRandomMode.value = false;
+    selectedPresetName.value = name;
+    const presets = butterchurnPresets.getPresets();
+    visualizer.loadPreset(presets[name], 2.7);
+    if (presetInterval) {
+      clearInterval(presetInterval);
+      presetInterval = null;
+    }
+  }
+  showPresetList.value = false;
+};
+
+const togglePresetList = () => {
+  showPresetList.value = !showPresetList.value;
 };
 
 const destroyVisualizer = () => {
@@ -134,8 +172,16 @@ const initButterchurn = () => {
 
     console.log('[Butterchurn] Initialization successful. GL Version:', visualizer.gl.getParameter(visualizer.gl.VERSION));
 
-    loadRandomPreset();
-    presetInterval = window.setInterval(loadRandomPreset, 30000);
+    // Get preset list
+    const presets = butterchurnPresets.getPresets();
+    presetList.value = ['Random', ...Object.keys(presets)];
+
+    if (isRandomMode.value) {
+      loadRandomPreset();
+      presetInterval = window.setInterval(loadRandomPreset, 30000);
+    } else {
+      selectPreset(selectedPresetName.value);
+    }
 
     // Set initial canvas size and observe container for future resizes
     resizeCanvas(width, height);
@@ -271,10 +317,22 @@ watch(() => props.isOpen, async (val) => {
   }
 });
 
+const handleDocumentClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement;
+  if (!target.closest('.preset-selector')) {
+    showPresetList.value = false;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick);
+});
+
 onUnmounted(() => {
   destroyVisualizer();
   resizeObserver?.disconnect();
   if (onWindowResize) window.removeEventListener('resize', onWindowResize);
+  document.removeEventListener('click', handleDocumentClick);
 });
 
 watch(() => audioStore.volume, (newVol) => {
@@ -297,11 +355,38 @@ emit("close");
 <template>
   <Transition name="overlay-slide">
     <div v-if="isOpen" class="player-overlay" :class="{ 'is-fullscreen': isFullscreen }">
-      <button class="fullscreen-btn" @click="toggleFullscreen" title="Полноэкранный режим">
-        <span v-if="isFullscreen">⛶</span>
-        <span v-else>❐</span>
-      </button>
-      <button class="close-btn" @click="handleClose">↓</button>
+      <div class="top-controls">
+        <button class="fullscreen-btn" @click="toggleFullscreen" title="Полноэкранный режим">
+          <span v-if="isFullscreen">⛶</span>
+          <span v-else>❐</span>
+        </button>
+
+        <div v-if="isCanvasActive" class="visualizer-tools">
+          <button class="tool-btn" @click="isCanvasActive = false" title="Вернуться к обложке">
+            🖼️
+          </button>
+          
+          <div class="preset-selector">
+            <button class="tool-btn preset-btn" @click="togglePresetList" :title="selectedPresetName">
+              🎨 {{ isRandomMode ? `Random (${selectedPresetName})` : selectedPresetName }}
+            </button>
+            
+            <div v-if="showPresetList" class="preset-dropdown">
+              <div 
+                v-for="name in presetList" 
+                :key="name"
+                class="preset-item"
+                :class="{ active: selectedPresetName === name }"
+                @click="selectPreset(name)"
+              >
+                {{ name }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="close-btn" @click="handleClose">↓</button>
+      </div>
       
       <div class="main-content">
         <div class="visualizer-container" @click="handleCanvasClick">
@@ -414,6 +499,98 @@ emit("close");
 .fullscreen-btn {
   left: $spacing-lg;
   font-size: 1.2rem;
+}
+
+.top-controls {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  z-index: 100;
+  pointer-events: none;
+
+  & > * {
+    pointer-events: auto;
+  }
+}
+
+.visualizer-tools {
+  position: absolute;
+  top: $spacing-md;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: $spacing-sm;
+}
+
+.tool-btn {
+  background: rgba(0, 0, 0, 0.45);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  border-radius: $radius-md;
+  height: 36px;
+  padding: 0 $spacing-md;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(6px);
+  opacity: 0.75;
+  transition: all 0.2s;
+  font-size: $font-size-sm;
+
+  &:hover { opacity: 1; background: rgba(0, 0, 0, 0.6); }
+}
+
+.preset-selector {
+  position: relative;
+}
+
+.preset-btn {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preset-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: $spacing-xs;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: $radius-md;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  max-height: 300px;
+  overflow-y: auto;
+  width: 250px;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+}
+
+.preset-item {
+  padding: $spacing-sm $spacing-md;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: $font-size-xs;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+
+  &.active {
+    background: var(--color-accent-primary);
+    color: #fff;
+  }
 }
 
 .main-content {
