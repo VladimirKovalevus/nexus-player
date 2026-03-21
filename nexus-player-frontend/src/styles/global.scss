@@ -8,8 +8,13 @@
 @font-face {
   font-family: 'Pixelzone';
   src: url('../assets/fonts/Pixelzone.ttf') format('truetype');
-  font-weight: normal;
+  font-weight: 600;
   font-style: normal;
+  // Масштабируем сам шрифт, не трогая font-size в коде
+  size-adjust: 200%; 
+  // Поджимаем вертикальные отступы самого шрифта, чтобы уменьшить межстрочный интервал
+  ascent-override: 80%;
+  descent-override: 20%;
 }
 
 // CSS Reset и базовые стили

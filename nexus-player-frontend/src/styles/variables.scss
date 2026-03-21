@@ -29,20 +29,20 @@ $light-border: #c4bfb3;            // Границы
 $light-border-light: #d4cfc4;      // Светлые границы
 
 // Accent Colors Constants
-$color-accent-primary-const: #667eea;    // Акцентный цвет
-$color-accent-hover-const: #5568d3;      // Hover акцента
+$color-accent-primary-const: #000;    // Акцентный цвет
+$color-accent-hover-const: #fff;      // Hover акцента
 $color-accent-purple-const: #764ba2;     // Фиолетовый акцент
 
 // Typography Constants
 $font-family-primary-const: 'Pixelzone', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-$font-size-xs-const: 1.5rem;      // 24px
-$font-size-sm-const: 1.75rem;     // 28px
-$font-size-base-const: 2rem;       // 32px
-$font-size-lg-const: 2.25rem;     // 36px
-$font-size-xl-const: 2.5rem;      // 40px
-$font-size-2xl-const: 3rem;      // 48px
-$font-size-3xl-const: 3.5rem;      // 56px
+$font-size-xs-const: 0.8rem;
+$font-size-sm-const: 0.9rem;
+$font-size-base-const: 1rem;
+$font-size-lg-const: 1.1rem;
+$font-size-xl-const: 1.3rem;
+$font-size-2xl-const: 1.6rem;
+$font-size-3xl-const: 2rem;
 
 // Radius Constants
 $radius-sm-const: 4px;
@@ -66,6 +66,9 @@ $color-bg-secondary: var(--color-bg-secondary);
 $color-bg-sidebar: var(--color-bg-sidebar);
 $color-bg-player: var(--color-bg-player);
 $color-bg-hover: var(--color-bg-hover);
+
+$color-media-card: var(--color-accent-primary);
+$color-media-card-active: var(--color-accent-primary);
 
 $color-text-primary: var(--color-text-primary);
 $color-text-secondary: var(--color-text-secondary);

@@ -281,7 +281,7 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
 
 <template>
   <div :class="$style.streamingSearch">
-    <h2 :class="$style.title">Streaming Search</h2>
+    <h2 :class="$style.title">Поиск</h2>
 
     <div :class="$style.searchControls">
       <div :class="$style.searchInputGroup">
@@ -431,8 +431,8 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
   flex: 1;
   padding: $spacing-md $spacing-lg;
   font-size: $font-size-lg;
-  background-color: var(--color-bg-secondary);
-  color: var(--color-text-primary);
+  background-color: var(--color-bg-secondary) ;
+  color: var(--color-accent-hover) !important;
   border: 2px solid var(--color-border);
   border-radius: $radius-md;
   outline: none;
@@ -443,7 +443,7 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
   }
 
   &::placeholder {
-    color: var(--color-text-muted);
+  color: var(--color-accent-hover) !important;
   }
 }
 
@@ -477,8 +477,8 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
 
 .filterGroup {
   display: flex;
-  align-items: center;
-  gap: $spacing-sm;
+  align-items: start;
+  flex-direction: column;
 
   label {
     font-weight: $font-weight-medium;
@@ -489,8 +489,11 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
 
 .providerSelect {
   padding: $spacing-sm $spacing-md;
-  background-color: var(--color-bg-secondary);
-  color: var(--color-text-primary);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: var(--color-bg-secondary) !important;
+  color: var(--color-accent-hover)  !important;
   border: 2px solid var(--color-border);
   border-radius: $radius-sm;
   font-size: $font-size-sm;
@@ -503,8 +506,8 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
   }
 
   option {
-    background-color: var(--color-bg-secondary);
-    color: var(--color-text-primary);
+    background-color: var(--color-accent-primary);
+    // color: #000000;
   }
 }
 

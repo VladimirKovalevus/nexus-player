@@ -57,7 +57,7 @@
         <div v-if="props.track?.liked" :class="$style.heartFilled"></div>
         <div v-else :class="$style.heartOutline"></div>
       </button>
-      <button v-if="showAction && type !== 'playlist'" ref="actionButtonRef" :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
+      <button v-if="showAction " ref="actionButtonRef" :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
       <button v-if="props.containerMode" :class="$style.expandBtn" @click.stop="emit('toggleExpand')">
         {{ props.isExpanded ? '▲' : '▼' }}
       </button>
@@ -534,31 +534,35 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
   display: flex;
   gap: $spacing-md;
   padding:  $spacing-md;
-  background-color: var(--color-bg-primary);
-  color: var(--color-bg-secondary);
+  background-color: var(--media-card-bg);
+  color: var(--media-card-color);
   transition: all $transition-fast;
   position: relative;
 
   &:hover {
-
-    background-color: var(--color-accent-primary);
-    color: var(--color-accent-hover);
+    background-color: var(--media-card-hover-bg);
+    color: var(--media-card-hover-color);
 
     .playOverlay {
       opacity: 1;
     }
+
+    .title, .title-active, .artist, .duration, .trackCount, .year, .separator {
+      // color: var(--media-card-hover-color);
+      color: var(--media-card-hover-color);
     }
+  }
 
   &.dropdownActive {
     z-index: 1000;
   }
 
   &.active {
-    background-color: var(--color-bg-secondary);
-    color: var(--color-bg-primary);
+    background-color: var(--media-card-active-bg);
+    color: var(--media-card-active-color);
 
     .title {
-      color: var(--color-bg-primary);
+      color: var(--media-card-active-color);
     }
   }
 }
@@ -622,10 +626,13 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
 }
 
 .playButton {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
+  padding: 0 !important;
   border-radius: 50%;
-  background-color: var(--color-accent-primary);
+  background-color: transparent !important;
+  position: relative;
+  isolation: isolate;
   color: white;
   border: none;
   @include flex-center;
@@ -633,9 +640,25 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
   cursor: pointer;
   transition: all $transition-fast;
 
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: var(--color-accent-primary);
+    border-radius: 50%;
+    z-index: -1;
+    transition: all $transition-fast;
+  }
+
   &:hover {
-    background-color: var(--color-accent-hover);
     transform: scale(1.1);
+    &::before {
+      background-color: var(--media-card-hover-color);
+    }
+    img {
+      // Иконка остается прежней, но на новом фоне она будет контрастна
+      filter: none; 
+    }
   }
 
   &:disabled {
@@ -686,7 +709,7 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
 .artist {
   @include text-ellipsis;
   .active & {
-    color: var(--color-bg-primary);
+    color: var(--media-card-active-color);
   }
 }
 
@@ -701,14 +724,16 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
 }
 
 .actions {
+  gap:8px;
   display: flex;
   align-items: center;
   position: relative;
 }
 
 .actionButton {
-  width: 32px;
-  height: 32px;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
   border-radius: 50%;
   background: transparent;
   border: none;
@@ -727,6 +752,7 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
 .likeButton {
   width: 32px;
   height: 32px;
+  padding:0 !important;
   border-radius: 50%;
   background: transparent;
   border: none;

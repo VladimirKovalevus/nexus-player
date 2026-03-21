@@ -48,6 +48,15 @@
   --transition-fast: #{$transition-fast-const};
   --transition-base: #{$transition-base-const};
   --transition-slow: #{$transition-slow-const};
+
+  // MediaCard Colors (Current default)
+  --media-card-bg: var(--color-bg-primary);
+  --media-card-color: var(--color-text-primary);
+  --media-card-hover-bg: var(--color-text-primary);
+  --media-card-hover-color: var(--color-bg-primary);
+  --media-card-active-bg: var(--color-bg-secondary);
+  --media-card-active-color: var(--color-bg-hover);
+  --media-card-current-playing: #888;
 }
 
 // Light theme
@@ -65,4 +74,12 @@
 
   --color-border: #{$light-border};
   --color-border-light: #{$light-border-light};
+
+  // MediaCard Colors (Default-like for light theme)
+  --media-card-bg: var(--color-bg-primary);
+  --media-card-color: var(--color-text-primary);
+  --media-card-hover-bg: var(--color-text-primary);
+  --media-card-hover-color: var(--color-bg-primary);
+  --media-card-active-bg: var(--color-bg-secondary);
+  --media-card-active-color: var(--color-bg-hover);
 }

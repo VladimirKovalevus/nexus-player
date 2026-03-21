@@ -12,7 +12,7 @@ html[data-theme='cyberpunk'] {
   --color-text-secondary: #333333;
   --color-text-muted: #666666;
 
-  --color-border: #000000;
+  --color-border: #ff003c;
   --color-border-light: #333333;
 
   --color-accent-primary: #ff003c;
@@ -32,6 +32,14 @@ html[data-theme='cyberpunk'] {
   --radius-lg: 0px;
   --radius-xl: 0px;
 
+  --media-card-bg: var(--color-bg-primary);
+  --media-card-color: var(--color-bg-secondary);
+  --media-card-hover-bg: var(--color-accent-primary);
+  --media-card-hover-color: var(--color-accent-hover);
+  --media-card-active-bg: var(--color-bg-secondary);
+  --media-card-active-color: var(--color-bg-primary);
+  --media-card-current-playing: var(--color-bg-secondary);
+
   --shadow-md: none;
   --shadow-lg: none;
 
@@ -45,7 +53,7 @@ html[data-theme='cyberpunk'] {
     font-family: 'Oxanium' !important;
     font-weight: bold !important;
     text-transform: uppercase;
-    padding: 10px 20px !important;
+    padding: 10px 20px ;
     border: none !important;
     clip-path: polygon(0 0, 100% 0, 100% 70%, 85% 100%, 0 100%);
     transition: all 0.2s;
@@ -80,8 +88,7 @@ html[data-theme='cyberpunk'] {
     }
   }
 
-  div[class*="taskCard"], 
-  div[class*="MediaCard"] {
+  div[class*="taskCard"] {
     background-color: #000 !important;
     color: #f8ef02 !important;
     border: 2px solid #00ffd2 !important;
@@ -103,7 +110,7 @@ html[data-theme='cyberpunk'] {
 
   aside, [class*="sidebar"] {
     background-color: #000 !important;
-    border-right: 4px solid #ff003c !important;
+    border-right: 4px solid #ff003c ;
     color: #f8ef02 !important;
     
     // Target specific nav items that are active
