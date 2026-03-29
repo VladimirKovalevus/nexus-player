@@ -43,26 +43,24 @@ impl BandcampProvider {
 
     fn convert_track_to_track_info(
         track: bandcamp::AlbumTrack,
-        album_url: &str,
+        _album_url: &str,
     ) -> Option<TrackInfo> {
+        if !track.is_streamable {
+            return None;
+        }
+
         let duration = track
             .duration
             .map(|secs| std::time::Duration::from_secs_f32(secs));
 
-        let urls = track
-            .streaming_url
-            .into_iter()
-            .take(1)
-            .collect::<Vec<(String, String)>>();
+        // Store "band_id:track_id" so resolve() can re-fetch fresh streaming URLs
+        // via the Bandcamp mobile API directly, bypassing Cloudflare-protected stream_redirect.
+        let id = format!("{}:{}", track.band_id, track.id);
 
-        if urls.is_empty() {
-            return None;
-        };
-        let track_url = &urls[0].1;
         Some(TrackInfo {
             source: TrackSource::External {
                 system: "bandcamp".to_string(),
-                id: track_url.clone(),
+                id,
             },
             title: track.title,
             artist: track.band_name,
@@ -89,12 +87,82 @@ impl StreamProvider for BandcampProvider {
             TrackSource::External { id, .. } => id.clone(),
             _ => return Err(StreamError::NotSupported),
         };
-        if url.contains("stream_redirect") {
+        // New format: "band_id:track_id" — fetch track page URL via mobile API, then pass it
+        // to detect_stream_type which will extract a direct CDN URL from the page HTML.
+        // This avoids bandcamp.com/stream_redirect which is blocked by Cloudflare JS challenge.
+        if let Some((band_id_str, track_id_str)) = url.split_once(':') {
+            if let (Ok(band_id), Ok(track_id)) =
+                (band_id_str.parse::<u64>(), track_id_str.parse::<u64>())
+            {
+                tracing::debug!(
+                    "[bandcamp resolve] fetching via API band_id={} track_id={}",
+                    band_id, track_id
+                );
+                let album = bandcamp::fetch_track(band_id, track_id)
+                    .await
+                    .map_err(|e| StreamError::MetadataError(format!("Bandcamp API error: {:?}", e)))?;
+
+                let track = album.tracks.first().ok_or_else(|| {
+                    StreamError::NoStreamAvailable("No tracks found in Bandcamp response".to_string())
+                })?;
+
+                // album.url is the artist subdomain page (e.g. https://artist.bandcamp.com/track/title)
+                // detect_stream_type will fetch its HTML and extract the direct bcbits.com CDN URL
+                tracing::debug!("[bandcamp resolve] using track page url={}", album.url);
+
+                return Ok((
+                    album.url.clone(),
+                    StreamMetadata {
+                        title: Some(track.title.clone()),
+                        artist: Some(album.band.name.clone()),
+                        album: Some(album.title.clone()),
+                        duration: None,
+                        artwork_url: album.image.get_url(),
+                        sample_rate: None,
+                        channels: None,
+                    },
+                ));
+            }
+        }
+
+        // Legacy: track page URL (e.g. https://artist.bandcamp.com/track/title)
+        if url.contains("bandcamp.com") && !url.contains("stream_redirect") && !url.contains("bcbits.com") {
+            tracing::debug!("[bandcamp resolve] legacy page url={}", url);
+            let album = bandcamp::track_from_url(&url)
+                .await
+                .map_err(|e| StreamError::MetadataError(format!("Bandcamp API error: {:?}", e)))?;
+
+            let track = album.tracks.first().ok_or_else(|| {
+                StreamError::NoStreamAvailable("No tracks found in Bandcamp response".to_string())
+            })?;
+
+            let streaming_url = track.streaming_url.values().next().ok_or_else(|| {
+                StreamError::NoStreamAvailable("No streaming URL found".to_string())
+            })?;
+
+            return Ok((
+                streaming_url.clone(),
+                StreamMetadata {
+                    title: Some(track.title.clone()),
+                    artist: Some(album.band.name.clone()),
+                    album: Some(album.title.clone()),
+                    duration: None,
+                    artwork_url: album.image.get_url(),
+                    sample_rate: None,
+                    channels: None,
+                },
+            ));
+        }
+
+        // Legacy: raw stream_redirect or bcbits.com URL stored directly — pass through as-is.
+        // These may fail if the token expired, but there's no way to re-resolve without band_id.
+        if url.contains("stream_redirect") || url.contains("bcbits.com") {
+            tracing::warn!("[bandcamp resolve] legacy streaming url (may be expired): {}", url);
             return Ok((
                 url.clone(),
                 StreamMetadata {
-                    title: Some("Без названия".to_string()),
-                    artist: Some("Неизвествен".to_string()),
+                    title: None,
+                    artist: None,
                     album: None,
                     duration: None,
                     artwork_url: None,
@@ -104,31 +172,11 @@ impl StreamProvider for BandcampProvider {
             ));
         }
 
-        let album = bandcamp::track_from_url(&url)
-            .await
-            .map_err(|e| StreamError::MetadataError(format!("Bandcamp API error: {:?}", e)))?;
-
-        let track = album.tracks.first().ok_or_else(|| {
-            StreamError::NoStreamAvailable("No tracks found in Bandcamp response".to_string())
-        })?;
-
-        let streaming_url =
-            track.streaming_url.values().next().ok_or_else(|| {
-                StreamError::NoStreamAvailable("No streaming URL found".to_string())
-            })?;
-
-        Ok((
-            streaming_url.clone(),
-            StreamMetadata {
-                title: Some(track.title.clone()),
-                artist: Some(album.band.name.clone()),
-                album: Some(album.title.clone()),
-                duration: None,
-                artwork_url: album.image.get_url(),
-                sample_rate: None,
-                channels: None,
-            },
-        ))
+        tracing::warn!("[bandcamp resolve] unrecognized source id={}, cannot resolve", url);
+        Err(StreamError::NoStreamAvailable(format!(
+            "Cannot resolve Bandcamp source: {}",
+            url
+        )))
     }
 
     async fn fetch_metadata(&self, source: &TrackSource) -> StreamResult<StreamMetadata> {
