@@ -9,12 +9,12 @@ use crate::library::types::TrackOrder;
 use crate::library::{LibraryService, PlaylistId, TrackId};
 use crate::playlist::cursor::{AppCursorResolver, ContainerContext, PlayerCursor};
 use crate::playlist::playback_queue::{
-    ActiveQueue, ContainerKind, ContainerMeta, CursorQueue, NextResult, RepeatMode,
-    SearchQueue, SearchQueueItem,
+    ActiveQueue, ContainerKind, ContainerMeta, CursorQueue, NextResult, RepeatMode, SearchQueue,
+    SearchQueueItem,
 };
 use crate::playlist::playlist::Playlist;
-use crate::streaming::StreamingService;
 use crate::streaming::types::ContentType;
+use crate::streaming::StreamingService;
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::Arc;

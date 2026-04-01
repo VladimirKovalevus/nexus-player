@@ -1,5 +1,7 @@
 use super::playback::PlaybackEngine;
-use super::types::{AudioCommand, AudioEvent, AudioState, BufferedRange, PlaybackState, Track, TrackSource};
+use super::types::{
+    AudioCommand, AudioEvent, AudioState, BufferedRange, PlaybackState, Track, TrackSource,
+};
 use crate::audio::types::{AudioSource, MediaSource};
 use crate::error::AudioError;
 use anyhow::Error;
@@ -62,7 +64,9 @@ impl AudioEngine {
     }
 
     pub fn preload_hls(&self, track: Track, source: HlsSource) {
-        let _ = self.command_tx.send(AudioCommand::PreloadHLS { track, source });
+        let _ = self
+            .command_tx
+            .send(AudioCommand::PreloadHLS { track, source });
     }
 
     pub fn preload_source(&self, track: Track, source: Box<dyn MediaSource>) {
@@ -168,7 +172,8 @@ impl AudioEngine {
                     s.position = Duration::ZERO;
                     s.duration = playback.duration().unwrap_or(Duration::ZERO);
                     preload_triggered = false;
-                    let _ = event_tx.send(AudioEvent::PlaybackStarted { track });
+                    // GaplessSwitched instead of PlaybackStarted so the queue cursor is advanced
+                    let _ = event_tx.send(AudioEvent::GaplessSwitched { track });
                     if s.duration > Duration::ZERO {
                         let _ = event_tx.send(AudioEvent::DurationChanged {
                             duration: s.duration,
@@ -197,7 +202,8 @@ impl AudioEngine {
                                 .map(|t| t.id)
                                 .unwrap_or(0);
                             info!("Порог предзагрузки достигнут (осталось 10с), отправка запроса");
-                            let _ = event_tx.send(AudioEvent::PreloadNextTrack { current_track_id });
+                            let _ =
+                                event_tx.send(AudioEvent::PreloadNextTrack { current_track_id });
                         }
                     }
 
@@ -278,236 +284,53 @@ impl AudioEngine {
             }
 
             match command_rx.recv_timeout(Duration::from_millis(10)) {
-                Ok(command) => {
-                    match command {
-                        AudioCommand::Preload(track) => {
-                            info!("Команда Preload для трека {}", track.id);
-                            match track.source {
-                                TrackSource::Local(ref p) => {
-                                    if let Err(e) = playback.preload_local(p) {
-                                        warn!("Ошибка предзагрузки: {}", e);
-                                    } else {
-                                        state.write().unwrap().next_track = Some(track);
-                                    }
-                                }
-                                _ => warn!("Предзагрузка данного типа источника пока не поддерживается"),
-                            }
-                        }
-                        AudioCommand::PreloadHLS { track, source } => {
-                            info!("Команда PreloadHLS для трека {}", track.id);
-                            if let Err(e) = playback.preload_hls(source) {
-                                warn!("Ошибка предзагрузки HLS: {}", e);
-                            } else {
-                                state.write().unwrap().next_track = Some(track);
-                            }
-                        }
-                        AudioCommand::PreloadSource { track, source } => {
-                            info!("Команда PreloadSource для трека {}", track.id);
-                            if let Err(e) = playback.preload_audio_source(source) {
-                                warn!("Ошибка предзагрузки Source: {}", e);
-                            } else {
-                                state.write().unwrap().next_track = Some(track);
-                            }
-                        }
-                        AudioCommand::PlayHLS { track, source } => {
-                            info!("Команда PlayHLS");
-                            preload_triggered = false;
-
-                            let use_preloaded = {
-                                let s = state.read().unwrap();
-                                s.next_track.as_ref().map(|t| t.id) == Some(track.id)
-                            };
-
-                            let result = if use_preloaded {
-                                info!("Используем предзагруженный HLS трек {}", track.id);
-                                playback.use_preloaded()
-                            } else {
-                                {
-                                    let mut s = state.write().unwrap();
-                                    s.playback_state = PlaybackState::Loading;
-                                    s.position = Duration::ZERO;
-                                    s.duration = Duration::ZERO;
-                                    s.buffered_ranges = Vec::new();
-                                    s.current_track = Some(track.clone());
-                                    s.next_track = None;
-                                }
-                                let _ = event_tx.send(AudioEvent::LoadingStarted {
-                                    track: track.clone(),
-                                });
-                                playback.stop();
-                                info!("Начало подготовки HLS для трека {}", track.id);
-                                playback.play_hls(source.clone())
-                            };
-
-                            match result {
-                                Ok(_) => {
-                                    let duration = playback.duration().unwrap_or(Duration::ZERO);
-
-                                    {
-                                        let mut s = state.write().unwrap();
-                                        s.playback_state = PlaybackState::Playing;
-                                        s.position = Duration::ZERO;
-                                        s.duration = duration;
-                                        s.current_track = Some(track.clone());
-                                        s.next_track = None;
-                                    }
-
-                                    if duration > Duration::ZERO {
-                                        let _ =
-                                            event_tx.send(AudioEvent::DurationChanged { duration });
-                                    }
-                                    last_position_update = std::time::Instant::now();
-
-                                    let _ = event_tx.send(AudioEvent::PlaybackStarted {
-                                        track: track.clone(),
-                                    });
-                                }
-                                Err(e) => {
-                                    warn!("Ошибка HLS воспроизведения: {}", e);
-                                    {
-                                        let mut s = state.write().unwrap();
-                                        s.playback_state = PlaybackState::Stopped;
-                                    }
-                                    let _ = event_tx.send(AudioEvent::Error {
-                                        message: format!("Ошибка HLS воспроизведения: {}", e),
-                                    });
+                Ok(command) => match command {
+                    AudioCommand::Preload(track) => {
+                        info!("Команда Preload для трека {}", track.id);
+                        match track.source {
+                            TrackSource::Local(ref p) => {
+                                if let Err(e) = playback.preload_local(p) {
+                                    warn!("Ошибка предзагрузки: {}", e);
+                                } else {
+                                    state.write().unwrap().next_track = Some(track);
                                 }
                             }
-                        }
-                        AudioCommand::Play(track) => {
-                            info!("Команда Play");
-                            preload_triggered = false;
-
-                            let use_preloaded = {
-                                let s = state.read().unwrap();
-                                s.next_track.as_ref().map(|t| t.id) == Some(track.id)
-                            };
-
-                            let result = if use_preloaded {
-                                info!("Используем предзагруженный локальный трек {}", track.id);
-                                playback.use_preloaded()
-                            } else {
-                                {
-                                    let mut s = state.write().unwrap();
-                                    s.playback_state = PlaybackState::Loading;
-                                    s.position = Duration::ZERO;
-                                    s.duration = Duration::ZERO;
-                                    s.buffered_ranges = Vec::new();
-                                    s.current_track = Some(track.clone());
-                                    s.next_track = None;
-                                }
-                                let _ = event_tx.send(AudioEvent::LoadingStarted {
-                                    track: track.clone(),
-                                });
-                                playback.stop();
-                                info!("Начало воспроизведения трека {}", track.id);
-                                playback.play(&track.source)
-                            };
-
-                            match result {
-                                Ok(_) => {
-                                    let duration = playback.duration().unwrap_or(Duration::ZERO);
-
-                                    {
-                                        let mut s = state.write().unwrap();
-                                        s.playback_state = PlaybackState::Playing;
-                                        s.position = Duration::ZERO;
-                                        s.duration = duration;
-                                        s.current_track = Some(track.clone());
-                                        s.next_track = None;
-                                    }
-
-                                    if duration > Duration::ZERO {
-                                        let _ =
-                                            event_tx.send(AudioEvent::DurationChanged { duration });
-                                    }
-                                    last_position_update = std::time::Instant::now();
-
-                                    let _ = event_tx.send(AudioEvent::PlaybackStarted {
-                                        track: track.clone(),
-                                    });
-                                }
-                                Err(e) => {
-                                    warn!("Ошибка воспроизведения: {}", e);
-                                    {
-                                        let mut s = state.write().unwrap();
-                                        s.playback_state = PlaybackState::Stopped;
-                                    }
-                                    let _ = event_tx.send(AudioEvent::Error {
-                                        message: format!("Ошибка воспроизведения: {}", e),
-                                    });
-                                }
+                            _ => {
+                                warn!("Предзагрузка данного типа источника пока не поддерживается")
                             }
                         }
-                        AudioCommand::PlaySource { track, source } => {
-                            info!("Команда PlaySource");
-                            preload_triggered = false;
-
-                            let use_preloaded = {
-                                let s = state.read().unwrap();
-                                s.next_track.as_ref().map(|t| t.id) == Some(track.id)
-                            };
-
-                            let result = if use_preloaded {
-                                info!("Используем предзагруженный Source трек {}", track.id);
-                                playback.use_preloaded()
-                            } else {
-                                {
-                                    let mut s = state.write().unwrap();
-                                    s.playback_state = PlaybackState::Loading;
-                                    s.position = Duration::ZERO;
-                                    s.duration = Duration::ZERO;
-                                    s.buffered_ranges = Vec::new();
-                                    s.current_track = Some(track.clone());
-                                    s.next_track = None;
-                                }
-                                let _ = event_tx.send(AudioEvent::LoadingStarted {
-                                    track: track.clone(),
-                                });
-                                playback.stop();
-                                info!("Начало воспроизведения из источника для трека {}", track.id);
-                                playback.play_audio_source(source)
-                            };
-
-                            match result {
-                                Ok(_) => {
-                                    let duration = playback.duration().unwrap_or(Duration::ZERO);
-
-                                    {
-                                        let mut s = state.write().unwrap();
-                                        s.playback_state = PlaybackState::Playing;
-                                        s.position = Duration::ZERO;
-                                        s.duration = duration;
-                                        s.current_track = Some(track.clone());
-                                        s.next_track = None;
-                                    }
-
-                                    if duration > Duration::ZERO {
-                                        let _ =
-                                            event_tx.send(AudioEvent::DurationChanged { duration });
-                                    }
-                                    last_position_update = std::time::Instant::now();
-
-                                    let _ = event_tx.send(AudioEvent::PlaybackStarted {
-                                        track: track.clone(),
-                                    });
-                                }
-                                Err(e) => {
-                                    warn!("Ошибка воспроизведения: {}", e);
-                                    {
-                                        let mut s = state.write().unwrap();
-                                        s.playback_state = PlaybackState::Stopped;
-                                    }
-                                    let _ = event_tx.send(AudioEvent::Error {
-                                        message: format!("Ошибка воспроизведения: {}", e),
-                                    });
-                                }
-                            }
+                    }
+                    AudioCommand::PreloadHLS { track, source } => {
+                        info!("Команда PreloadHLS для трека {}", track.id);
+                        if let Err(e) = playback.preload_hls(source) {
+                            warn!("Ошибка предзагрузки HLS: {}", e);
+                        } else {
+                            state.write().unwrap().next_track = Some(track);
                         }
+                    }
+                    AudioCommand::PreloadSource { track, source } => {
+                        info!("Команда PreloadSource для трека {}", track.id);
+                        if let Err(e) = playback.preload_audio_source(source) {
+                            warn!("Ошибка предзагрузки Source: {}", e);
+                        } else {
+                            state.write().unwrap().next_track = Some(track);
+                        }
+                    }
+                    AudioCommand::PlayHLS { track, source } => {
+                        info!("Команда PlayHLS");
+                        preload_triggered = false;
 
-                        AudioCommand::SetLoading(track) => {
-                            info!("Команда SetLoading");
-                            playback.stop();
+                        let use_preloaded = {
+                            let s = state.read().unwrap();
+                            s.next_track.as_ref().map(|t| t.id) == Some(track.id)
+                        };
+
+                        let result = if use_preloaded {
+                            info!("Используем предзагруженный HLS трек {}", track.id);
+                            let ok = playback.use_preloaded();
+                            state.write().unwrap().next_track = None;
+                            ok
+                        } else {
                             {
                                 let mut s = state.write().unwrap();
                                 s.playback_state = PlaybackState::Loading;
@@ -520,88 +343,267 @@ impl AudioEngine {
                             let _ = event_tx.send(AudioEvent::LoadingStarted {
                                 track: track.clone(),
                             });
-                        }
-
-                        AudioCommand::Pause => {
-                            info!("Пауза");
-                            playback.pause();
-                            state.write().unwrap().playback_state = PlaybackState::Paused;
-                            let _ = event_tx.send(AudioEvent::PlaybackPaused);
-                        }
-
-                        AudioCommand::Resume => {
-                            info!("Возобновление");
-                            playback.resume();
-                            state.write().unwrap().playback_state = PlaybackState::Playing;
-
-                            let _ = event_tx.send(AudioEvent::PlaybackResumed);
-                        }
-
-                        AudioCommand::Stop => {
-                            info!("Остановка");
                             playback.stop();
+                            info!("Начало подготовки HLS для трека {}", track.id);
+                            playback.play_hls(source.clone())
+                        };
 
-                            {
-                                let mut s = state.write().unwrap();
-                                s.playback_state = PlaybackState::Stopped;
-                                s.position = Duration::ZERO;
-                                s.current_track = None;
-                                s.next_track = None;
+                        match result {
+                            Ok(_) => {
+                                let duration = playback.duration().unwrap_or(Duration::ZERO);
+
+                                {
+                                    let mut s = state.write().unwrap();
+                                    s.playback_state = PlaybackState::Playing;
+                                    s.position = Duration::ZERO;
+                                    s.duration = duration;
+                                    s.current_track = Some(track.clone());
+                                    s.next_track = None;
+                                }
+
+                                if duration > Duration::ZERO {
+                                    let _ = event_tx.send(AudioEvent::DurationChanged { duration });
+                                }
+                                last_position_update = std::time::Instant::now();
+
+                                let _ = event_tx.send(AudioEvent::PlaybackStarted {
+                                    track: track.clone(),
+                                });
                             }
-
-                            let _ = event_tx.send(AudioEvent::PlaybackStopped);
-                        }
-
-                        AudioCommand::Seek(position) => {
-                            info!("Перемотка на {:?}", position);
-
-                            match playback.seek(position) {
-                                Ok(_) => {
-                                    state.write().unwrap().position = position;
-                                    let _ = event_tx.send(AudioEvent::PositionUpdated {
-                                        position,
-                                        fft: None,
-                                        pcm: None,
-                                    });
+                            Err(e) => {
+                                warn!("Ошибка HLS воспроизведения: {}", e);
+                                {
+                                    let mut s = state.write().unwrap();
+                                    s.playback_state = PlaybackState::Stopped;
                                 }
-                                Err(AudioError::InProgress) => {
-                                    info!("Ошибка INPROGRESS:");
-                                    state.write().unwrap().position = position;
-                                    let _ = event_tx.send(AudioEvent::PositionUpdated {
-                                        position,
-                                        fft: None,
-                                        pcm: None,
-                                    });
-                                }
-                                Err(AudioError::OutsideOfBuffer) => {
-                                    info!("Ошибка OutsideOfBuffer:");
-                                    let _ = event_tx.send(AudioEvent::Error {
-                                        message: format!(
-                                            "Поиск вне буфера не поддерживается для opus"
-                                        ),
-                                    });
-                                }
-                                Err(e) => {
-                                    warn!("Ошибка перемотки: {}", e);
-                                }
+                                let _ = event_tx.send(AudioEvent::Error {
+                                    message: format!("Ошибка HLS воспроизведения: {}", e),
+                                });
                             }
-                        }
-
-                        AudioCommand::SetVolume(volume) => {
-                            info!("Установка громкости: {}", volume);
-                            state.write().unwrap().volume = volume;
-                            playback.set_volume(volume);
-                            let _ = event_tx.send(AudioEvent::VolumeChanged { volume });
-                        }
-
-                        AudioCommand::Shutdown => {
-                            info!("Завершение работы аудио потока");
-                            return;
                         }
                     }
-                }
-                Err(channel::RecvTimeoutError::Timeout) => {
-                }
+                    AudioCommand::Play(track) => {
+                        info!("Команда Play");
+                        preload_triggered = false;
+
+                        let use_preloaded = {
+                            let s = state.read().unwrap();
+                            s.next_track.as_ref().map(|t| t.id) == Some(track.id)
+                        };
+
+                        let result = if use_preloaded {
+                            info!("Используем предзагруженный локальный трек {}", track.id);
+                            playback.use_preloaded()
+                        } else {
+                            {
+                                let mut s = state.write().unwrap();
+                                s.playback_state = PlaybackState::Loading;
+                                s.position = Duration::ZERO;
+                                s.duration = Duration::ZERO;
+                                s.buffered_ranges = Vec::new();
+                                s.current_track = Some(track.clone());
+                                s.next_track = None;
+                            }
+                            let _ = event_tx.send(AudioEvent::LoadingStarted {
+                                track: track.clone(),
+                            });
+                            playback.stop();
+                            info!("Начало воспроизведения трека {}", track.id);
+                            playback.play(&track.source)
+                        };
+
+                        match result {
+                            Ok(_) => {
+                                let duration = playback.duration().unwrap_or(Duration::ZERO);
+
+                                {
+                                    let mut s = state.write().unwrap();
+                                    s.playback_state = PlaybackState::Playing;
+                                    s.position = Duration::ZERO;
+                                    s.duration = duration;
+                                    s.current_track = Some(track.clone());
+                                    s.next_track = None;
+                                }
+
+                                if duration > Duration::ZERO {
+                                    let _ = event_tx.send(AudioEvent::DurationChanged { duration });
+                                }
+                                last_position_update = std::time::Instant::now();
+
+                                let _ = event_tx.send(AudioEvent::PlaybackStarted {
+                                    track: track.clone(),
+                                });
+                            }
+                            Err(e) => {
+                                warn!("Ошибка воспроизведения: {}", e);
+                                {
+                                    let mut s = state.write().unwrap();
+                                    s.playback_state = PlaybackState::Stopped;
+                                }
+                                let _ = event_tx.send(AudioEvent::Error {
+                                    message: format!("Ошибка воспроизведения: {}", e),
+                                });
+                            }
+                        }
+                    }
+                    AudioCommand::PlaySource { track, source } => {
+                        info!("Команда PlaySource");
+                        preload_triggered = false;
+
+                        let use_preloaded = {
+                            let s = state.read().unwrap();
+                            s.next_track.as_ref().map(|t| t.id) == Some(track.id)
+                        };
+
+                        let result = if use_preloaded {
+                            info!("Используем предзагруженный Source трек {}", track.id);
+                            playback.use_preloaded()
+                        } else {
+                            {
+                                let mut s = state.write().unwrap();
+                                s.playback_state = PlaybackState::Loading;
+                                s.position = Duration::ZERO;
+                                s.duration = Duration::ZERO;
+                                s.buffered_ranges = Vec::new();
+                                s.current_track = Some(track.clone());
+                                s.next_track = None;
+                            }
+                            let _ = event_tx.send(AudioEvent::LoadingStarted {
+                                track: track.clone(),
+                            });
+                            playback.stop();
+                            info!("Начало воспроизведения из источника для трека {}", track.id);
+                            playback.play_audio_source(source)
+                        };
+
+                        match result {
+                            Ok(_) => {
+                                let duration = playback.duration().unwrap_or(Duration::ZERO);
+
+                                {
+                                    let mut s = state.write().unwrap();
+                                    s.playback_state = PlaybackState::Playing;
+                                    s.position = Duration::ZERO;
+                                    s.duration = duration;
+                                    s.current_track = Some(track.clone());
+                                    s.next_track = None;
+                                }
+
+                                if duration > Duration::ZERO {
+                                    let _ = event_tx.send(AudioEvent::DurationChanged { duration });
+                                }
+                                last_position_update = std::time::Instant::now();
+
+                                let _ = event_tx.send(AudioEvent::PlaybackStarted {
+                                    track: track.clone(),
+                                });
+                            }
+                            Err(e) => {
+                                warn!("Ошибка воспроизведения: {}", e);
+                                {
+                                    let mut s = state.write().unwrap();
+                                    s.playback_state = PlaybackState::Stopped;
+                                }
+                                let _ = event_tx.send(AudioEvent::Error {
+                                    message: format!("Ошибка воспроизведения: {}", e),
+                                });
+                            }
+                        }
+                    }
+
+                    AudioCommand::SetLoading(track) => {
+                        info!("Команда SetLoading");
+                        playback.stop();
+                        {
+                            let mut s = state.write().unwrap();
+                            s.playback_state = PlaybackState::Loading;
+                            s.position = Duration::ZERO;
+                            s.duration = Duration::ZERO;
+                            s.buffered_ranges = Vec::new();
+                            s.current_track = Some(track.clone());
+                            s.next_track = None;
+                        }
+                        let _ = event_tx.send(AudioEvent::LoadingStarted {
+                            track: track.clone(),
+                        });
+                    }
+
+                    AudioCommand::Pause => {
+                        info!("Пауза");
+                        playback.pause();
+                        state.write().unwrap().playback_state = PlaybackState::Paused;
+                        let _ = event_tx.send(AudioEvent::PlaybackPaused);
+                    }
+
+                    AudioCommand::Resume => {
+                        info!("Возобновление");
+                        playback.resume();
+                        state.write().unwrap().playback_state = PlaybackState::Playing;
+
+                        let _ = event_tx.send(AudioEvent::PlaybackResumed);
+                    }
+
+                    AudioCommand::Stop => {
+                        info!("Остановка");
+                        playback.stop();
+
+                        {
+                            let mut s = state.write().unwrap();
+                            s.playback_state = PlaybackState::Stopped;
+                            s.position = Duration::ZERO;
+                            s.current_track = None;
+                            s.next_track = None;
+                        }
+
+                        let _ = event_tx.send(AudioEvent::PlaybackStopped);
+                    }
+
+                    AudioCommand::Seek(position) => {
+                        info!("Перемотка на {:?}", position);
+
+                        match playback.seek(position) {
+                            Ok(_) => {
+                                state.write().unwrap().position = position;
+                                let _ = event_tx.send(AudioEvent::PositionUpdated {
+                                    position,
+                                    fft: None,
+                                    pcm: None,
+                                });
+                            }
+                            Err(AudioError::InProgress) => {
+                                info!("Ошибка INPROGRESS:");
+                                state.write().unwrap().position = position;
+                                let _ = event_tx.send(AudioEvent::PositionUpdated {
+                                    position,
+                                    fft: None,
+                                    pcm: None,
+                                });
+                            }
+                            Err(AudioError::OutsideOfBuffer) => {
+                                info!("Ошибка OutsideOfBuffer:");
+                                let _ = event_tx.send(AudioEvent::Error {
+                                    message: format!("Поиск вне буфера не поддерживается для opus"),
+                                });
+                            }
+                            Err(e) => {
+                                warn!("Ошибка перемотки: {}", e);
+                            }
+                        }
+                    }
+
+                    AudioCommand::SetVolume(volume) => {
+                        info!("Установка громкости: {}", volume);
+                        state.write().unwrap().volume = volume;
+                        playback.set_volume(volume);
+                        let _ = event_tx.send(AudioEvent::VolumeChanged { volume });
+                    }
+
+                    AudioCommand::Shutdown => {
+                        info!("Завершение работы аудио потока");
+                        return;
+                    }
+                },
+                Err(channel::RecvTimeoutError::Timeout) => {}
                 Err(channel::RecvTimeoutError::Disconnected) => {
                     warn!("Канал команд отключен");
                     break;

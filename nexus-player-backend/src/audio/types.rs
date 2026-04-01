@@ -88,6 +88,8 @@ pub enum AudioEvent {
 
     TrackFinished,
 
+    GaplessSwitched { track: Track },
+
     PreloadNextTrack { current_track_id: usize },
 
     PositionUpdated {
