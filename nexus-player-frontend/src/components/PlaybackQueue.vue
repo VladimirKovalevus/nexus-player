@@ -288,7 +288,7 @@ onMounted(() => {
   fetchQueue();
 });
 
-defineExpose({ fetchQueue });
+defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
 </script>
 
 <template>

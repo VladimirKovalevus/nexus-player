@@ -16,6 +16,7 @@ import DownloadsView from './views/DownloadsView.vue';
 import StreamingSearch from './components/StreamingSearch.vue';
 import GlobalNotifications from './components/common/GlobalNotifications.vue';
 import VisualizerOverlay from './components/VisualizerOverlay.vue';
+import CommandLine from './components/CommandLine.vue';
 
 const playbackQueueRef = ref<InstanceType<typeof PlaybackQueue> | null>(null);
 const playerControlRef = ref<InstanceType<typeof PlayerControl> | null>(null);
@@ -82,6 +83,10 @@ const navigateBackFromPlaylist = () => {
 
 provide('refreshQueue', refreshQueue);
 provide('navigateToPlaylist', navigateToPlaylist);
+provide('changeView', changeView);
+provide('toggleQueue', toggleQueue);
+provide('openCreatePlaylistModal', () => playbackQueueRef.value?.openCreatePlaylistModal());
+provide('clearQueue', () => playbackQueueRef.value?.clearQueue());
 </script>
 
 <template>
@@ -130,5 +135,6 @@ provide('navigateToPlaylist', navigateToPlaylist);
   </AppLayout>
   <GlobalNotifications />
   <VisualizerOverlay :is-open="showVisualizer" @close="showVisualizer = false" />
+  <CommandLine />
 </template>
 <style lang="scss" scoped></style>
