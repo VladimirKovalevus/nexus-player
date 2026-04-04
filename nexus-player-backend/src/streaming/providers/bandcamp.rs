@@ -106,12 +106,14 @@ impl StreamProvider for BandcampProvider {
                     StreamError::NoStreamAvailable("No tracks found in Bandcamp response".to_string())
                 })?;
 
-                // album.url is the artist subdomain page (e.g. https://artist.bandcamp.com/track/title)
-                // detect_stream_type will fetch its HTML and extract the direct bcbits.com CDN URL
-                tracing::debug!("[bandcamp resolve] using track page url={}", album.url);
+                let streaming_url = track.streaming_url.values().next().ok_or_else(|| {
+                    StreamError::NoStreamAvailable("No streaming URL in Bandcamp API response".to_string())
+                })?;
+
+                tracing::debug!("[bandcamp resolve] band_id:track_id → stream url={}", streaming_url);
 
                 return Ok((
-                    album.url.clone(),
+                    streaming_url.clone(),
                     StreamMetadata {
                         title: Some(track.title.clone()),
                         artist: Some(album.band.name.clone()),

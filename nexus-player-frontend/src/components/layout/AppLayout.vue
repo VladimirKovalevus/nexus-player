@@ -79,28 +79,21 @@ onUnmounted(() => resizeObserver?.disconnect());
 .appLayout {
   display: grid;
   grid-template-areas:
-    'sidebar topbar topbar'
-    'sidebar main queue'
-    'player player player';
-  grid-template-columns: $sidebar-width 1fr minmax(0, 50vh);
+    'sidebar topbar'
+    'sidebar main'
+    'player player';
+  grid-template-columns: $sidebar-width 1fr;
   grid-template-rows: $topbar-height 1fr $player-height;
   height: 100vh;
   width: 100%;
   overflow: hidden;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  transition: grid-template-columns 0.3s ease;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
 
-.hideQueue {
-  grid-template-areas:
-    'sidebar topbar topbar'
-    'sidebar main queue'
-    'player player player';
-  grid-template-columns: $sidebar-width 1fr 0px;
-}
+.hideQueue {}
 
 .topBar {
   grid-area: topbar;
@@ -126,11 +119,15 @@ onUnmounted(() => resizeObserver?.disconnect());
 }
 
 .rightSidebar {
-  border-right: none !important;
-  grid-area: queue;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: $player-height;
+  width: min(360px, 40vw);
   background-color: var(--color-bg-secondary);
   border-left: 4px solid var(--color-accent-primary);
   overflow-y: auto;
+  z-index: $z-queue-overlay;
 }
 
 .bottomPlayer {
@@ -234,15 +231,15 @@ onUnmounted(() => resizeObserver?.disconnect());
   transform: translateY(100%);
 }
 
-/* Only apply slide transition on mobile */
+/* Desktop: slide in from right */
 @media (min-width: 480px) {
-  .slide-up-enter-from,
-  .slide-up-leave-to {
-    transform: none;
-  }
   .slide-up-enter-active,
   .slide-up-leave-active {
-    transition: none;
+    transition: transform 0.25s ease;
+  }
+  .slide-up-enter-from,
+  .slide-up-leave-to {
+    transform: translateX(100%);
   }
 }
 </style>
