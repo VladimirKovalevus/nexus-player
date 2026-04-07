@@ -39,7 +39,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import Sidebar from './Sidebar.vue';
-import TopBar from './TopBar.vue';
 
 interface Props {
   showQueue?: boolean;
@@ -79,11 +78,10 @@ onUnmounted(() => resizeObserver?.disconnect());
 .appLayout {
   display: grid;
   grid-template-areas:
-    'sidebar topbar'
     'sidebar main'
     'player player';
   grid-template-columns: $sidebar-width 1fr;
-  grid-template-rows: $topbar-height 1fr $player-height;
+  grid-template-rows: 1fr $player-height;
   height: 100vh;
   width: 100%;
   overflow: hidden;
@@ -94,14 +92,6 @@ onUnmounted(() => resizeObserver?.disconnect());
 }
 
 .hideQueue {}
-
-.topBar {
-  grid-area: topbar;
-  background-color: var(--color-bg-primary);
-  border-bottom: 1px solid var(--color-border);
-  z-index: $z-topbar;
-  padding-top: env(safe-area-inset-top);
-}
 
 .leftSidebar {
   grid-area: sidebar;
@@ -154,22 +144,20 @@ onUnmounted(() => resizeObserver?.disconnect());
 @media (max-width: $mobile-breakpoint) {
   .appLayout {
     grid-template-areas:
-      'topbar'
       'main'
       'player'
       'mobilenav';
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto 1fr $player-height auto;
+    grid-template-rows: 1fr $player-height auto;
   }
 
   .hideQueue {
     grid-template-areas:
-      'topbar'
       'main'
       'player'
       'mobilenav';
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto 1fr $player-height auto;
+    grid-template-rows: 1fr $player-height auto;
   }
 
   .leftSidebar {
@@ -182,15 +170,17 @@ onUnmounted(() => resizeObserver?.disconnect());
   }
 
   .rightSidebar {
-    grid-area: unset;
     position: fixed;
+    top: auto;
+    right: 0;
     bottom: var(--queue-bottom, #{$player-height + $mobile-nav-height});
     left: 0;
-    right: 0;
+    width: auto;
     height: 66.666vh;
     z-index: $z-queue-overlay;
     background-color: var(--color-bg-secondary);
     border: none;
+    border-left: none;
     border-top: 1px solid var(--color-border);
     border-radius: 16px 16px 0 0;
     box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);

@@ -3,6 +3,7 @@ import { ref, inject, nextTick, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { useAudioStore } from '../stores/audio';
 import { useStreamingStore } from '../stores/streaming';
+import { useVkStore } from '../stores/vk';
 
 // ════════════════════════════════════════════════════════════════════
 // Fuzzy Search
@@ -158,6 +159,7 @@ const showFeedback = (msg: string, error = false, ms = 800) => {
 
 const audioStore        = useAudioStore();
 const streamingStore    = useStreamingStore();
+const vkStore           = useVkStore();
 const changeView        = inject<(v: string) => void>('changeView');
 const toggleQueue       = inject<() => void>('toggleQueue');
 const openQueuePlaylist = inject<() => void>('openCreatePlaylistModal');
@@ -179,6 +181,11 @@ const fetchPlaylists = async (): Promise<PlaylistMeta[]> => {
 
 const playlistTitleCompleter: Completer = async () =>
   (await fetchPlaylists()).map(p => p.title);
+
+const vkPlaylistTitleCompleter: Completer = async () => {
+  if (!vkStore.initialized) await vkStore.fetchContent();
+  return vkStore.playlists.map(p => p.title);
+};
 
 // ════════════════════════════════════════════════════════════════════
 // Static Completion Sets
@@ -283,6 +290,38 @@ const execSearchPlay: ExecFn = async ([idxStr]) => {
   showFeedback(`→ очередь: ${(result as any).title ?? (result as any).name ?? n}`);
 };
 
+const execVkPlaylist: ExecFn = async (_, raw) => {
+  const afterPath = raw.replace(/^vk\s+playlist\s+/i, '');
+  const titleArg = shiftArg(afterPath);
+  if (!titleArg?.val) { showFeedback("vk playlist: укажи название в ''", true, 1500); return; }
+  const startN = titleArg.rest ? (parseInt(titleArg.rest) || 1) : 1;
+
+  if (!vkStore.initialized) await vkStore.fetchContent();
+  const tq = titleArg.val.toLowerCase();
+  const match = vkStore.playlists.find(p => p.title.toLowerCase() === tq)
+    ?? fuzzyFilter(tq, vkStore.playlists.map(p => p.title))
+       .map(t => vkStore.playlists.find(p => p.title === t)!)[0];
+
+  if (!match) { showFeedback(`vk playlist не найден: ${titleArg.val}`, true, 1500); return; }
+  if (!match.source) { showFeedback(`нет source у плейлиста: ${match.title}`, true, 1500); return; }
+
+  const searchResult = {
+    type: 'playlist',
+    id: match.source.url,
+    title: match.title,
+    creator: match.creator || '',
+    trackCount: match.trackCount,
+    thumbnail: match.thumbnail || undefined,
+    url: `https://vk.com/audio?z=audio_playlist${match.source.url}`,
+    system: match.source.system,
+    tracks: [],
+  };
+
+  await invoke('handle_streaming_track', { searchResult, strategy: 'cache', searchType: 'playlist' });
+  await invoke('play_at_index', { index: startN - 1 });
+  showFeedback(`▶ ${match.title}${startN > 1 ? ` #${startN}` : ''}`);
+};
+
 const execSearch: ExecFn = async ([provArg, typeArg, limitArg, pageArg], _, query) => {
   if (!provArg) { showFeedback('search: укажи провайдера', true, 1800); return; }
   const provider = fuzzyFilter(provArg, PROVIDERS)[0];
@@ -324,6 +363,10 @@ const SPECS: CmdSpec[] = [
       { name: 'title', complete: playlistTitleCompleter, quoted: true },
       { name: 'index', complete: () => []                             },
     ],                                                                                    exec: execPlayPlaylist  },
+  { path: ['vk', 'playlist'],  args: [
+      { name: 'title', complete: vkPlaylistTitleCompleter, quoted: true },
+      { name: 'index', complete: () => []                               },
+    ],                                                                                    exec: execVkPlaylist    },
   { path: ['stop'],                                                                       exec: execStop          },
   { path: ['switch'],           args: [{ name: 'view',     complete: () => VIEWS     }], exec: execSwitch        },
   { path: ['queue', 'toggle'],                                                            exec: execQueueToggle   },
