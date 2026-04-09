@@ -325,8 +325,6 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 [[package]]
 name = "bandcamp"
 version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc8f990cfc739590270d0413b821f09b28505d442204fd0f3fd99196df394d52"
 dependencies = [
  "chrono",
  "lazy_static",
