@@ -1,26 +1,32 @@
 <template>
-  <div 
-    ref="containerRef" 
+  <div
+    v-if="MARQUEE_ENABLED"
+    ref="containerRef"
     :class="[$style.marqueeContainer, { [$style.isActive]: active || isHovered }]"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
   >
-    <div 
-      ref="contentRef" 
-      :class="$style.marqueeContent" 
+    <div
+      ref="contentRef"
+      :class="$style.marqueeContent"
       :style="scrollStyle"
     >
       <slot></slot>
     </div>
   </div>
+  <!-- MARQUEE_ENABLED=false: bare span, zero JS overhead -->
+  <span v-else :class="$style.marqueeContainer"><slot></slot></span>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted, watch } from 'vue';
 
+// Toggle to re-enable animations
+const MARQUEE_ENABLED = false;
+
 const props = defineProps<{
   active?: boolean;
-  durationPerPx?: number; // Seconds per pixel for consistent speed
+  durationPerPx?: number;
 }>();
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -31,7 +37,6 @@ let resizeObserver: ResizeObserver | null = null;
 
 const checkOverflow = () => {
   if (containerRef.value && contentRef.value) {
-    // We measure the difference between scrollWidth and clientWidth
     const amount = contentRef.value.scrollWidth - containerRef.value.clientWidth;
     overflowAmount.value = Math.max(0, amount);
   }
@@ -39,26 +44,19 @@ const checkOverflow = () => {
 
 const scrollStyle = computed(() => {
   if (overflowAmount.value <= 0) return {};
-  
-  // Dynamic duration based on length if desired, or fixed
-  const duration = props.durationPerPx 
-    ? Math.max(3, overflowAmount.value * props.durationPerPx) 
+  const duration = props.durationPerPx
+    ? Math.max(3, overflowAmount.value * props.durationPerPx)
     : 5;
-
   return {
     '--overflow-shift': `-${overflowAmount.value}px`,
-    '--animation-duration': `${duration}s`
+    '--animation-duration': `${duration}s`,
   };
 });
 
 onMounted(() => {
+  if (!MARQUEE_ENABLED) return;
   checkOverflow();
-  
-  // Watch for size changes
-  resizeObserver = new ResizeObserver(() => {
-    checkOverflow();
-  });
-  
+  resizeObserver = new ResizeObserver(() => { checkOverflow(); });
   if (containerRef.value) resizeObserver.observe(containerRef.value);
   if (contentRef.value) resizeObserver.observe(contentRef.value);
 });
@@ -67,9 +65,8 @@ onUnmounted(() => {
   resizeObserver?.disconnect();
 });
 
-// Also check when content might change (slot updates)
 watch(() => props.active, () => {
-  checkOverflow();
+  if (MARQUEE_ENABLED) checkOverflow();
 });
 </script>
 
@@ -83,23 +80,28 @@ watch(() => props.active, () => {
   min-width: 0;
 }
 
+// ANIMATIONS DISABLED — set MARQUEE_ENABLED=true and uncomment to re-enable
+// .isActive {
+//   text-overflow: clip;
+//
+//   .marqueeContent {
+//     animation: marquee-dynamic-reveal var(--animation-duration, 5s) linear infinite alternate;
+//   }
+// }
+
 .isActive {
   text-overflow: clip;
-  
-  .marqueeContent {
-    animation: marquee-dynamic-reveal var(--animation-duration, 5s) linear infinite alternate;
-  }
 }
 
 .marqueeContent {
   display: inline-block;
   vertical-align: top;
   will-change: transform;
-  max-width: 100%; // Default state
+  max-width: 100%;
 }
 
 .isActive .marqueeContent {
-  max-width: none; // Allow it to be as wide as content when animating
+  max-width: none;
 }
 
 @keyframes marquee-dynamic-reveal {

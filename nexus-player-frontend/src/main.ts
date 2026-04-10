@@ -8,6 +8,11 @@ import { useThemeStore } from './stores/theme';
 const app = createApp(App);
 const pinia = createPinia();
 
+// Enable Vue performance marks — visible in Web Inspector → Timelines → JS & Events
+// Toggle this flag to profile component render/update/patch timing
+const PERF_PROFILING = true;
+if (PERF_PROFILING) app.config.performance = true;
+
 app.use(pinia);
 
 // Initialize stores

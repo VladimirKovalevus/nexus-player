@@ -83,10 +83,12 @@
         <VirtualList
           :items="tracks"
           :item-height="96"
+          :overscan="8"
           container-selector=".home-view-scroll-container"
         >
           <template #default="{ item: track }">
             <MediaCard
+              v-memo="[track.id, track.liked, audioStore.currentTrack?.id === track.id]"
               type="track"
               show-action
               :track="track"

@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useAudioStore } from '@/stores/audio';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -19,14 +19,27 @@ const BAR_RADIUS = 1;
 
 let animationFrame: number | null = null;
 
-const getThemeColors = () => {
+// Cached values to skip redundant redraws
+let cachedColors = { background: '#333333', played: '#ffffff', buffered: '#888888' };
+let cachedWidth = 0;
+let cachedHeight = 0;
+let prevPosition = -1;
+let prevDuration = -1;
+let prevWaveformRef: unknown = null;
+let prevBufferedRef: unknown = null;
+let needsRedraw = true; // force first draw
+
+const refreshColors = () => {
   const styles = getComputedStyle(document.documentElement);
-  return {
+  cachedColors = {
     background: styles.getPropertyValue('--waveform-bg').trim() || '#333333',
     played: styles.getPropertyValue('--waveform-played').trim() || '#ffffff',
     buffered: styles.getPropertyValue('--waveform-buffered').trim() || '#888888',
   };
+  needsRedraw = true;
 };
+
+const getThemeColors = () => cachedColors;
 
 const handleSeek = (event: MouseEvent) => {
   if (!containerRef.value || audioStore.duration === 0) return;
@@ -44,12 +57,34 @@ const draw = () => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  const duration = audioStore.duration;
+  const position = audioStore.position;
+  const bufferedRanges = audioStore.bufferedRanges;
+  const waveforms = audioStore.waveforms;
+
+  // Skip redraw if nothing changed
+  const sizeChanged = cachedWidth !== container.clientWidth || cachedHeight !== container.clientHeight;
+  const stateChanged = position !== prevPosition || duration !== prevDuration
+    || waveforms !== prevWaveformRef || bufferedRanges !== prevBufferedRef;
+
+  if (!needsRedraw && !sizeChanged && !stateChanged) {
+    animationFrame = requestAnimationFrame(draw);
+    return;
+  }
+
+  needsRedraw = false;
+  prevPosition = position;
+  prevDuration = duration;
+  prevWaveformRef = waveforms;
+  prevBufferedRef = bufferedRanges;
+
   const dpr = window.devicePixelRatio || 1;
-  // getBoundingClientRect is always the container's actual layout rect,
-  // unaffected by the canvas child's explicit style width.
-  const rect = container.getBoundingClientRect();
-  const width = Math.floor(rect.width);
-  const height = Math.floor(rect.height);
+  // Use clientWidth/clientHeight (no reflow) — updated by ResizeObserver
+  const width = Math.floor(container.clientWidth);
+  const height = Math.floor(container.clientHeight);
+
+  cachedWidth = width;
+  cachedHeight = height;
 
   if (width === 0 || height === 0) {
     animationFrame = requestAnimationFrame(draw);
@@ -70,11 +105,6 @@ const draw = () => {
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
-
-  const duration = audioStore.duration;
-  const position = audioStore.position;
-  const bufferedRanges = audioStore.bufferedRanges;
-  const waveforms = audioStore.waveforms;
 
   const totalBars = Math.floor(width / (BAR_WIDTH + BAR_GAP));
   const colors = getThemeColors();
@@ -158,12 +188,56 @@ const draw = () => {
   animationFrame = requestAnimationFrame(draw);
 };
 
-onMounted(() => {
+let resizeObserver: ResizeObserver | null = null;
+
+const startLoop = () => {
+  if (animationFrame !== null) return;
   draw();
+};
+
+const stopLoop = () => {
+  if (animationFrame !== null) {
+    cancelAnimationFrame(animationFrame);
+    animationFrame = null;
+  }
+};
+
+onMounted(() => {
+  refreshColors();
+
+  // Track container size changes without getBoundingClientRect in hot loop
+  resizeObserver = new ResizeObserver(() => { needsRedraw = true; });
+  if (containerRef.value) resizeObserver.observe(containerRef.value);
+
+  window.addEventListener('theme-changed', refreshColors);
+
+  startLoop();
 });
 
 onUnmounted(() => {
-  if (animationFrame) cancelAnimationFrame(animationFrame);
+  stopLoop();
+  resizeObserver?.disconnect();
+  window.removeEventListener('theme-changed', refreshColors);
+});
+
+// Stop RAF when paused — no CPU burn at idle
+watch(() => audioStore.isPlaying, (playing) => {
+  if (playing) {
+    startLoop();
+  } else {
+    // One final draw to sync position indicator, then stop
+    needsRedraw = true;
+    draw();
+    stopLoop();
+  }
+});
+
+// Redraw when data arrives while paused (waveform load, seek, buffer update)
+watch(() => [audioStore.waveforms, audioStore.bufferedRanges, audioStore.position], () => {
+  if (!audioStore.isPlaying) {
+    needsRedraw = true;
+    if (animationFrame === null) draw();
+  }
 });
 </script>
 

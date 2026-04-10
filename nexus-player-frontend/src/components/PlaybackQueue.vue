@@ -324,6 +324,7 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
       <VirtualList
         :items="queue"
         :item-height="calculateItemHeight"
+        :overscan="8"
         container-selector=".queue-scroll-container"
       >
         <template #default="{ item }">
