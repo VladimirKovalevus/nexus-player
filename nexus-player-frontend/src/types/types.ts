@@ -86,6 +86,14 @@ export interface SearchContextDto {
   query: string;
 }
 
+export interface LibraryPageDto {
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+  totalTracks: number;
+  trackIndexInPage: number;
+}
+
 export interface QueueState {
   entries: QueueEntryDto[];
   currentPosition: CurrentPositionDto | null;

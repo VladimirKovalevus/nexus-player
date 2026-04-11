@@ -115,6 +115,16 @@ pub struct SearchContextDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LibraryPageDto {
+    pub current_page: usize,
+    pub total_pages: usize,
+    pub page_size: usize,
+    pub total_tracks: usize,
+    pub track_index_in_page: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QueueStateDto {
     pub entries: Vec<QueueEntryDto>,
     pub current_position: Option<CurrentPositionDto>,

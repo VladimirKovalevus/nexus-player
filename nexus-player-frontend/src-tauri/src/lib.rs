@@ -91,6 +91,8 @@ pub fn run() {
             commands::clear_queue,
             commands::get_queue,
             commands::load_playlist_to_queue,
+            commands::load_library_page_to_queue,
+            commands::load_library_page,
             commands::play_at_index,
             commands::play_next,
             commands::play_previous,

@@ -344,6 +344,78 @@ impl AppState {
         }
     }
 
+    pub async fn load_library_page_to_queue(
+        &self,
+        track_id: TrackId,
+        page_size: usize,
+        order: TrackOrder,
+    ) -> Result<(usize, usize, usize)> {
+        let all_tracks = self.get_all_library_tracks(order).await?;
+        let total = all_tracks.len();
+
+        let clicked_pos = all_tracks
+            .iter()
+            .position(|t| t.id == track_id)
+            .unwrap_or(0);
+        let page = clicked_pos / page_size;
+        let page_start = page * page_size;
+        let page_end = (page_start + page_size).min(total);
+        let track_index_in_page = clicked_pos - page_start;
+
+        let audio_tracks: Vec<AudioTrack> = all_tracks[page_start..page_end]
+            .iter()
+            .map(|t| t.clone().into())
+            .collect();
+
+        self.fill_cursor_queue(audio_tracks).await;
+
+        let total_pages = (total + page_size - 1) / page_size;
+        Ok((page, total_pages, track_index_in_page))
+    }
+
+    pub async fn load_library_page(
+        &self,
+        page: usize,
+        page_size: usize,
+        order: TrackOrder,
+    ) -> Result<usize> {
+        let all_tracks = self.get_all_library_tracks(order).await?;
+        let total = all_tracks.len();
+
+        let page_start = (page * page_size).min(total);
+        let page_end = (page_start + page_size).min(total);
+
+        let audio_tracks: Vec<AudioTrack> = all_tracks[page_start..page_end]
+            .iter()
+            .map(|t| t.clone().into())
+            .collect();
+
+        self.fill_cursor_queue(audio_tracks).await;
+
+        let total_pages = (total + page_size - 1) / page_size;
+        Ok(total_pages)
+    }
+
+    async fn fill_cursor_queue(&self, tracks: Vec<AudioTrack>) {
+        let mut queue = self.queue.lock().await;
+        match &mut *queue {
+            ActiveQueue::Cursor(cq) => {
+                cq.clear();
+                for track in tracks {
+                    cq.add_track(track);
+                }
+            }
+            _ => {
+                *queue = ActiveQueue::new_cursor();
+                if let ActiveQueue::Cursor(cq) = &mut *queue {
+                    for track in tracks {
+                        cq.add_track(track);
+                    }
+                }
+            }
+        }
+    }
+
     pub async fn load_context_to_queue(&self, context: ContainerContext) -> Result<()> {
         tracing::info!("Loading context to queue: {:?}", context);
         let cursor = PlayerCursor::from_context(context, self.cursor_resolver.clone()).await?;

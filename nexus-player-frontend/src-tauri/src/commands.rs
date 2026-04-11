@@ -1,8 +1,8 @@
 use crate::dto::{
     hash_str_to_i64, AudioStateDto, ContainerMetaDto, CreatePlaylistRequest,
-    CreatePlaylistWithTracksRequest, CurrentPositionDto, PlayHistoryEntryDto, PlaylistDto,
-    PlaylistItemDto, PlaylistWithItemsDto, PlaylistWithTracksDto, QueueEntryDto, QueueStateDto,
-    SearchContextDto, SearchResultDto, TaskInfoDto, TrackDto, TrackSourceDto,
+    CreatePlaylistWithTracksRequest, CurrentPositionDto, LibraryPageDto, PlayHistoryEntryDto,
+    PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, PlaylistWithTracksDto, QueueEntryDto,
+    QueueStateDto, SearchContextDto, SearchResultDto, TaskInfoDto, TrackDto, TrackSourceDto,
 };
 use crate::events::FrontendEvent;
 use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
@@ -361,6 +361,54 @@ pub async fn load_playlist_to_queue(
         .map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn load_library_page_to_queue(
+    state: State<'_, Arc<AppState>>,
+    track_id: i64,
+    page_size: Option<usize>,
+    order: Option<TrackOrder>,
+) -> Result<LibraryPageDto> {
+    let page_size = page_size.unwrap_or(50);
+    let order = order.unwrap_or_default();
+
+    let (current_page, total_pages, track_index_in_page) = state
+        .load_library_page_to_queue(TrackId(track_id), page_size, order)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let total_tracks = total_pages * page_size; // approximate; not critical
+    Ok(LibraryPageDto {
+        current_page,
+        total_pages,
+        page_size,
+        total_tracks,
+        track_index_in_page,
+    })
+}
+
+#[tauri::command]
+pub async fn load_library_page(
+    state: State<'_, Arc<AppState>>,
+    page: usize,
+    page_size: usize,
+    order: Option<TrackOrder>,
+) -> Result<LibraryPageDto> {
+    let order = order.unwrap_or_default();
+
+    let total_pages = state
+        .load_library_page(page, page_size, order)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(LibraryPageDto {
+        current_page: page,
+        total_pages,
+        page_size,
+        total_tracks: 0,
+        track_index_in_page: 0,
+    })
 }
 
 #[tauri::command]

@@ -82,20 +82,38 @@
     <section :class="$style.trackSection">
       <div :class="$style.sectionHeader">
         <h2 :class="$style.sectionTitle">Треки</h2>
-        <div
-          v-if="tracks.length > 0"
-          :class="$style.filter"
-          @click="toggleSort"
-        >
-          <span>{{ currentSortLabel }}</span>
-          <span
-            :class="[
-              $style.arrow,
-              sortDirection === 'desc' && $style.arrowDown,
-            ]"
-            >▲</span
+        <div :class="$style.headerControls">
+          <div
+            v-if="tracks.length > 0"
+            :class="$style.filter"
+            @click="toggleSort"
           >
+            <span>{{ currentSortLabel }}</span>
+            <span
+              :class="[
+                $style.arrow,
+                sortDirection === 'desc' && $style.arrowDown,
+              ]"
+              >▲</span
+            >
+          </div>
         </div>
+      </div>
+
+      <div v-if="pageCursor.totalPages > 1" :class="$style.pagination">
+        <button
+          :class="$style.pageBtn"
+          :disabled="pageCursor.currentPage === 0"
+          @click="goToPage(pageCursor.currentPage - 1)"
+        >‹</button>
+        <span :class="$style.pageInfo">
+          {{ pageCursor.currentPage + 1 }} / {{ pageCursor.totalPages }}
+        </span>
+        <button
+          :class="$style.pageBtn"
+          :disabled="pageCursor.currentPage >= pageCursor.totalPages - 1"
+          @click="goToPage(pageCursor.currentPage + 1)"
+        >›</button>
       </div>
 
       <div v-if="tracks.length === 0" :class="$style.emptyState">
@@ -147,6 +165,7 @@ import type {
   PlaylistDto,
   TrackDto,
   PlaylistWithItemsDto,
+  LibraryPageDto,
 } from '@/types/types';
 import { useNotificationStore } from '@/stores/notifications';
 import { useAudioStore } from '@/stores/audio';
@@ -167,6 +186,9 @@ const isPlaylistModalOpen = ref(false);
 
 const sortField = ref<'default' | 'title' | 'artist' | 'added_at'>('default');
 const sortDirection = ref<'asc' | 'desc'>('asc');
+
+const PAGE_SIZE = 50;
+const pageCursor = ref({ currentPage: 0, totalPages: 0 });
 
 const sortLabels = {
   default: 'По умолчанию',
@@ -333,12 +355,36 @@ const handleAddTrack = async () => {
 };
 
 const handleTrackClick = async (track: TrackDto) => {
-  console.log('Track clicked:', track);
+  audioStore.startLoading();
   try {
-    await invoke('add_to_queue', { trackId: track.id });
+    const dto = await invoke<LibraryPageDto>('load_library_page_to_queue', {
+      trackId: track.id,
+      pageSize: PAGE_SIZE,
+      order: { [sortField.value]: sortDirection.value },
+    });
+    pageCursor.value = { currentPage: dto.currentPage, totalPages: dto.totalPages };
+    await invoke('play_at_index', { index: dto.trackIndexInPage });
     refreshQueue();
   } catch (e) {
-    console.error('Failed to add track to queue:', e);
+    console.error('Failed to load library page:', e);
+    audioStore.stopLoading();
+  }
+};
+
+const goToPage = async (page: number) => {
+  audioStore.startLoading();
+  try {
+    const dto = await invoke<LibraryPageDto>('load_library_page', {
+      page,
+      pageSize: PAGE_SIZE,
+      order: { [sortField.value]: sortDirection.value },
+    });
+    pageCursor.value = { currentPage: dto.currentPage, totalPages: dto.totalPages };
+    await invoke('play_at_index', { index: 0 });
+    refreshQueue();
+  } catch (e) {
+    console.error('Failed to load page:', e);
+    audioStore.stopLoading();
   }
 };
 
@@ -414,6 +460,11 @@ const handleTrackMore = (track: TrackDto) => {
   }
 }
 
+.headerControls {
+  @include flex-center;
+  gap: $spacing-sm;
+}
+
 .filter {
   @include flex-center;
   gap: $spacing-sm;
@@ -429,6 +480,41 @@ const handleTrackMore = (track: TrackDto) => {
     color: var(--color-text-primary);
     background-color: var(--color-bg-hover);
   }
+}
+
+.pagination {
+  @include flex-center;
+  gap: $spacing-sm;
+  padding: $spacing-xs 0 $spacing-sm;
+}
+
+.pageBtn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border-radius: $radius-sm;
+  cursor: pointer;
+  font-size: $font-size-base;
+  @include flex-center;
+  transition: all $transition-fast;
+
+  &:hover:not(:disabled) {
+    background: var(--color-bg-hover);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.pageInfo {
+  font-size: $font-size-sm;
+  color: var(--color-text-secondary);
+  min-width: 60px;
+  text-align: center;
 }
 
 .arrow {
