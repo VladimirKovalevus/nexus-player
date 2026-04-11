@@ -1,12 +1,13 @@
 <template>
-  <div :class="[$style.home, 'home-view-scroll-container']">
+  <div :class="$style.home">
     <PlaylistCreateModal
       :is-open="isPlaylistModalOpen"
       @close="handleModalClose"
       @created="handlePlaylistCreated"
     />
 
-    <section :class="$style.section">
+    <!-- Плейлисты: фиксированная верхняя зона -->
+    <section :class="$style.playlistSection">
       <div :class="$style.sectionHeader">
         <h2 :class="$style.sectionTitle">Плейлисты</h2>
         <a
@@ -32,7 +33,7 @@
         <VirtualHorizontalList
           :items="playlists"
           :item-width="180"
-          :height="300"
+          :height="220"
         >
           <template #default="{ item: playlist }">
             <MediaCardCompact
@@ -48,10 +49,26 @@
               @delete="handlePlaylistDelete(playlist)"
             >
               <template #menu="{ close }">
-                <button :class="$style.menuItem" @click.stop="() => { handlePlaylistCache(playlist); close(); }">
+                <button
+                  :class="$style.menuItem"
+                  @click.stop="
+                    () => {
+                      handlePlaylistCache(playlist);
+                      close();
+                    }
+                  "
+                >
                   Кэшировать плейлист
                 </button>
-                <button :class="[$style.menuItem, $style.danger]" @click.stop="() => { handlePlaylistDelete(playlist); close(); }">
+                <button
+                  :class="[$style.menuItem, $style.danger]"
+                  @click.stop="
+                    () => {
+                      handlePlaylistDelete(playlist);
+                      close();
+                    }
+                  "
+                >
                   Удалить
                 </button>
               </template>
@@ -61,12 +78,23 @@
       </div>
     </section>
 
-    <section :class="$style.section">
+    <!-- Треки: занимает всё оставшееся место, прокручивается отдельно -->
+    <section :class="$style.trackSection">
       <div :class="$style.sectionHeader">
         <h2 :class="$style.sectionTitle">Треки</h2>
-        <div v-if="tracks.length > 0" :class="$style.filter" @click="toggleSort">
+        <div
+          v-if="tracks.length > 0"
+          :class="$style.filter"
+          @click="toggleSort"
+        >
           <span>{{ currentSortLabel }}</span>
-          <span :class="[$style.arrow, sortDirection === 'desc' && $style.arrowDown]">▲</span>
+          <span
+            :class="[
+              $style.arrow,
+              sortDirection === 'desc' && $style.arrowDown,
+            ]"
+            >▲</span
+          >
         </div>
       </div>
 
@@ -79,27 +107,30 @@
         </button>
       </div>
 
-      <div v-else :class="$style.trackList">
-        <VirtualList
-          :items="tracks"
-          :item-height="96"
-          :overscan="8"
-          container-selector=".home-view-scroll-container"
-        >
-          <template #default="{ item: track }">
-            <MediaCard
-              v-memo="[track.id, track.liked, audioStore.currentTrack?.id === track.id]"
-              type="track"
-              show-action
-              :track="track"
-              :active="audioStore.currentTrack?.id === track.id"
-              @click="handleTrackClick(track)"
-              @play="handleTrackPlay(track)"
-              @refresh="fetchTracks"
-            />
-          </template>
-        </VirtualList>
-      </div>
+      <VirtualList
+        v-else
+        :class="$style.scroller"
+        :items="tracks"
+        :item-height="96"
+        :overscan="8"
+      >
+        <template #default="{ item: track }">
+          <MediaCard
+            v-memo="[
+              track.id,
+              track.liked,
+              audioStore.currentTrack?.id === track.id,
+            ]"
+            type="track"
+            show-action
+            :track="track"
+            :active="audioStore.currentTrack?.id === track.id"
+            @click="handleTrackClick(track)"
+            @play="handleTrackPlay(track)"
+            @refresh="fetchTracks"
+          />
+        </template>
+      </VirtualList>
     </section>
   </div>
 </template>
@@ -112,7 +143,11 @@ import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
 import PlaylistCreateModal from '@/components/PlaylistCreateModal.vue';
 import VirtualList from '@/components/common/VirtualList.vue';
 import VirtualHorizontalList from '@/components/common/VirtualHorizontalList.vue';
-import type { PlaylistDto, TrackDto, PlaylistWithItemsDto } from '@/types/types';
+import type {
+  PlaylistDto,
+  TrackDto,
+  PlaylistWithItemsDto,
+} from '@/types/types';
 import { useNotificationStore } from '@/stores/notifications';
 import { useAudioStore } from '@/stores/audio';
 
@@ -147,20 +182,24 @@ const toggleSort = () => {
     sortDirection.value = 'desc';
   } else {
     sortDirection.value = 'asc';
-    const fields: (typeof sortField.value)[] = ['default', 'title', 'artist', 'added_at'];
+    const fields: (typeof sortField.value)[] = [
+      'default',
+      'title',
+      'artist',
+      'added_at',
+    ];
     const currentIndex = fields.indexOf(sortField.value);
     sortField.value = fields[(currentIndex + 1) % fields.length];
   }
   fetchTracks();
 };
 
-
 const fetchPlaylists = async () => {
   try {
     const playlistDtos = await invoke<PlaylistDto[]>('get_all_playlists');
-    console.log(playlistDtos,"PLAYLISTS")
-    playlists.value = playlistDtos; 
-    } catch (e) {
+    console.log(playlistDtos, 'PLAYLISTS');
+    playlists.value = playlistDtos;
+  } catch (e) {
     console.error('Failed to fetch playlists:', e);
     error.value = `Failed to load playlists: ${e}`;
   }
@@ -170,7 +209,7 @@ const fetchTracks = async () => {
   try {
     const order = { [sortField.value]: sortDirection.value };
     const trackDtos = await invoke<TrackDto[]>('get_all_tracks', { order });
-    console.log(trackDtos,"DTOS")
+    console.log(trackDtos, 'DTOS');
     tracks.value = trackDtos;
   } catch (e) {
     console.error('Failed to fetch tracks:', e);
@@ -187,11 +226,9 @@ const loadData = async () => {
   loading.value = false;
 };
 
-
 onMounted(() => {
   loadData();
 });
-
 
 const handleAddPlaylist = () => {
   isPlaylistModalOpen.value = true;
@@ -207,7 +244,6 @@ const handleModalClose = () => {
 
 const showAllPlaylists = () => {
   console.log('Show all playlists clicked');
-  
 };
 
 const handlePlaylistClick = (playlist: PlaylistDto) => {
@@ -229,13 +265,19 @@ const handlePlaylistPlay = async (playlist: PlaylistDto) => {
 
 const handlePlaylistCache = async (playlist: PlaylistDto) => {
   console.log('Caching playlist:', playlist.title);
-  notifications.addNotification(`Начинаю кэширование плейлиста "${playlist.title}"`, 'info');
+  notifications.addNotification(
+    `Начинаю кэширование плейлиста "${playlist.title}"`,
+    'info',
+  );
   try {
-    const pwi = await invoke<PlaylistWithItemsDto | null>('get_playlist_with_tracks', { playlistId: playlist.id });
+    const pwi = await invoke<PlaylistWithItemsDto | null>(
+      'get_playlist_with_tracks',
+      { playlistId: playlist.id },
+    );
     if (pwi && pwi.items) {
       let successCount = 0;
       let failCount = 0;
-      
+
       for (const item of pwi.items) {
         if (item.itemType === 'track') {
           try {
@@ -247,16 +289,25 @@ const handlePlaylistCache = async (playlist: PlaylistDto) => {
           }
         }
       }
-      
+
       if (failCount === 0) {
-        notifications.addNotification(`Плейлист "${playlist.title}" поставлен на загрузку (${successCount} треков)`, 'success');
+        notifications.addNotification(
+          `Плейлист "${playlist.title}" поставлен на загрузку (${successCount} треков)`,
+          'success',
+        );
       } else {
-        notifications.addNotification(`Загрузка "${playlist.title}": ${successCount} ок, ${failCount} ошибок`, 'warning');
+        notifications.addNotification(
+          `Загрузка "${playlist.title}": ${successCount} ок, ${failCount} ошибок`,
+          'warning',
+        );
       }
     }
   } catch (e) {
     console.error('Failed to cache playlist:', e);
-    notifications.addNotification(`Ошибка при получении данных плейлиста: ${e}`, 'error');
+    notifications.addNotification(
+      `Ошибка при получении данных плейлиста: ${e}`,
+      'error',
+    );
   }
 };
 
@@ -268,7 +319,6 @@ const handlePlaylistDelete = async (playlist: PlaylistDto) => {
     console.error('Failed to delete playlist:', e);
   }
 };
-
 
 const handleAddTrack = async () => {
   try {
@@ -308,7 +358,6 @@ const handleTrackPlay = async (track: TrackDto) => {
 
 const handleTrackMore = (track: TrackDto) => {
   console.log('Track more clicked:', track);
-  
 };
 </script>
 
@@ -317,14 +366,29 @@ const handleTrackMore = (track: TrackDto) => {
 @import '@/styles/mixins.scss';
 
 .home {
-  padding: $spacing-xl;
-  overflow-y: auto;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  overflow: hidden;
 }
 
-.section {
+.playlistSection {
+  flex-shrink: 0;
+  padding: $spacing-xl $spacing-xl 0;
   margin-bottom: $spacing-2xl;
+}
+
+.trackSection {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 $spacing-xl;
+}
+
+.scroller {
+  flex: 1;
+  min-height: 0;
 }
 
 .sectionHeader {
@@ -387,13 +451,6 @@ const handleTrackMore = (track: TrackDto) => {
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: $spacing-lg;
 }
-
-.trackList {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-sm;
-}
-
 
 .emptyState {
   display: flex;

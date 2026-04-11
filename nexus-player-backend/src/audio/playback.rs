@@ -167,7 +167,7 @@ impl PlaybackEngine {
             samples_played: Arc::new(Mutex::new(0)),
             sample_buffer: Arc::new(Mutex::new(Vec::new())),
             buffer_position: Arc::new(Mutex::new(0)),
-            volume: Arc::new(Mutex::new(1.0)),
+            volume: Arc::new(Mutex::new(0.1)),
             recent_samples: Arc::new(Mutex::new(Vec::with_capacity(8192))),
             needs_recreation: Arc::new(AtomicBool::new(false)),
         })

@@ -144,7 +144,7 @@ impl Default for AudioState {
             playback_state: PlaybackState::Stopped,
             position: Duration::ZERO,
             duration: Duration::ZERO,
-            volume: 1.0,
+            volume: 0.1,
             buffered_ranges: Vec::new(),
             waveforms: Vec::new(),
             fft: Vec::new(),

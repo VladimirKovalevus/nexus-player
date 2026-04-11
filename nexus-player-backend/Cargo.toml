@@ -48,7 +48,7 @@ parking_lot = "0.12"
 chrono = { workspace = true }
 #===============
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "stream", "blocking"] }
-bandcamp = "0.3.4"
+bandcamp = {path = "../../bandcamp"}
 rsoundcloud = { workspace = true }
 vk-api = { workspace = true }
 sha2 = "0.10.9"

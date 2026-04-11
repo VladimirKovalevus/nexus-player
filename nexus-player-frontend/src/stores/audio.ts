@@ -6,7 +6,7 @@ import { useNotificationStore } from './notifications';
 
 export const useAudioStore = defineStore('audio', () => {
   const notificationStore = useNotificationStore();
-  
+
   // High-frequency state isolated to prevent unnecessary re-renders of the whole app
   const currentPositionSecs = ref(0);
   const currentFft = ref<number[]>([]);
@@ -18,7 +18,7 @@ export const useAudioStore = defineStore('audio', () => {
     state: 'stopped',
     positionSecs: 0,
     durationSecs: 0,
-    volume: 1.0,
+    volume: 0.1,
     currentTrack: null,
     bufferedRanges: [],
     waveforms: [],
@@ -42,22 +42,27 @@ export const useAudioStore = defineStore('audio', () => {
         title: track.title,
         artist: track.artist,
         album: track.album || '',
-        artwork: track.thumbnail ? [{ src: track.thumbnail, sizes: '512x512', type: 'image/png' }] : []
+        artwork: track.thumbnail
+          ? [{ src: track.thumbnail, sizes: '512x512', type: 'image/png' }]
+          : [],
       });
     }
   }
 
   function updateMediaSessionPlaybackState() {
     if ('mediaSession' in navigator) {
-      navigator.mediaSession.playbackState = 
-        audioState.value.state === 'playing' ? 'playing' : 
-        audioState.value.state === 'paused' ? 'paused' : 'none';
-      
+      navigator.mediaSession.playbackState =
+        audioState.value.state === 'playing'
+          ? 'playing'
+          : audioState.value.state === 'paused'
+            ? 'paused'
+            : 'none';
+
       if (audioState.value.durationSecs > 0) {
         navigator.mediaSession.setPositionState({
           duration: audioState.value.durationSecs,
           playbackRate: 1,
-          position: currentPositionSecs.value
+          position: currentPositionSecs.value,
         });
       }
     }
@@ -66,11 +71,15 @@ export const useAudioStore = defineStore('audio', () => {
   if ('mediaSession' in navigator) {
     navigator.mediaSession.setActionHandler('play', () => invoke('resume'));
     navigator.mediaSession.setActionHandler('pause', () => invoke('pause'));
-    navigator.mediaSession.setActionHandler('previoustrack', () => invoke('play_previous'));
-    navigator.mediaSession.setActionHandler('nexttrack', () => invoke('play_next'));
+    navigator.mediaSession.setActionHandler('previoustrack', () =>
+      invoke('play_previous'),
+    );
+    navigator.mediaSession.setActionHandler('nexttrack', () =>
+      invoke('play_next'),
+    );
     navigator.mediaSession.setActionHandler('seekto', (details) => {
       if (details.seekTime !== undefined) {
-        invoke('seek', { positionSecs: Math.max(details.seekTime,0) });
+        invoke('seek', { positionSecs: Math.max(details.seekTime, 0) });
       }
     });
   }
@@ -80,21 +89,30 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   function syncNativeBridge() {
-    const bridge = typeof window !== 'undefined' ? (window as any)._NexusAudio : null;
+    const bridge =
+      typeof window !== 'undefined' ? (window as any)._NexusAudio : null;
     if (!bridge) return;
     const track = audioState.value.currentTrack;
-    const playing = audioState.value.state === 'playing' || audioState.value.state === 'loading';
+    const playing =
+      audioState.value.state === 'playing' ||
+      audioState.value.state === 'loading';
     if (audioState.value.state === 'stopped') {
       bridge.stopService();
     } else {
-      bridge.updateState(track?.title ?? 'Nexus Player', track?.artist ?? '', playing);
+      bridge.updateState(
+        track?.title ?? 'Nexus Player',
+        track?.artist ?? '',
+        playing,
+      );
     }
   }
 
   const isPlaying = computed(() => audioState.value.state === 'playing');
   const isPaused = computed(() => audioState.value.state === 'paused');
   const isStopped = computed(() => audioState.value.state === 'stopped');
-  const isLoading = computed(() => audioState.value.state === 'loading' || isWaitingForAudio.value);
+  const isLoading = computed(
+    () => audioState.value.state === 'loading' || isWaitingForAudio.value,
+  );
   const currentTrack = computed(() => audioState.value.currentTrack);
   const position = computed(() => currentPositionSecs.value);
   const fft = computed(() => currentPcm.value);
@@ -121,14 +139,20 @@ export const useAudioStore = defineStore('audio', () => {
     }
     return result;
   });
-  const currentIndex = computed(() => queueState.value.currentPosition?.itemIndex ?? null);
+  const currentIndex = computed(
+    () => queueState.value.currentPosition?.itemIndex ?? null,
+  );
 
   const repeatIcon = computed((): string => {
     switch (queueState.value.repeatMode) {
-      case 'off': return '🔁';
-      case 'all': return '🔁';
-      case 'one': return '🔂';
-      default: return '🔁';
+      case 'off':
+        return '🔁';
+      case 'all':
+        return '🔁';
+      case 'one':
+        return '🔂';
+      default:
+        return '🔁';
     }
   });
 
@@ -159,7 +183,10 @@ export const useAudioStore = defineStore('audio', () => {
         if (event.payload?.positionSecs !== undefined) {
           const now = Date.now();
           // Throttle reactive updates to 20fps max, but allow big jumps
-          if (now - _lastPosUpdate > 50 || Math.abs(event.payload.positionSecs - currentPositionSecs.value) > 1) {
+          if (
+            now - _lastPosUpdate > 50 ||
+            Math.abs(event.payload.positionSecs - currentPositionSecs.value) > 1
+          ) {
             currentPositionSecs.value = event.payload.positionSecs;
             if (event.payload.fft) {
               currentFft.value = event.payload.fft;
@@ -223,20 +250,32 @@ export const useAudioStore = defineStore('audio', () => {
         break;
       case 'DownloadStarted':
         if (event.payload?.title) {
-          notificationStore.addNotification(`Download started: ${event.payload.title}`, 'success');
+          notificationStore.addNotification(
+            `Download started: ${event.payload.title}`,
+            'success',
+          );
         }
         break;
       case 'DownloadFinished':
         if (event.payload?.success) {
-          notificationStore.addNotification(`Download finished: ${event.payload.title}`, 'success');
+          notificationStore.addNotification(
+            `Download finished: ${event.payload.title}`,
+            'success',
+          );
         } else {
-          notificationStore.addNotification(`Download failed: ${event.payload.title}`, 'error');
+          notificationStore.addNotification(
+            `Download failed: ${event.payload.title}`,
+            'error',
+          );
         }
         break;
       case 'Error':
         isWaitingForAudio.value = false;
         console.error('Audio error:', event.payload?.message);
-        notificationStore.addNotification(`Audio Error: ${event.payload?.message}`, 'error');
+        notificationStore.addNotification(
+          `Audio Error: ${event.payload?.message}`,
+          'error',
+        );
         break;
     }
   }
@@ -265,7 +304,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   function playNext() {
     startLoading();
-    invoke('play_next').catch(e => {
+    invoke('play_next').catch((e) => {
       console.error('Failed to play next:', e);
       stopLoading();
     });
@@ -273,7 +312,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   function playPrevious() {
     startLoading();
-    invoke('play_previous').catch(e => {
+    invoke('play_previous').catch((e) => {
       console.error('Failed to play previous:', e);
       stopLoading();
     });
