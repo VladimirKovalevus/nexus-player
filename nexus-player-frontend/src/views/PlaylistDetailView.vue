@@ -395,8 +395,7 @@ const toggleExpand = async (childId: number) => {
 const handlePlayAll = async () => {
   audioStore.startLoading();
   try {
-    await invoke('load_playlist_to_queue', { playlistId: props.playlistId });
-    await invoke('play_at_index', { index: 0 });
+    await invoke('load_playlist_and_play', { playlistId: props.playlistId, startIndex: 0 });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play playlist:', e);
@@ -407,8 +406,7 @@ const handlePlayAll = async () => {
 const handlePlaySubPlaylist = async (sub: PlaylistDto) => {
   audioStore.startLoading();
   try {
-    await invoke('load_playlist_to_queue', { playlistId: sub.id });
-    await invoke('play_at_index', { index: 0 });
+    await invoke('load_playlist_and_play', { playlistId: sub.id, startIndex: 0 });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play sub-playlist:', e);
@@ -428,16 +426,13 @@ const handleTrackClick = async (track: TrackDto) => {
 const handleTrackPlay = async (index: number) => {
   audioStore.startLoading();
   try {
-    await invoke('load_playlist_to_queue', { playlistId: props.playlistId });
-    
     let trackIndex = 0;
     for (let i = 0; i < index; i++) {
       if (items.value[i].itemType === 'track') {
         trackIndex++;
       }
     }
-    
-    await invoke('play_at_index', { index: trackIndex });
+    await invoke('load_playlist_and_play', { playlistId: props.playlistId, startIndex: trackIndex });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play track from playlist:', e);

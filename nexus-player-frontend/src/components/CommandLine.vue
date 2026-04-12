@@ -246,8 +246,7 @@ const execPlayPlaylist: ExecFn = async (_, raw) => {
   const match = playlists.find(p => p.title.toLowerCase() === tq)
     ?? fuzzyFilter(tq, playlists.map(p => p.title)).map(t => playlists.find(p => p.title === t)!)[0];
   if (!match) { showFeedback(`playlist не найден: ${titleArg.val}`, true, 1500); return; }
-  await invoke('load_playlist_to_queue', { playlistId: match.id });
-  await invoke('play_at_index', { index: startN - 1 });
+  await invoke('load_playlist_and_play', { playlistId: match.id, startIndex: startN - 1 });
   showFeedback(`▶ ${match.title}${startN > 1 ? ` #${startN}` : ''}`);
 };
 
@@ -317,8 +316,7 @@ const execVkPlaylist: ExecFn = async (_, raw) => {
     tracks: [],
   };
 
-  await invoke('handle_streaming_track', { searchResult, strategy: 'cache', searchType: 'playlist' });
-  await invoke('play_at_index', { index: startN - 1 });
+  await invoke('handle_streaming_track', { searchResult, strategy: 'cache', searchType: 'playlist', play: true });
   showFeedback(`▶ ${match.title}${startN > 1 ? ` #${startN}` : ''}`);
 };
 

@@ -21,6 +21,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use streaming::state::types::DefaultCallbacks;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 pub struct AppState {
     audio_engine: Arc<AudioEngine>,
@@ -35,6 +36,8 @@ pub struct AppState {
     streaming: Arc<StreamingService>, // Made Arc to share with resolver
 
     config_manager: ConfigManager,
+
+    op_cancel: Mutex<CancellationToken>,
 }
 
 impl AppState {
@@ -69,6 +72,7 @@ impl AppState {
             library,
             streaming,
             config_manager,
+            op_cancel: Mutex::new(CancellationToken::new()),
         })
     }
 
@@ -113,6 +117,22 @@ impl AppState {
             }
         }
         Ok(tracks)
+    }
+
+    /// Search streaming providers, cancelling any in-flight exclusive operation first.
+    pub async fn search_streaming_cancellable(
+        &self,
+        system: &str,
+        content_type: Option<crate::streaming::types::ContentType>,
+        query: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<crate::streaming::types::SearchResult>> {
+        let cancel = self.begin_exclusive_op().await;
+        tokio::select! {
+            r = self.streaming.search(system, content_type, query, limit, offset) => Ok(r?),
+            _ = cancel.cancelled() => Ok(vec![]),
+        }
     }
 
     // --- Playback Control ---
@@ -416,17 +436,198 @@ impl AppState {
         }
     }
 
-    pub async fn load_context_to_queue(&self, context: ContainerContext) -> Result<()> {
-        tracing::info!("Loading context to queue: {:?}", context);
-        let cursor = PlayerCursor::from_context(context, self.cursor_resolver.clone()).await?;
+    // --- Cancellation mechanism ---
+
+    /// Cancel any in-flight exclusive operation and return a fresh token for the new one.
+    async fn begin_exclusive_op(&self) -> CancellationToken {
+        let mut guard = self.op_cancel.lock().await;
+        guard.cancel();
+        let token = CancellationToken::new();
+        *guard = token.clone();
+        token
+    }
+
+    /// Like `play()` but stops silently if the cancel token is triggered before reaching the
+    /// audio engine. Prevents stale play commands from a superseded operation reaching the driver.
+    async fn play_cancellable(&self, track: Option<Track>, cancel: CancellationToken) {
+        if let Some(track) = track {
+            self.audio_engine().set_loading(track.clone());
+
+            let lib = self.library.clone();
+            let track_for_history = track.clone();
+            tokio::spawn(async move {
+                let entry = PlayHistoryEntry {
+                    id: 0,
+                    title: track_for_history.title.clone(),
+                    artist: track_for_history.artist.clone(),
+                    source: track_for_history.source.clone(),
+                    artwork_url: track_for_history.artwork_url.clone(),
+                    played_at: chrono::Utc::now().timestamp(),
+                };
+                let _ = lib.add_play_history(entry).await;
+            });
+
+            let next_track = {
+                let queue = self.queue.lock().await;
+                queue.peek_next()
+            };
+            let next_track_id = next_track.as_ref().map(|t| t.id as u64);
+
+            if let Some(next) = next_track {
+                let streaming = self.streaming.clone();
+                let nx = next.clone();
+                let engine = self.audio_engine.clone();
+                tokio::spawn(async move {
+                    match streaming
+                        .resolve(nx.source.clone(), nx.id.clone() as u64, None)
+                        .await
+                    {
+                        Ok(wrapper) => wrapper.preload(&engine, nx),
+                        Err(_) => {}
+                    }
+                });
+            }
+
+            let resolve_result = tokio::select! {
+                r = self.streaming().resolve(track.source.clone(), track.id as u64, None) => r,
+                _ = cancel.cancelled() => return,
+            };
+
+            match resolve_result {
+                Ok(wrapper) => {
+                    self.streaming()
+                        .set_context(track.id as u64, next_track_id)
+                        .await;
+
+                    let prepare_result = tokio::select! {
+                        r = wrapper.prepare() => r,
+                        _ = cancel.cancelled() => return,
+                    };
+
+                    if let Err(e) = prepare_result {
+                        tracing::warn!("Prepare failed: {}", e);
+                        self.audio_engine().stop();
+                        return;
+                    }
+
+                    if cancel.is_cancelled() {
+                        return;
+                    }
+                    wrapper.play(self.audio_engine(), track);
+                }
+                Err(e) => {
+                    tracing::warn!("Error resolving track source: {}", e);
+                }
+            }
+        } else {
+            self.stop();
+        }
+    }
+
+    /// Load a library page (determined by the clicked track's position) and play it.
+    /// Cancels any in-flight exclusive operation before starting.
+    pub async fn load_and_play_library_page_at_track(
+        &self,
+        track_id: TrackId,
+        page_size: usize,
+        order: TrackOrder,
+    ) -> Result<(usize, usize, usize)> {
+        let cancel = self.begin_exclusive_op().await;
+
+        let all_tracks = self.get_all_library_tracks(order).await?;
+        let total = all_tracks.len();
+        let clicked_pos = all_tracks
+            .iter()
+            .position(|t| t.id == track_id)
+            .unwrap_or(0);
+        let page = clicked_pos / page_size;
+        let page_start = page * page_size;
+        let page_end = (page_start + page_size).min(total);
+        let track_index_in_page = clicked_pos - page_start;
+        let audio_tracks: Vec<AudioTrack> = all_tracks[page_start..page_end]
+            .iter()
+            .map(|t| t.clone().into())
+            .collect();
+
+        let total_pages = (total + page_size - 1) / page_size;
+
+        if cancel.is_cancelled() {
+            return Ok((page, total_pages, track_index_in_page));
+        }
+
+        self.fill_cursor_queue(audio_tracks).await;
+
+        let track = {
+            let mut queue = self.queue.lock().await;
+            match &mut *queue {
+                ActiveQueue::Cursor(cq) => {
+                    cq.jump_to(track_index_in_page);
+                    cq.current_track.clone()
+                }
+                _ => None,
+            }
+        };
+
+        if let Some(t) = track {
+            self.play_cancellable(Some(t), cancel).await;
+        }
+        Ok((page, total_pages, track_index_in_page))
+    }
+
+    /// Load a specific library page into the queue and play the first track.
+    /// Cancels any in-flight exclusive operation before starting.
+    pub async fn load_and_play_library_page(
+        &self,
+        page: usize,
+        page_size: usize,
+        order: TrackOrder,
+    ) -> Result<usize> {
+        let cancel = self.begin_exclusive_op().await;
+
+        let all_tracks = self.get_all_library_tracks(order).await?;
+        let total = all_tracks.len();
+        let page_start = (page * page_size).min(total);
+        let page_end = (page_start + page_size).min(total);
+        let audio_tracks: Vec<AudioTrack> = all_tracks[page_start..page_end]
+            .iter()
+            .map(|t| t.clone().into())
+            .collect();
+
+        let total_pages = (total + page_size - 1) / page_size;
+
+        if cancel.is_cancelled() {
+            return Ok(total_pages);
+        }
+
+        self.fill_cursor_queue(audio_tracks).await;
+
+        let track = {
+            let mut queue = self.queue.lock().await;
+            match &mut *queue {
+                ActiveQueue::Cursor(cq) => {
+                    cq.jump_to(0);
+                    cq.current_track.clone()
+                }
+                _ => None,
+            }
+        };
+
+        if let Some(t) = track {
+            self.play_cancellable(Some(t), cancel).await;
+        }
+        Ok(total_pages)
+    }
+
+    async fn fill_context_queue(&self, context: ContainerContext, cancel: &CancellationToken) -> Result<()> {
+        let cursor = tokio::select! {
+            r = PlayerCursor::from_context(context, self.cursor_resolver.clone()) => r?,
+            _ = cancel.cancelled() => return Ok(()),
+        };
 
         {
             let mut queue = self.queue.lock().await;
             let cq = match &mut *queue {
-                ActiveQueue::Cursor(cq) => {
-                    cq.clear();
-                    cq
-                }
+                ActiveQueue::Cursor(cq) => { cq.clear(); cq }
                 _ => {
                     *queue = ActiveQueue::new_cursor();
                     match &mut *queue {
@@ -436,11 +637,9 @@ impl AppState {
                 }
             };
             cq.set_cursor(cursor);
-
             if let Ok(Some(first)) = cq.next().await {
                 tracing::info!("First track loaded: {}", first.id);
             }
-
             let prefetched = cq.prefetch(50).await?;
             tracing::info!("Prefetched {} tracks from cursor", prefetched);
         }
@@ -449,33 +648,56 @@ impl AppState {
         Ok(())
     }
 
-    // Legacy method support (load playlist to manual queue)
-    pub async fn load_playlist_to_queue(&self, playlist_id: PlaylistId) -> Result<()> {
-        let context = ContainerContext::LocalPlaylist(playlist_id.0);
-        self.load_context_to_queue(context).await
+    pub async fn load_context_to_queue(&self, context: ContainerContext) -> Result<()> {
+        tracing::info!("Loading context to queue: {:?}", context);
+        let cancel = self.begin_exclusive_op().await;
+        self.fill_context_queue(context, &cancel).await
     }
 
-    pub async fn load_search_to_queue(
+    pub async fn load_context_and_play(&self, context: ContainerContext, start_index: usize) -> Result<()> {
+        let cancel = self.begin_exclusive_op().await;
+        self.fill_context_queue(context, &cancel).await?;
+        if cancel.is_cancelled() { return Ok(()); }
+        let track = {
+            let mut queue = self.queue.lock().await;
+            match &mut *queue {
+                ActiveQueue::Cursor(cq) => { cq.jump_to(start_index); cq.current_track.clone() }
+                _ => None,
+            }
+        };
+        self.play_cancellable(track, cancel).await;
+        Ok(())
+    }
+
+    pub async fn load_playlist_to_queue(&self, playlist_id: PlaylistId) -> Result<()> {
+        self.load_context_to_queue(ContainerContext::LocalPlaylist(playlist_id.0)).await
+    }
+
+    pub async fn load_playlist_and_play(&self, playlist_id: PlaylistId, start_index: usize) -> Result<()> {
+        self.load_context_and_play(ContainerContext::LocalPlaylist(playlist_id.0), start_index).await
+    }
+
+    async fn fill_search_queue(
         &self,
-        system: String,
-        query: String,
+        system: &str,
+        query: &str,
         content_type: ContentType,
         selected_track_id: usize,
+        cancel: &CancellationToken,
     ) -> Result<()> {
-        tracing::info!("Loading search context: {} from {}", query, system);
         let context = ContainerContext::SearchQuery {
-            system: system.clone(),
-            query: query.clone(),
+            system: system.to_string(),
+            query: query.to_string(),
             content_type,
         };
-        let cursor = PlayerCursor::from_context(context, self.cursor_resolver.clone()).await?;
+        let cursor = tokio::select! {
+            r = PlayerCursor::from_context(context, self.cursor_resolver.clone()) => r?,
+            _ = cancel.cancelled() => return Ok(()),
+        };
 
         let mut queue = self.queue.lock().await;
         let cq = match &mut *queue {
-            ActiveQueue::Cursor(cq) => {
-                cq.clear();
-                cq
-            }
+            ActiveQueue::Cursor(cq) => { cq.clear(); cq }
             _ => {
                 *queue = ActiveQueue::new_cursor();
                 match &mut *queue {
@@ -495,13 +717,73 @@ impl AppState {
         }
 
         if !found {
-            tracing::warn!(
-                "Selected track {} not found in search results initial batch",
-                selected_track_id
-            );
+            tracing::warn!("Selected track {} not found in search results initial batch", selected_track_id);
         }
 
         cq.prefetch(50).await?;
+        Ok(())
+    }
+
+    pub async fn load_search_to_queue(
+        &self,
+        system: String,
+        query: String,
+        content_type: ContentType,
+        selected_track_id: usize,
+    ) -> Result<()> {
+        tracing::info!("Loading search context: {} from {}", query, system);
+        let cancel = self.begin_exclusive_op().await;
+        self.fill_search_queue(&system, &query, content_type, selected_track_id, &cancel).await
+    }
+
+    pub async fn load_search_and_play(
+        &self,
+        system: String,
+        query: String,
+        content_type: ContentType,
+        selected_track_id: usize,
+    ) -> Result<()> {
+        let cancel = self.begin_exclusive_op().await;
+        self.fill_search_queue(&system, &query, content_type, selected_track_id, &cancel).await?;
+        if cancel.is_cancelled() { return Ok(()); }
+        let track = {
+            let mut queue = self.queue.lock().await;
+            match &mut *queue {
+                ActiveQueue::Cursor(cq) => cq.current_track.clone(),
+                _ => None,
+            }
+        };
+        self.play_cancellable(track, cancel).await;
+        Ok(())
+    }
+
+    pub async fn add_track_and_play(&self, track: AudioTrack) -> Result<()> {
+        let cancel = self.begin_exclusive_op().await;
+        {
+            let mut queue = self.queue.lock().await;
+            let mut cq = CursorQueue::new();
+            cq.add_track(track.clone());
+            cq.jump_to(0);
+            *queue = ActiveQueue::Cursor(cq);
+        }
+        if cancel.is_cancelled() { return Ok(()); }
+        self.play_cancellable(Some(track), cancel).await;
+        Ok(())
+    }
+
+    pub async fn play_library_track(&self, track_id: TrackId) -> Result<()> {
+        let cancel = self.begin_exclusive_op().await;
+        let lib_track = self.library.get_track(track_id).await?.ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+        let track: AudioTrack = lib_track.into();
+        {
+            let mut queue = self.queue.lock().await;
+            let mut cq = CursorQueue::new();
+            cq.add_track(track.clone());
+            cq.jump_to(0);
+            *queue = ActiveQueue::Cursor(cq);
+        }
+        if cancel.is_cancelled() { return Ok(()); }
+        self.play_cancellable(Some(track), cancel).await;
         Ok(())
     }
 
@@ -608,6 +890,114 @@ impl AppState {
             self.expand_search_container(selected_index).await?;
         }
 
+        Ok(())
+    }
+
+    /// Atomic search + play: cancels any in-flight operation, searches, builds the SearchQueue,
+    /// optionally expands a container, then plays the selected item via play_cancellable.
+    pub async fn search_and_play(
+        &self,
+        system: String,
+        query: String,
+        content_type: Option<crate::streaming::types::ContentType>,
+        limit: usize,
+        offset: usize,
+        selected_index: usize,
+    ) -> Result<()> {
+        use crate::streaming::types::{ContentType, SearchResult as SR};
+
+        let cancel = self.begin_exclusive_op().await;
+
+        let results = tokio::select! {
+            r = self.streaming.search(&system, content_type, &query, limit, offset) => {
+                r.context("Search failed")?
+            }
+            _ = cancel.cancelled() => return Ok(()),
+        };
+
+        let has_more = results.len() >= limit;
+        let items: Vec<SearchQueueItem> = results
+            .into_iter()
+            .map(|r| match r {
+                SR::Track(track) => SearchQueueItem::Track(track.into()),
+                SR::Album(album) => SearchQueueItem::Container {
+                    info: ContainerMeta {
+                        kind: ContainerKind::Album,
+                        id: album.id,
+                        system: album.service.to_string(),
+                        title: album.title,
+                        artist: album.artist,
+                        track_count: album.track_count,
+                        thumbnail: album.thumbnail,
+                    },
+                    expanded_tracks: None,
+                    play_index: 0,
+                },
+                SR::Playlist(playlist) => SearchQueueItem::Container {
+                    info: ContainerMeta {
+                        kind: ContainerKind::Playlist,
+                        id: playlist.id,
+                        system: playlist.service.to_string(),
+                        title: playlist.title,
+                        artist: playlist.creator,
+                        track_count: playlist.track_count,
+                        thumbnail: playlist.thumbnail,
+                    },
+                    expanded_tracks: None,
+                    play_index: 0,
+                },
+                SR::Channel(_) => SearchQueueItem::Track(Track {
+                    id: 0,
+                    title: "Channel (unsupported)".to_string(),
+                    artist: None,
+                    album: None,
+                    duration: None,
+                    artwork_url: None,
+                    format: None,
+                    source: crate::audio::types::TrackSource::local("".to_string()),
+                    state: crate::audio::types::TrackState::Streaming,
+                    liked: false,
+                }),
+            })
+            .collect();
+
+        let mut sq = SearchQueue::new(system.clone(), query.clone(), items, has_more);
+        sq.jump_to(selected_index);
+
+        let needs_expand = {
+            let (entries, _) = sq.snapshot();
+            if let Some(entry) = entries.get(selected_index) {
+                matches!(
+                    entry,
+                    crate::playlist::playback_queue::QueueEntry::Container { tracks: None, .. }
+                )
+            } else {
+                false
+            }
+        };
+
+        {
+            let mut queue = self.queue.lock().await;
+            *queue = ActiveQueue::Search(sq);
+        }
+
+        if needs_expand {
+            let expand_result = tokio::select! {
+                r = self.expand_search_container(selected_index) => r,
+                _ = cancel.cancelled() => return Ok(()),
+            };
+            expand_result?;
+        }
+
+        let track = {
+            let queue = self.queue.lock().await;
+            match &*queue {
+                ActiveQueue::Search(sq) => sq.current_track(),
+                _ => None,
+            }
+        };
+
+        self.play_cancellable(track, cancel).await;
         Ok(())
     }
 
@@ -1033,6 +1423,7 @@ impl AppState {
     }
 
     pub async fn play_at_index(&self, index: usize) {
+        let cancel = self.begin_exclusive_op().await;
         let track = {
             let mut queue = self.queue.lock().await;
             match &mut *queue {
@@ -1046,10 +1437,7 @@ impl AppState {
                 }
             }
         };
-
-        if let Some(track) = track {
-            self.play(Some(track)).await;
-        }
+        self.play_cancellable(track, cancel).await;
     }
 
     /// Play a specific item in the search queue, optionally with a track index within a container

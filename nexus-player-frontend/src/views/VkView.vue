@@ -95,11 +95,26 @@ const handleTrackClick = async (track: TrackDto) => {
 };
 
 const handleTrackPlay = async (track: TrackDto) => {
+  if (!track.source) return;
   audioStore.startLoading();
+  const searchResult = {
+    type: 'track',
+    id: track.id,
+    title: track.title,
+    artist: track.artist || '',
+    durationSecs: track.durationSecs,
+    thumbnail: track.artworkUrl,
+    source: track.source,
+    state: track.state,
+    liked: track.liked || false,
+  };
   try {
-    await invoke('clear_queue');
-    await handleTrackClick(track);
-    await invoke('play_at_index', { index: 0 });
+    await invoke('handle_streaming_track', {
+      searchResult,
+      strategy: 'cache',
+      searchType: 'track',
+      play: true,
+    });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play VK track:', e);
@@ -138,10 +153,26 @@ const handlePlaylistClick = async (playlist: PlaylistDto) => {
 };
 
 const handlePlaylistPlay = async (playlist: PlaylistDto) => {
+  if (!playlist.source) return;
   audioStore.startLoading();
+  const searchResult = {
+    type: 'playlist',
+    id: playlist.source.url,
+    title: playlist.title,
+    creator: playlist.creator || '',
+    trackCount: playlist.trackCount,
+    thumbnail: playlist.thumbnail || undefined,
+    url: `https://vk.com/audio?z=audio_playlist${playlist.source.url}`,
+    system: playlist.source.system,
+    tracks: [],
+  };
   try {
-    await handlePlaylistClick(playlist);
-    await invoke('play_at_index', { index: 0 });
+    await invoke('handle_streaming_track', {
+      searchResult,
+      strategy: 'cache',
+      searchType: 'playlist',
+      play: true,
+    });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play VK playlist:', e);

@@ -412,6 +412,72 @@ pub async fn load_library_page(
 }
 
 #[tauri::command]
+pub async fn load_and_play_library_page_at_track(
+    state: State<'_, Arc<AppState>>,
+    track_id: i64,
+    page_size: Option<usize>,
+    order: Option<TrackOrder>,
+) -> Result<LibraryPageDto> {
+    let page_size = page_size.unwrap_or(50);
+    let order = order.unwrap_or_default();
+    let (current_page, total_pages, track_index_in_page) = state
+        .load_and_play_library_page_at_track(TrackId(track_id), page_size, order)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(LibraryPageDto {
+        current_page,
+        total_pages,
+        page_size,
+        total_tracks: total_pages * page_size,
+        track_index_in_page,
+    })
+}
+
+#[tauri::command]
+pub async fn play_library_track(
+    state: State<'_, Arc<AppState>>,
+    track_id: i64,
+) -> Result<()> {
+    state
+        .play_library_track(TrackId(track_id))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn load_playlist_and_play(
+    state: State<'_, Arc<AppState>>,
+    playlist_id: i64,
+    start_index: Option<usize>,
+) -> Result<()> {
+    state
+        .load_playlist_and_play(PlaylistId(playlist_id), start_index.unwrap_or(0))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn load_and_play_library_page(
+    state: State<'_, Arc<AppState>>,
+    page: usize,
+    page_size: usize,
+    order: Option<TrackOrder>,
+) -> Result<LibraryPageDto> {
+    let order = order.unwrap_or_default();
+    let total_pages = state
+        .load_and_play_library_page(page, page_size, order)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(LibraryPageDto {
+        current_page: page,
+        total_pages,
+        page_size,
+        total_tracks: 0,
+        track_index_in_page: 0,
+    })
+}
+
+#[tauri::command]
 pub async fn play_at_index(state: State<'_, Arc<AppState>>, index: usize) -> Result<()> {
     state.play_at_index(index).await;
     Ok(())
@@ -600,7 +666,7 @@ pub async fn handle_search(
     });
 
     state
-        .load_search_queue(
+        .search_and_play(
             system,
             query,
             content_type_enum,
@@ -611,7 +677,6 @@ pub async fn handle_search(
         .await
         .map_err(|e| e.to_string())?;
 
-    state.play_current_search().await;
     Ok(())
 }
 
@@ -696,8 +761,7 @@ pub async fn search_streaming(
     });
 
     let results = state
-        .streaming()
-        .search(
+        .search_streaming_cancellable(
             &provider,
             content_type_enum,
             &query,
@@ -742,6 +806,7 @@ pub async fn handle_streaming_track(
     strategy: String,
     query: Option<String>,
     search_type: Option<String>,
+    play: Option<bool>,
 ) -> Result<Option<i64>> {
     use nexus_player_backend::library::types::DownloadStrategy;
     use nexus_player_backend::streaming::types::ContentType;
@@ -752,6 +817,7 @@ pub async fn handle_streaming_track(
         "progressive" => DownloadStrategy::Progressive,
         _ => return Err("Invalid download strategy".into()),
     };
+    let should_play = play.unwrap_or(false);
     tracing::info!("SEARCH RESULT {:?}", search_result);
 
     match download_strategy {
@@ -774,45 +840,64 @@ pub async fn handle_streaming_track(
                             _ => ContentType::Track,
                         };
 
-                        state
-                            .load_search_to_queue(system, q, content_type, target_id)
-                            .await
-                            .map_err(|e| e.to_string())?;
-                    } else {
-                        use nexus_player_backend::playlist::playback_queue::{
-                            ActiveQueue, CursorQueue,
-                        };
-                        let mut queue = state.lock_queue().await;
-                        match &mut *queue {
-                            ActiveQueue::Cursor(cq) => {
-                                cq.add_track(track.into());
-                            }
-                            _ => {
-                                let mut cq = CursorQueue::new();
-                                cq.add_track(track.into());
-                                *queue = ActiveQueue::Cursor(cq);
-                            }
+                        if should_play {
+                            state
+                                .load_search_and_play(system, q, content_type, target_id)
+                                .await
+                                .map_err(|e| e.to_string())?;
+                        } else {
+                            state
+                                .load_search_to_queue(system, q, content_type, target_id)
+                                .await
+                                .map_err(|e| e.to_string())?;
                         }
-                        tracing::info!("Track added to queue");
+                    } else {
+                        let audio_track: nexus_player_backend::audio::types::Track = track.into();
+                        if should_play {
+                            state
+                                .add_track_and_play(audio_track)
+                                .await
+                                .map_err(|e| e.to_string())?;
+                        } else {
+                            use nexus_player_backend::playlist::playback_queue::{
+                                ActiveQueue, CursorQueue,
+                            };
+                            let mut queue = state.lock_queue().await;
+                            match &mut *queue {
+                                ActiveQueue::Cursor(cq) => {
+                                    cq.add_track(audio_track);
+                                }
+                                _ => {
+                                    let mut cq = CursorQueue::new();
+                                    cq.add_track(audio_track);
+                                    *queue = ActiveQueue::Cursor(cq);
+                                }
+                            }
+                            tracing::info!("Track added to queue");
+                        }
                     }
                 }
                 SearchResult::Playlist(playlist) => {
-                    state
-                        .load_context_to_queue(ContainerContext::ExternalPlaylist {
-                            system: playlist.service.to_string(),
-                            id: playlist.id,
-                        })
-                        .await
-                        .map_err(|e| e.to_string())?;
+                    let context = ContainerContext::ExternalPlaylist {
+                        system: playlist.service.to_string(),
+                        id: playlist.id,
+                    };
+                    if should_play {
+                        state.load_context_and_play(context, 0).await.map_err(|e| e.to_string())?;
+                    } else {
+                        state.load_context_to_queue(context).await.map_err(|e| e.to_string())?;
+                    }
                 }
                 SearchResult::Album(album) => {
-                    state
-                        .load_context_to_queue(ContainerContext::ExternalAlbum {
-                            system: album.service.to_string(),
-                            id: album.id,
-                        })
-                        .await
-                        .map_err(|e| e.to_string())?;
+                    let context = ContainerContext::ExternalAlbum {
+                        system: album.service.to_string(),
+                        id: album.id,
+                    };
+                    if should_play {
+                        state.load_context_and_play(context, 0).await.map_err(|e| e.to_string())?;
+                    } else {
+                        state.load_context_to_queue(context).await.map_err(|e| e.to_string())?;
+                    }
                 }
                 _ => todo!(),
             }

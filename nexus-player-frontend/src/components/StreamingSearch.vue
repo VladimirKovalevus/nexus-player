@@ -125,16 +125,8 @@ const toggleContainer = (index: number) => {
   }
 };
 
-const handleResultClick = async (result: SearchResult, index: number) => {
+const handleResultClick = async (result: SearchResult, index: number, play = false) => {
   console.log('Clicked result:', result, 'at index:', index);
-  console.log({
-      system: activeProvider.value,
-      contentType: activeContentType.value,
-      query: activeQuery.value,
-      limit: limit.value,
-      offset: offset.value,
-      selectedIndex: index,
-    },'search')
   try {
     await invoke('handle_search', {
       system: activeProvider.value,
@@ -152,6 +144,7 @@ const handleResultClick = async (result: SearchResult, index: number) => {
         strategy: 'cache',
         query: activeQuery.value,
         searchType: activeContentType.value,
+        play,
       });
     } catch (innerE) {
         console.error('fallback handle_streaming_track failed:', innerE);
@@ -164,9 +157,7 @@ const handleResultClick = async (result: SearchResult, index: number) => {
 const handleResultPlay = async (result: SearchResult, index: number) => {
   audioStore.startLoading();
   try {
-    await invoke('clear_queue');
-    await handleResultClick(result, index);
-    await invoke('play_at_index', { index: 0 });
+    await handleResultClick(result, index, true);
   } catch (e) {
     console.error('Failed to play search result:', e);
     audioStore.stopLoading();

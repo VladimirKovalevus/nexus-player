@@ -189,6 +189,7 @@ const sortDirection = ref<'asc' | 'desc'>('asc');
 
 const PAGE_SIZE = 50;
 const pageCursor = ref({ currentPage: 0, totalPages: 0 });
+const isPageLoading = ref(false);
 
 const sortLabels = {
   default: 'По умолчанию',
@@ -276,8 +277,7 @@ const handlePlaylistPlay = async (playlist: PlaylistDto) => {
   console.log('Play playlist clicked:', playlist);
   audioStore.startLoading();
   try {
-    await invoke('load_playlist_to_queue', { playlistId: playlist.id });
-    await invoke('play_at_index', { index: 0 });
+    await invoke('load_playlist_and_play', { playlistId: playlist.id, startIndex: 0 });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play playlist:', e);
@@ -355,36 +355,40 @@ const handleAddTrack = async () => {
 };
 
 const handleTrackClick = async (track: TrackDto) => {
+  isPageLoading.value = true;
   audioStore.startLoading();
   try {
-    const dto = await invoke<LibraryPageDto>('load_library_page_to_queue', {
+    const dto = await invoke<LibraryPageDto>('load_and_play_library_page_at_track', {
       trackId: track.id,
       pageSize: PAGE_SIZE,
       order: { [sortField.value]: sortDirection.value },
     });
     pageCursor.value = { currentPage: dto.currentPage, totalPages: dto.totalPages };
-    await invoke('play_at_index', { index: dto.trackIndexInPage });
     refreshQueue();
   } catch (e) {
     console.error('Failed to load library page:', e);
     audioStore.stopLoading();
+  } finally {
+    isPageLoading.value = false;
   }
 };
 
 const goToPage = async (page: number) => {
+  isPageLoading.value = true;
   audioStore.startLoading();
   try {
-    const dto = await invoke<LibraryPageDto>('load_library_page', {
+    const dto = await invoke<LibraryPageDto>('load_and_play_library_page', {
       page,
       pageSize: PAGE_SIZE,
       order: { [sortField.value]: sortDirection.value },
     });
     pageCursor.value = { currentPage: dto.currentPage, totalPages: dto.totalPages };
-    await invoke('play_at_index', { index: 0 });
     refreshQueue();
   } catch (e) {
     console.error('Failed to load page:', e);
     audioStore.stopLoading();
+  } finally {
+    isPageLoading.value = false;
   }
 };
 
@@ -392,9 +396,7 @@ const handleTrackPlay = async (track: TrackDto) => {
   console.log('Play track clicked:', track);
   audioStore.startLoading();
   try {
-    await invoke('clear_queue');
-    const index = await invoke<number>('add_to_queue', { trackId: track.id });
-    await invoke('play_at_index', { index });
+    await invoke('play_library_track', { trackId: track.id });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play track:', e);
