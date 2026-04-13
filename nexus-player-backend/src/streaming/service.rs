@@ -12,7 +12,7 @@ use streaming::multi_downloader::source::Source;
 
 use super::error::{StreamError, StreamResult};
 use super::provider::StreamProvider;
-use super::providers::{BandcampProvider, SoundCloudProvider, VkProvider, YtDlpProvider};
+use super::providers::{BandcampProvider, SoundCloudProvider, VkProvider};
 use super::types::{
     ContentType, PlaylistInfo, SearchResult, StreamingService as StreamingServiceEnum,
 };
@@ -258,14 +258,7 @@ impl StreamingService {
                 let file = File::open(path)?;
                 Ok(StreamingSourceWrapper::Local(Box::new(file)))
             }
-            TrackSource::Http(_) => {
-                if let Some(ytdlp_provider) = self.providers.get("ytdlp") {
-                    let media_source = ytdlp_provider.get_stream(&source).await?;
-                    Ok(StreamingSourceWrapper::Local(media_source))
-                } else {
-                    Err(StreamError::NoProviderFound)
-                }
-            }
+            TrackSource::Http(_) => Err(StreamError::NoProviderFound),
             TrackSource::External { system, id } => {
                 if let Some(provider) = self.providers.get(&system) {
                     let mut effective_options = options.unwrap_or(DownloadOptions {
