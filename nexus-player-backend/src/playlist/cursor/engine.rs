@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::sync::Arc;
+use std::collections::VecDeque;
 use async_trait::async_trait;
 
 use crate::audio::types::Track;
@@ -17,6 +18,7 @@ pub trait CursorResolver: Send + Sync {
 pub struct PlayerCursor {
     stack: Vec<Box<dyn CursorSource>>,
     resolver: Arc<dyn CursorResolver>,
+    buffer: VecDeque<CursorItem>,
 }
 
 impl PlayerCursor {
@@ -24,6 +26,7 @@ impl PlayerCursor {
         Self {
             stack: vec![root_source],
             resolver,
+            buffer: VecDeque::new(),
         }
     }
 
@@ -37,49 +40,56 @@ impl PlayerCursor {
     /// It automatically expands containers and pops exhausted cursors from the stack.
     pub async fn next_track(&mut self) -> Result<Option<Track>> {
         loop {
-            // 1. Get the top cursor from the stack
+            // 1. Check if we have items in the buffer first
+            if let Some(item) = self.buffer.pop_front() {
+                match item {
+                    CursorItem::Track(track) => return Ok(Some(track)),
+                    CursorItem::Container(context) => {
+                        let new_source = self.resolver.resolve(context).await?;
+                        self.stack.push(new_source);
+                        continue; // Immediately start fetching from the new cursor
+                    }
+                }
+            }
+
+            // 2. Buffer is empty, get the top cursor from the stack
             let active_cursor = match self.stack.last_mut() {
                 Some(c) => c,
                 None => return Ok(None), // Stack is empty, nothing to play
             };
 
-            // 2. Try to get next item batch (we need at least one)
+            // 3. Fetch next batch from source
             let mut batch = active_cursor.next_batch(1).await?;
             
             if batch.is_empty() {
-                // 5. EOF for current cursor: Pop it and continue with the previous one
+                // 4. EOF for current cursor: Pop it and continue with the previous one
                 self.stack.pop();
                 continue;
             }
 
-            // Remove the first item from the batch
-            let item = batch.remove(0);
-
-            match item {
-                // 3. We found a track! Return it to the player.
-                CursorItem::Track(track) => return Ok(Some(track)),
-                
-                // 4. We found a container! Expand it by pushing a new source to the stack.
-                CursorItem::Container(context) => {
-                    let new_source = self.resolver.resolve(context).await?;
-                    self.stack.push(new_source);
-                    // Continue the loop to immediately start fetching from the new cursor
-                }
-            }
+            // 5. Put item in buffer and loop to handle it correctly
+            self.buffer.push_back(batch.remove(0));
         }
     }
 
     /// Peek ahead to see upcoming items without consuming them.
-    /// Note: This is complex with nested stacks and might require 
-    /// a temporary clone or state management. 
-    /// For now, it returns what's available in the current top cursor.
     pub async fn peek_next_batch(&mut self, limit: usize) -> Result<Vec<CursorItem>> {
-        if let Some(active_cursor) = self.stack.last_mut() {
-            // Ideally, the source should support peeking. 
-            // If not, we might need a buffer inside PlayerCursor.
-            active_cursor.next_batch(limit).await
-        } else {
-            Ok(Vec::new())
+        // Fill buffer if it has fewer items than requested
+        while self.buffer.len() < limit {
+            if let Some(active_cursor) = self.stack.last_mut() {
+                let batch = active_cursor.next_batch(1).await?;
+                if batch.is_empty() {
+                    break;
+                }
+                for item in batch {
+                    self.buffer.push_back(item);
+                }
+            } else {
+                break;
+            }
         }
+
+        // Return items from buffer without removing them
+        Ok(self.buffer.iter().take(limit).cloned().collect())
     }
 }

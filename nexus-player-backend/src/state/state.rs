@@ -166,8 +166,16 @@ impl AppState {
                         self.play(None).await;
                         return;
                     }
-                    // Retry after expansion
-                    continue;
+                    // After expansion, play the current track (which is now available)
+                    let track = {
+                        let queue = self.queue.lock().await;
+                        match &*queue {
+                            ActiveQueue::Search(sq) => sq.current_track(),
+                            _ => None,
+                        }
+                    };
+                    self.play(track).await;
+                    return;
                 }
                 NextResult::NeedMorePages => {
                     if let Err(e) = self.fetch_more_search_results().await {
@@ -175,8 +183,16 @@ impl AppState {
                         self.play(None).await;
                         return;
                     }
-                    // Retry after fetching
-                    continue;
+                    // After fetching, play the current track
+                    let track = {
+                        let queue = self.queue.lock().await;
+                        match &*queue {
+                            ActiveQueue::Search(sq) => sq.current_track(),
+                            _ => None,
+                        }
+                    };
+                    self.play(track).await;
+                    return;
                 }
                 NextResult::End => {
                     tracing::info!("End of queue");
@@ -243,7 +259,16 @@ impl AppState {
                         self.play(None).await;
                         return;
                     }
-                    continue;
+                    // After expansion, play the current track
+                    let track = {
+                        let queue = self.queue.lock().await;
+                        match &*queue {
+                            ActiveQueue::Search(sq) => sq.current_track(),
+                            _ => None,
+                        }
+                    };
+                    self.play(track).await;
+                    return;
                 }
                 _ => {
                     self.play(None).await;

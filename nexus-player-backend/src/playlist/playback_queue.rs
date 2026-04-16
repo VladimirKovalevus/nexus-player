@@ -371,8 +371,14 @@ impl SearchQueue {
         }
 
         self.current_index = Some(next_idx);
+
+        // Ensure that if the next item is a container, it starts from the beginning
+        if let Some(SearchQueueItem::Container { play_index, .. }) = self.items.get_mut(next_idx) {
+            *play_index = 0;
+        }
+
         self.return_current_or_expand(next_idx)
-    }
+        }
 
     pub fn previous(&mut self) -> NextResult {
         let current = match self.current_index {
@@ -407,6 +413,21 @@ impl SearchQueue {
 
         let prev_idx = current - 1;
         self.current_index = Some(prev_idx);
+
+        // If the previous item is a container, we usually want its LAST track when going backwards
+        if let Some(SearchQueueItem::Container {
+            play_index,
+            expanded_tracks,
+            ..
+        }) = self.items.get_mut(prev_idx)
+        {
+            if let Some(tracks) = expanded_tracks {
+                *play_index = tracks.len().saturating_sub(1);
+            } else {
+                *play_index = 0; // Will be expanded and we should probably handle it then
+            }
+        }
+
         self.return_current_or_expand(prev_idx)
     }
 
