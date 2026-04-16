@@ -18,6 +18,7 @@ const EVENT_BUFFER_SIZE: usize = 128;
 
 pub struct AudioEngine {
     command_tx: Sender<AudioCommand>,
+    event_tx: Sender<AudioEvent>,
     event_rx: Receiver<AudioEvent>,
     state: Arc<RwLock<AudioState>>,
     audio_thread: Option<std::thread::JoinHandle<()>>,
@@ -32,10 +33,11 @@ impl AudioEngine {
 
         let state = Arc::new(RwLock::new(AudioState::default()));
 
-        let audio_thread = Self::spawn_audio_thread(command_rx, event_tx, Arc::clone(&state))?;
+        let audio_thread = Self::spawn_audio_thread(command_rx, event_tx.clone(), Arc::clone(&state))?;
 
         Ok(Self {
             command_tx,
+            event_tx,
             event_rx,
             state,
             audio_thread: Some(audio_thread),
@@ -113,6 +115,10 @@ impl AudioEngine {
 
     pub fn poll_all_events(&self) -> Vec<AudioEvent> {
         self.event_rx.try_iter().collect()
+    }
+
+    pub fn push_event(&self, event: AudioEvent) {
+        let _ = self.event_tx.send(event);
     }
 
     fn spawn_audio_thread(

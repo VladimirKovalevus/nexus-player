@@ -66,7 +66,16 @@ impl StreamProvider for SoundCloudProvider {
         let track = client
             .get_track(ResourceId::Url(url))
             .await
-            .map_err(|e| StreamError::MetadataError(format!("SoundCloud API error: {}", e)))?;
+            .map_err(|e| {
+                let msg = format!("{}", e);
+                if msg.contains("404") || msg.to_lowercase().contains("not found") {
+                    StreamError::Unavailable("Track not found (404)".to_string())
+                } else if msg.contains("403") || msg.to_lowercase().contains("forbidden") {
+                    StreamError::Unavailable("Track forbidden (403)".to_string())
+                } else {
+                    StreamError::MetadataError(format!("SoundCloud API error: {}", e))
+                }
+            })?;
 
         // Find HLS transcoding
         let transcoding = track
@@ -87,7 +96,14 @@ impl StreamProvider for SoundCloudProvider {
             .ok_or_else(|| StreamError::NoStreamAvailable("No transcodings found".to_string()))?;
 
         let stream_url = client.get_stream_url(&transcoding.url).await.map_err(|e| {
-            StreamError::Other(format!("Failed to get SoundCloud stream URL: {}", e))
+            let msg = format!("{}", e);
+            if msg.contains("404") || msg.to_lowercase().contains("not found") {
+                StreamError::Unavailable("Stream URL not found (404)".to_string())
+            } else if msg.contains("403") || msg.to_lowercase().contains("forbidden") {
+                StreamError::Unavailable("Stream URL forbidden (403)".to_string())
+            } else {
+                StreamError::Other(format!("Failed to get SoundCloud stream URL: {}", e))
+            }
         })?;
 
         Ok((
@@ -119,7 +135,16 @@ impl StreamProvider for SoundCloudProvider {
         let track = client
             .get_track(ResourceId::Url(url))
             .await
-            .map_err(|e| StreamError::MetadataError(format!("SoundCloud API error: {}", e)))?;
+            .map_err(|e| {
+                let msg = format!("{}", e);
+                if msg.contains("404") || msg.to_lowercase().contains("not found") {
+                    StreamError::Unavailable("Track not found (404)".to_string())
+                } else if msg.contains("403") || msg.to_lowercase().contains("forbidden") {
+                    StreamError::Unavailable("Track forbidden (403)".to_string())
+                } else {
+                    StreamError::MetadataError(format!("SoundCloud API error: {}", e))
+                }
+            })?;
 
         Ok(StreamMetadata {
             title: Some(track.track.title),

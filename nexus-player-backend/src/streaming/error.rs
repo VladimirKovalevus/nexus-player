@@ -29,6 +29,9 @@ pub enum StreamError {
     #[error("Превышен таймаут запроса")]
     Timeout,
 
+    #[error("Трек недоступен: {0}")]
+    Unavailable(String),
+
     #[error("Ошибка streaming: {0}")]
     Other(String),
 }

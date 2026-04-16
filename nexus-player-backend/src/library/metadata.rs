@@ -154,5 +154,6 @@ pub fn create_track_from_parsed(path: std::path::PathBuf, parsed: ParsedMetadata
         updated_at: chrono::Utc::now(),
         liked: false,
         liked_position: None,
+        unavailable: false,
     }
 }

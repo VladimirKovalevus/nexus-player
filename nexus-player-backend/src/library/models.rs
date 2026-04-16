@@ -46,6 +46,7 @@ pub struct Track {
 
     pub liked: bool,
     pub liked_position: Option<i64>,
+    pub unavailable: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

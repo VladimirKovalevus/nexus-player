@@ -1,5 +1,5 @@
 <template>
-  <div :class="[$style.mediaCard, $style[`type-${type}`], { [$style.dropdownActive]: dropdownOpen, [$style.active]: props.active }]" :data-dropdown-open="dropdownOpen || undefined">
+  <div :class="[$style.mediaCard, $style[`type-${type}`], { [$style.dropdownActive]: dropdownOpen, [$style.active]: props.active, [$style.unavailable]: props.track?.unavailable }]" :data-dropdown-open="dropdownOpen || undefined">
     <div :class="$style.content" @click="handleClick">
     <div :class="$style.thumbnail">
       <img
@@ -12,8 +12,9 @@
       </div>
 
       <div v-if="type === 'track'" :class="$style.playOverlay">
-        <button :class="$style.playButton" @click.stop="handlePlay" :disabled="store.isLoading && props.active">
+        <button :class="$style.playButton" @click.stop="handlePlay" :disabled="(store.isLoading && props.active) || props.track?.unavailable">
           <span v-if="store.isLoading && props.active" class="mini-loader">●</span>
+          <span v-else-if="props.track?.unavailable" :class="$style.unavailableIcon">✕</span>
           <img v-else src="/icon/play.svg" alt="Play">
         </button>
       </div>
@@ -570,6 +571,14 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
       color: var(--media-card-active-color);
     }
   }
+
+  &.unavailable {
+    opacity: 0.45;
+
+    .content {
+      pointer-events: none;
+    }
+  }
 }
 
 .content {
@@ -670,6 +679,11 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
     cursor: wait;
     opacity: 0.8;
   }
+}
+
+.unavailableIcon {
+  font-size: 16px;
+  line-height: 1;
 }
 
 .mini-loader {

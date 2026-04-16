@@ -58,6 +58,7 @@ pub struct Model {
 
     pub liked: i32,
     pub liked_position: Option<i64>,
+    pub unavailable: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

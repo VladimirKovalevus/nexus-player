@@ -298,7 +298,7 @@ impl StreamingService {
                                     Err(e) => Err(StreamError::Other(e.to_string())),
                                 }
                             }
-                            Err(e) => Err(StreamError::Other(e.to_string())),
+                            Err(e) => Err(e),
                         }
                     }
                 } else {

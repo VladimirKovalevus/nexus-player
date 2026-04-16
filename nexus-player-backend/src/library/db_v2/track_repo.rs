@@ -78,6 +78,7 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
             updated_at: ActiveValue::Set(entity_model.updated_at),
             liked: ActiveValue::Set(entity_model.liked),
             liked_position: ActiveValue::Set(entity_model.liked_position),
+            unavailable: ActiveValue::Set(entity_model.unavailable),
         };
 
         let result = active_model
@@ -137,6 +138,7 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
             updated_at: ActiveValue::Set(entity_model.updated_at),
             liked: ActiveValue::Set(entity_model.liked),
             liked_position: ActiveValue::Set(entity_model.liked_position),
+            unavailable: ActiveValue::Set(entity_model.unavailable),
         };
 
         active_model
@@ -348,6 +350,19 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
                 .await
                 .context("Failed to set liked=false")?;
         }
+        Ok(())
+    }
+
+    async fn set_unavailable(&self, id: TrackId, unavailable: bool) -> Result<()> {
+        let active_model = track::ActiveModel {
+            id: ActiveValue::Unchanged(id.0),
+            unavailable: ActiveValue::Set(unavailable as i32),
+            ..Default::default()
+        };
+        active_model
+            .update(&self.db)
+            .await
+            .context("Failed to set unavailable")?;
         Ok(())
     }
 

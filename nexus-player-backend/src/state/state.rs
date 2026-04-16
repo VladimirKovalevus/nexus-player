@@ -316,6 +316,20 @@ impl AppState {
                 }
                 Err(e) => {
                     tracing::warn!("Error resolving track source: {}", e);
+                    if matches!(e, crate::streaming::error::StreamError::Unavailable(_))
+                        && track.state == crate::audio::types::TrackState::Saved
+                    {
+                        let id = track.id as i64;
+                        self.audio_engine().push_event(
+                            crate::audio::types::AudioEvent::TrackUnavailable { track_id: id },
+                        );
+                        let lib = self.library.clone();
+                        tokio::spawn(async move {
+                            let _ = lib.set_track_unavailable(TrackId(id), true).await;
+                        });
+                    }
+                    self.audio_engine().stop();
+                    return;
                 }
             }
         } else {
@@ -517,6 +531,20 @@ impl AppState {
                 }
                 Err(e) => {
                     tracing::warn!("Error resolving track source: {}", e);
+                    if matches!(e, crate::streaming::error::StreamError::Unavailable(_))
+                        && track.state == crate::audio::types::TrackState::Saved
+                    {
+                        let id = track.id as i64;
+                        self.audio_engine().push_event(
+                            crate::audio::types::AudioEvent::TrackUnavailable { track_id: id },
+                        );
+                        let lib = self.library.clone();
+                        tokio::spawn(async move {
+                            let _ = lib.set_track_unavailable(TrackId(id), true).await;
+                        });
+                    }
+                    self.audio_engine().stop();
+                    return;
                 }
             }
         } else {

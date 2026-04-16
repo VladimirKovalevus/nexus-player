@@ -112,6 +112,11 @@ impl LibraryService {
         self.track_repo.update(track).await
     }
 
+    /// Mark a track as unavailable (e.g. 404/403 from streaming provider)
+    pub async fn set_track_unavailable(&self, id: TrackId, unavailable: bool) -> Result<()> {
+        self.track_repo.set_unavailable(id, unavailable).await
+    }
+
     /// Delete track
     pub async fn delete_track(&self, id: TrackId) -> Result<()> {
         self.track_repo.delete(id).await
@@ -351,6 +356,7 @@ impl LibraryService {
                 updated_at: ActiveValue::Set(entity_track.updated_at),
                 liked: ActiveValue::Set(entity_track.liked),
                 liked_position: ActiveValue::Set(entity_track.liked_position),
+                unavailable: ActiveValue::Set(entity_track.unavailable),
             };
 
             let result = active_track

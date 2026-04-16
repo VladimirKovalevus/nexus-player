@@ -7,6 +7,8 @@ import { useNotificationStore } from './notifications';
 export const useAudioStore = defineStore('audio', () => {
   const notificationStore = useNotificationStore();
 
+  const lastUnavailableTrackId = ref<number | null>(null);
+
   // High-frequency state isolated to prevent unnecessary re-renders of the whole app
   const currentPositionSecs = ref(0);
   const currentFft = ref<number[]>([]);
@@ -277,6 +279,12 @@ export const useAudioStore = defineStore('audio', () => {
           'error',
         );
         break;
+      case 'TrackUnavailable':
+        if (event.payload?.trackId !== undefined) {
+          lastUnavailableTrackId.value = event.payload.trackId;
+          notificationStore.addNotification('Трек недоступен и помечен как недоступный', 'error');
+        }
+        break;
     }
   }
 
@@ -342,6 +350,7 @@ export const useAudioStore = defineStore('audio', () => {
     tracks,
     currentIndex,
     repeatIcon,
+    lastUnavailableTrackId,
     handleAudioEvent,
     startLoading,
     stopLoading,

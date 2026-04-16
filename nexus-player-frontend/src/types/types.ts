@@ -14,6 +14,7 @@ export interface TrackDto {
   liked: boolean;
   state: string;
   source?: TrackSourceDto | null;
+  unavailable?: boolean;
 }
 
 export interface PlaylistDto {

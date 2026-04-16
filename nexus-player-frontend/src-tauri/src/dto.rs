@@ -23,6 +23,8 @@ pub struct TrackDto {
     pub state: TrackStateDto,
     #[serde(default)]
     pub source: Option<TrackSourceDto>,
+    #[serde(default)]
+    pub unavailable: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -302,6 +304,7 @@ impl From<models::Track> for TrackDto {
             liked: track.liked,
             state: TrackStateDto::Saved,
             source: Some(track.source.into()),
+            unavailable: track.unavailable,
         }
     }
 }
@@ -319,6 +322,7 @@ impl From<audio::Track> for TrackDto {
             liked: track.liked,
             state: track.state.into(),
             source: Some(track.source.into()),
+            unavailable: false,
         }
     }
 }
@@ -336,6 +340,7 @@ impl From<&audio::Track> for TrackDto {
             liked: track.liked,
             state: track.state.clone().into(),
             source: Some(track.source.clone().into()),
+            unavailable: false,
         }
     }
 }
@@ -745,6 +750,7 @@ impl From<nexus_player_backend::streaming::types::TrackInfo> for TrackDto {
 
         Self {
             id: hash_str_to_i64(&track.source.as_str()),
+            unavailable: false,
             title: track.title,
             artist: Some(track.artist),
             album: None,

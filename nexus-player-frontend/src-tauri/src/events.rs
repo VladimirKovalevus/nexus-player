@@ -87,6 +87,11 @@ pub enum FrontendEvent {
     Error {
         message: String,
     },
+
+    #[serde(rename_all = "camelCase")]
+    TrackUnavailable {
+        track_id: i64,
+    },
 }
 
 pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
@@ -171,6 +176,9 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                     }
                     AudioEvent::BufferingFinished => {
                         continue;
+                    }
+                    AudioEvent::TrackUnavailable { track_id } => {
+                        FrontendEvent::TrackUnavailable { track_id }
                     }
                     _ => {
                         continue;

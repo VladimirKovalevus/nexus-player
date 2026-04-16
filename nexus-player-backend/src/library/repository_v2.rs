@@ -30,6 +30,8 @@ pub trait TrackRepositoryV2: Send + Sync {
 
     async fn set_liked(&self, id: TrackId, liked: bool) -> Result<()>;
 
+    async fn set_unavailable(&self, id: TrackId, unavailable: bool) -> Result<()>;
+
     async fn reorder_liked(&self, track_ids: Vec<TrackId>) -> Result<()>;
 
     async fn find_liked_by_sources(&self, sources: &[TrackSource]) -> Result<std::collections::HashSet<TrackSource>>;

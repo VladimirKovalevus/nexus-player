@@ -100,7 +100,16 @@ impl StreamProvider for BandcampProvider {
                 );
                 let album = bandcamp::fetch_track(band_id, track_id)
                     .await
-                    .map_err(|e| StreamError::MetadataError(format!("Bandcamp API error: {:?}", e)))?;
+                    .map_err(|e| {
+                        let msg = format!("{:?}", e);
+                        if msg.contains("404") || msg.to_lowercase().contains("not found") {
+                            StreamError::Unavailable("Track not found (404)".to_string())
+                        } else if msg.contains("403") || msg.to_lowercase().contains("forbidden") {
+                            StreamError::Unavailable("Track forbidden (403)".to_string())
+                        } else {
+                            StreamError::MetadataError(format!("Bandcamp API error: {:?}", e))
+                        }
+                    })?;
 
                 let track = album.tracks.first().ok_or_else(|| {
                     StreamError::NoStreamAvailable("No tracks found in Bandcamp response".to_string())
@@ -132,7 +141,16 @@ impl StreamProvider for BandcampProvider {
             tracing::debug!("[bandcamp resolve] legacy page url={}", url);
             let album = bandcamp::track_from_url(&url)
                 .await
-                .map_err(|e| StreamError::MetadataError(format!("Bandcamp API error: {:?}", e)))?;
+                .map_err(|e| {
+                    let msg = format!("{:?}", e);
+                    if msg.contains("404") || msg.to_lowercase().contains("not found") {
+                        StreamError::Unavailable("Track not found (404)".to_string())
+                    } else if msg.contains("403") || msg.to_lowercase().contains("forbidden") {
+                        StreamError::Unavailable("Track forbidden (403)".to_string())
+                    } else {
+                        StreamError::MetadataError(format!("Bandcamp API error: {:?}", e))
+                    }
+                })?;
 
             let track = album.tracks.first().ok_or_else(|| {
                 StreamError::NoStreamAvailable("No tracks found in Bandcamp response".to_string())

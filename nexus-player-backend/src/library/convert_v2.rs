@@ -174,6 +174,7 @@ impl TryFrom<entities_v2::track::Model> for models::Track {
             updated_at: timestamp_to_datetime(entity.updated_at)?,
             liked: entity.liked != 0,
             liked_position: entity.liked_position,
+            unavailable: entity.unavailable != 0,
         })
     }
 }
@@ -258,6 +259,7 @@ impl From<models::Track> for entities_v2::track::Model {
             updated_at: datetime_to_timestamp(track.updated_at),
             liked: track.liked as i32,
             liked_position: track.liked_position,
+            unavailable: track.unavailable as i32,
         }
     }
 }

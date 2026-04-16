@@ -52,6 +52,7 @@ impl From<audio::Track> for LibraryTrack {
             updated_at: Utc::now(),
             liked: false,
             liked_position: None,
+            unavailable: false,
         }
     }
 }

@@ -113,6 +113,8 @@ pub enum AudioEvent {
     WaveformUpdated { waveforms: Vec<Waveform> },
 
     LoadingStarted { track: Track },
+
+    TrackUnavailable { track_id: i64 },
 }
 
 #[derive(Debug, Clone)]

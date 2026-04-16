@@ -154,7 +154,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject, computed } from 'vue';
+import { ref, onMounted, inject, computed, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import MediaCard from '@/components/common/MediaCard.vue';
 import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
@@ -181,6 +181,12 @@ const notifications = useNotificationStore();
 const playlists = ref<PlaylistDto[]>([]);
 const tracks = ref<TrackDto[]>([]);
 const loading = ref(false);
+
+watch(() => audioStore.lastUnavailableTrackId, (trackId) => {
+  if (trackId === null) return;
+  const track = tracks.value.find(t => t.id === trackId);
+  if (track) track.unavailable = true;
+});
 const error = ref<string | null>(null);
 const isPlaylistModalOpen = ref(false);
 
