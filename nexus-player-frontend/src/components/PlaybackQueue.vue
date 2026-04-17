@@ -6,18 +6,24 @@ import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import VirtualList from './common/VirtualList.vue';
 import MarqueeText from './common/MarqueeText.vue';
 import { useAudioStore } from '../stores/audio';
+import { useThemeStore } from '../stores/theme';
 import type { QueueEntryDto } from '@/types/types';
 
 const audioStore = useAudioStore();
+const themeStore = useThemeStore();
 const loading = ref(true);
 const error = ref<string | null>(null);
 const isModalOpen = ref(false);
 const isSavingPlaylist = ref(false);
 const expandedContainers = ref<Set<number>>(new Set());
-const playlistInitialData = ref<{ title?: string; description?: string; artworkUrl?: string }>({});
+const playlistInitialData = ref<{
+  title?: string;
+  description?: string;
+  artworkUrl?: string;
+}>({});
 
 // Modal mode: 'queue' for whole queue, or {index, entry} for single container
-const modalTarget = ref<'queue' | { index: number } >('queue');
+const modalTarget = ref<'queue' | { index: number }>('queue');
 
 const mapContentType = (type: string) => {
   if (!type) return null;
@@ -38,7 +44,8 @@ const calculateItemHeight = (index: number) => {
   if (entry.entryType === 'track') return 88;
   if (entry.entryType === 'container') {
     if (expandedContainers.value.has(index) && entry.tracks) {
-      return 88 + (entry.tracks.length * 88); // 88 header + tracks
+      const trackHeight = themeStore.activeTheme === 'retro' ? 32 : 42;
+      return 88 + entry.tracks.length * trackHeight; // 88 header + tracks
     }
     return 88;
   }
@@ -62,7 +69,10 @@ const fetchQueue = async () => {
   }
 };
 
-const playQueueItem = async (itemIndex: number, trackIndexInContainer?: number) => {
+const playQueueItem = async (
+  itemIndex: number,
+  trackIndexInContainer?: number,
+) => {
   audioStore.startLoading();
   try {
     await invoke('play_queue_item', {
@@ -97,12 +107,16 @@ const toggleContainer = (itemIndex: number) => {
   }
 };
 
-const isContainerExpanded = (itemIndex: number) => expandedContainers.value.has(itemIndex);
+const isContainerExpanded = (itemIndex: number) =>
+  expandedContainers.value.has(itemIndex);
 
 const playAtIndex = async (index: number) => {
   audioStore.startLoading();
   try {
-    await invoke('play_queue_item', { itemIndex: index, trackIndexInContainer: null });
+    await invoke('play_queue_item', {
+      itemIndex: index,
+      trackIndexInContainer: null,
+    });
     await fetchQueue();
   } catch (e) {
     console.error('Failed to play at index:', e);
@@ -137,13 +151,19 @@ const ensureAllContainersExpanded = async () => {
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     if (entry.entryType === 'container' && !entry.tracks) {
-      const result = await invoke<any>('expand_queue_container', { itemIndex: i });
+      const result = await invoke<any>('expand_queue_container', {
+        itemIndex: i,
+      });
       audioStore.updateQueueState(result);
     }
   }
 };
 
-const handleCreatePlaylist = async (data: { title: string; description: string | null; artworkUrl: string | null }) => {
+const handleCreatePlaylist = async (data: {
+  title: string;
+  description: string | null;
+  artworkUrl: string | null;
+}) => {
   if (isSavingPlaylist.value) return;
 
   isSavingPlaylist.value = true;
@@ -178,7 +198,7 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
     }
 
     // Check if queue has only tracks (no containers) — use simple path
-    const hasContainers = entries.some(e => e.entryType === 'container');
+    const hasContainers = entries.some((e) => e.entryType === 'container');
 
     if (!hasContainers) {
       const tracks = audioStore.tracks;
@@ -247,7 +267,10 @@ const handleContainerCreatePlaylist = (itemIndex: number) => {
   isModalOpen.value = true;
 };
 
-const handleContainerAddToPlaylist = async (itemIndex: number, playlistId: number) => {
+const handleContainerAddToPlaylist = async (
+  itemIndex: number,
+  playlistId: number,
+) => {
   const entry = audioStore.entries[itemIndex];
   if (entry?.entryType !== 'container') return;
 
@@ -300,7 +323,9 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
       <div :class="$style.actionsMenu" v-if="queue.length > 0">
         <button :class="$style.menuToggle">⋮</button>
         <div :class="$style.menuContent">
-          <button @click="openCreatePlaylistModal">Сформировать плейлист</button>
+          <button @click="openCreatePlaylistModal">
+            Сформировать плейлист
+          </button>
           <button @click="clearQueue" :class="$style.clearAction">
             Очистить
           </button>
@@ -309,7 +334,9 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
     </div>
 
     <div v-if="audioStore.searchContext" :class="$style.searchBadge">
-      Search: "{{ audioStore.searchContext.query }}" ({{ audioStore.searchContext.system }})
+      Search: "{{ audioStore.searchContext.query }}" ({{
+        audioStore.searchContext.system
+      }})
     </div>
 
     <div v-if="loading" :class="$style.loading">Загрузка...</div>
@@ -333,14 +360,21 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
             v-if="item.entry.entryType === 'track'"
             :class="[
               $style.trackWrapper,
-              { [$style.currentlyPlaying]: item.isCurrentItem && audioStore.currentPosition?.trackWithinContainer == null },
+              {
+                [$style.currentlyPlaying]:
+                  item.isCurrentItem &&
+                  audioStore.currentPosition?.trackWithinContainer == null,
+              },
             ]"
           >
             <MediaCard
               type="track"
               :track="item.entry.track"
               :queue-index="item.index"
-              :active="item.isCurrentItem && audioStore.currentPosition?.trackWithinContainer == null"
+              :active="
+                item.isCurrentItem &&
+                audioStore.currentPosition?.trackWithinContainer == null
+              "
               context="queue"
               showAction
               @click="playQueueItem(item.index)"
@@ -352,7 +386,10 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
           <!-- Container entry -->
           <div
             v-else-if="item.entry.entryType === 'container'"
-            :class="[$style.containerWrapper, { [$style.currentlyPlayingList]: item.isCurrentItem }]"
+            :class="[
+              $style.containerWrapper,
+              { [$style.currentlyPlayingList]: item.isCurrentItem },
+            ]"
           >
             <MediaCard
               type="album"
@@ -364,8 +401,12 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
               :is-expanded="isContainerExpanded(item.index)"
               @click="toggleContainer(item.index)"
               @toggle-expand="toggleContainer(item.index)"
-              @container-create-playlist="handleContainerCreatePlaylist(item.index)"
-              @container-add-to-playlist="(plId) => handleContainerAddToPlaylist(item.index, plId)"
+              @container-create-playlist="
+                handleContainerCreatePlaylist(item.index)
+              "
+              @container-add-to-playlist="
+                (plId) => handleContainerAddToPlaylist(item.index, plId)
+              "
               @container-remove="handleContainerRemove(item.index)"
             />
 
@@ -382,7 +423,8 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
                   {
                     [$style.currentlyPlaying]:
                       item.isCurrentItem &&
-                      audioStore.currentPosition?.trackWithinContainer === trackIdx,
+                      audioStore.currentPosition?.trackWithinContainer ===
+                        trackIdx,
                   },
                 ]"
                 @click="playQueueItem(item.index, trackIdx)"
@@ -390,12 +432,24 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
                 <span :class="$style.trackNumber">{{ trackIdx + 1 }}</span>
                 <div :class="$style.trackInfo">
                   <div :class="$style.trackTitle">
-                    <MarqueeText :active="item.isCurrentItem && audioStore.currentPosition?.trackWithinContainer === trackIdx">
+                    <MarqueeText
+                      :active="
+                        item.isCurrentItem &&
+                        audioStore.currentPosition?.trackWithinContainer ===
+                          trackIdx
+                      "
+                    >
                       {{ track.title }}
                     </MarqueeText>
                   </div>
                   <div :class="$style.trackArtist">
-                    <MarqueeText :active="item.isCurrentItem && audioStore.currentPosition?.trackWithinContainer === trackIdx">
+                    <MarqueeText
+                      :active="
+                        item.isCurrentItem &&
+                        audioStore.currentPosition?.trackWithinContainer ===
+                          trackIdx
+                      "
+                    >
                       {{ track.artist }}
                     </MarqueeText>
                   </div>
@@ -626,7 +680,7 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
 .currentlyPlaying {
   border-radius: $radius-md;
   animation: bg-pulse 2s ease-in-out infinite;
-  
+
   // Делаем фон MediaCard прозрачным, чтобы была видна анимация обертки
   & > div {
     background-color: var(--media-card-current-playing) !important;
@@ -637,7 +691,6 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
   & > div {
     background-color: transparent !important;
   }
-
 }
 
 .containerWrapper {
@@ -707,7 +760,8 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
 }
 
 @keyframes bg-pulse {
-  0%, 100% {
+  0%,
+  100% {
     background-color: var(--playback-queue-pulse, rgba(76, 175, 80, 0.1));
   }
   50% {

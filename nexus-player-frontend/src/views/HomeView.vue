@@ -105,7 +105,9 @@
           :class="$style.pageBtn"
           :disabled="pageCursor.currentPage === 0"
           @click="goToPage(pageCursor.currentPage - 1)"
-        >‹</button>
+        >
+          ‹
+        </button>
         <span :class="$style.pageInfo">
           {{ pageCursor.currentPage + 1 }} / {{ pageCursor.totalPages }}
         </span>
@@ -113,7 +115,9 @@
           :class="$style.pageBtn"
           :disabled="pageCursor.currentPage >= pageCursor.totalPages - 1"
           @click="goToPage(pageCursor.currentPage + 1)"
-        >›</button>
+        >
+          ›
+        </button>
       </div>
 
       <div v-if="tracks.length === 0" :class="$style.emptyState">
@@ -182,11 +186,14 @@ const playlists = ref<PlaylistDto[]>([]);
 const tracks = ref<TrackDto[]>([]);
 const loading = ref(false);
 
-watch(() => audioStore.lastUnavailableTrackId, (trackId) => {
-  if (trackId === null) return;
-  const track = tracks.value.find(t => t.id === trackId);
-  if (track) track.unavailable = true;
-});
+watch(
+  () => audioStore.lastUnavailableTrackId,
+  (trackId) => {
+    if (trackId === null) return;
+    const track = tracks.value.find((t) => t.id === trackId);
+    if (track) track.unavailable = true;
+  },
+);
 const error = ref<string | null>(null);
 const isPlaylistModalOpen = ref(false);
 
@@ -283,7 +290,10 @@ const handlePlaylistPlay = async (playlist: PlaylistDto) => {
   console.log('Play playlist clicked:', playlist);
   audioStore.startLoading();
   try {
-    await invoke('load_playlist_and_play', { playlistId: playlist.id, startIndex: 0 });
+    await invoke('load_playlist_and_play', {
+      playlistId: playlist.id,
+      startIndex: 0,
+    });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play playlist:', e);
@@ -364,12 +374,18 @@ const handleTrackClick = async (track: TrackDto) => {
   isPageLoading.value = true;
   audioStore.startLoading();
   try {
-    const dto = await invoke<LibraryPageDto>('load_and_play_library_page_at_track', {
-      trackId: track.id,
-      pageSize: PAGE_SIZE,
-      order: { [sortField.value]: sortDirection.value },
-    });
-    pageCursor.value = { currentPage: dto.currentPage, totalPages: dto.totalPages };
+    const dto = await invoke<LibraryPageDto>(
+      'load_and_play_library_page_at_track',
+      {
+        trackId: track.id,
+        pageSize: PAGE_SIZE,
+        order: { [sortField.value]: sortDirection.value },
+      },
+    );
+    pageCursor.value = {
+      currentPage: dto.currentPage,
+      totalPages: dto.totalPages,
+    };
     refreshQueue();
   } catch (e) {
     console.error('Failed to load library page:', e);
@@ -388,7 +404,10 @@ const goToPage = async (page: number) => {
       pageSize: PAGE_SIZE,
       order: { [sortField.value]: sortDirection.value },
     });
-    pageCursor.value = { currentPage: dto.currentPage, totalPages: dto.totalPages };
+    pageCursor.value = {
+      currentPage: dto.currentPage,
+      totalPages: dto.totalPages,
+    };
     refreshQueue();
   } catch (e) {
     console.error('Failed to load page:', e);
