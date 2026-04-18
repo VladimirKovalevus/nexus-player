@@ -64,8 +64,6 @@ impl SeaOrmPlaylistRepository {
 impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
     async fn create(&self, mut domain_playlist: Playlist) -> Result<PlaylistId> {
         let now = Utc::now().timestamp();
-        domain_playlist.created_at =
-            chrono::DateTime::from_timestamp(now, 0).context("Invalid timestamp")?;
         domain_playlist.updated_at =
             chrono::DateTime::from_timestamp(now, 0).context("Invalid timestamp")?;
 

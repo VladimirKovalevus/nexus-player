@@ -34,6 +34,8 @@ pub struct SyncTrack {
     pub liked_position: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub artwork_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_at: Option<i64>,
 }
 
 /// Subset of TrackSource that can be synced across devices.
@@ -77,6 +79,8 @@ pub struct SyncPlaylist {
     pub items: Vec<SyncPlaylistItem>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub artwork_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

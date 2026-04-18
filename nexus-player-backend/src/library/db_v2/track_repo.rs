@@ -41,8 +41,6 @@ impl SeaOrmTrackRepository {
 impl TrackRepositoryV2 for SeaOrmTrackRepository {
     async fn insert(&self, mut domain_track: Track) -> Result<TrackId> {
         let now = Utc::now().timestamp();
-        domain_track.added_at =
-            chrono::DateTime::from_timestamp(now, 0).context("Invalid timestamp")?;
         domain_track.updated_at =
             chrono::DateTime::from_timestamp(now, 0).context("Invalid timestamp")?;
 

@@ -105,6 +105,10 @@ impl<'a> SyncApplier<'a> {
         // Pass 1: create all playlists, build sync_id -> PlaylistId map
         let mut sync_id_to_playlist_id: HashMap<usize, PlaylistId> = HashMap::new();
         for sp in sync_playlists {
+            let playlist_created_at = sp
+                .created_at
+                .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0))
+                .unwrap_or(now);
             let artwork = if let Some(url) = &sp.artwork_url {
                 let art_id = self.service.ensure_artwork_url(url).await?;
                 Some(Artwork {
@@ -125,7 +129,7 @@ impl<'a> SyncApplier<'a> {
                     artwork,
                 },
                 creator: sp.creator.clone(),
-                created_at: now,
+                created_at: playlist_created_at,
                 updated_at: now,
             };
             let id = self.service.create_playlist(playlist).await?;
@@ -177,6 +181,10 @@ impl<'a> SyncApplier<'a> {
 
 fn sync_track_to_model(st: &SyncTrack) -> Track {
     let now = Utc::now();
+    let added_at = st
+        .added_at
+        .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0))
+        .unwrap_or(now);
     let artwork = st.artwork_url.as_ref().map(|url| Artwork {
         id: ArtworkId(0),
         source: ArtworkSource::Url { url: url.clone() },
@@ -208,7 +216,7 @@ fn sync_track_to_model(st: &SyncTrack) -> Track {
         }),
         play_count: 0,
         last_played: None,
-        added_at: now,
+        added_at,
         updated_at: now,
         liked: st.liked,
         liked_position: st.liked_position,

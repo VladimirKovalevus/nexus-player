@@ -54,6 +54,7 @@ impl<'a> SyncBuilder<'a> {
                     liked: t.liked,
                     liked_position: t.liked_position,
                     artwork_url,
+                    added_at: Some(t.added_at.timestamp()),
                 });
             }
         }
@@ -100,6 +101,7 @@ impl<'a> SyncBuilder<'a> {
                 creator: playlist.creator.clone(),
                 items,
                 artwork_url,
+                created_at: Some(playlist.created_at.timestamp()),
             });
         }
 
