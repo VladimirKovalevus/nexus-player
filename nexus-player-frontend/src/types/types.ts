@@ -202,3 +202,5 @@ export interface TaskInfoDto {
   progress: number;
   meta: StreamingTrack | null;
 }
+
+export type SyncType = 'full' | 'diff';

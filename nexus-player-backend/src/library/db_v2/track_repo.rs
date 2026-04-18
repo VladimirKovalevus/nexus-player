@@ -184,6 +184,25 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
         Ok(domain_tracks)
     }
 
+    async fn list_all_flat(&self) -> Result<Vec<Track>> {
+        let results = track::Entity::find()
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
+            .order_by_desc(track::Column::AddedAt)
+            .all(&self.db)
+            .await
+            .context("Failed to list all tracks flat")?;
+
+        let mut domain_tracks = Vec::new();
+        for (entity, artwork_entity) in results {
+            let mut domain_track: Track = entity.try_into()?;
+            if let Some(art_entity) = artwork_entity {
+                domain_track.metadata.artwork = Some(art_entity.try_into()?);
+            }
+            domain_tracks.push(domain_track);
+        }
+        Ok(domain_tracks)
+    }
+
     async fn search(&self, query: &str) -> Result<Vec<Track>> {
         use sea_orm::Condition;
 

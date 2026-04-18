@@ -131,6 +131,14 @@ pub fn run() {
             commands::reorder_playlist_items,
             commands::list_download_tasks,
             commands::remove_download_task,
+            commands::export_sync,
+            commands::import_sync,
+            commands::select_sync_file,
+            commands::telegram_get_config,
+            commands::telegram_save_config,
+            commands::telegram_check_config,
+            commands::telegram_push,
+            commands::telegram_pull,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

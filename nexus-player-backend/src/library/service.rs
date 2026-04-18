@@ -107,6 +107,16 @@ impl LibraryService {
         self.track_repo.find_by_album(album).await
     }
 
+    /// Get all tracks regardless of liked state (excludes playlist-only tracks)
+    pub async fn list_all_tracks(&self) -> Result<Vec<models::Track>> {
+        self.track_repo.list_all().await
+    }
+
+    /// Get every track in the database, including those only referenced by playlists
+    pub async fn list_all_tracks_flat(&self) -> Result<Vec<models::Track>> {
+        self.track_repo.list_all_flat().await
+    }
+
     /// Update track
     pub async fn update_track(&self, track: models::Track) -> Result<()> {
         self.track_repo.update(track).await
@@ -488,6 +498,10 @@ impl LibraryService {
         offset: usize,
     ) -> Result<Vec<models::PlayHistoryEntry>> {
         self.history_repo.list_recent(limit, offset).await
+    }
+
+    pub async fn ensure_artwork_url(&self, url: &str) -> Result<i64> {
+        self.ensure_artwork(url, &self.db).await
     }
 
     async fn ensure_artwork<C>(&self, url: &str, db: &C) -> Result<i64>

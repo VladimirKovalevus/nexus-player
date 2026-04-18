@@ -16,6 +16,9 @@ pub trait TrackRepositoryV2: Send + Sync {
 
     async fn list_all(&self) -> Result<Vec<Track>>;
 
+    /// Returns every track in the database, including those referenced by playlist items.
+    async fn list_all_flat(&self) -> Result<Vec<Track>>;
+
     async fn search(&self, query: &str) -> Result<Vec<Track>>;
 
     async fn find_by_artist(&self, artist: &str) -> Result<Vec<Track>>;

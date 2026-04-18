@@ -5,5 +5,6 @@ pub mod library;
 pub mod playlist;
 pub mod state;
 pub mod streaming;
+pub mod sync;
 pub mod config;
 

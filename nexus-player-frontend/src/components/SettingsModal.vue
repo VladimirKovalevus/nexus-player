@@ -74,6 +74,86 @@
             </div>
           </section>
 
+          <!-- Sync Settings -->
+          <section :class="$style.section">
+            <h3 :class="$style.sectionTitle">Синхронизация</h3>
+
+            <div :class="$style.provider">
+              <div :class="$style.field">
+                <label>Bot Token</label>
+                <input
+                  type="password"
+                  v-model="telegramToken"
+                  placeholder="123456:ABC-DEF..."
+                  autocomplete="off"
+                />
+                <p :class="$style.hint">Создайте бота через @BotFather и вставьте токен.</p>
+              </div>
+              <div :class="$style.field">
+                <label>Chat ID</label>
+                <div :class="$style.inputGroup">
+                  <input
+                    type="text"
+                    v-model="telegramChatId"
+                    :placeholder="tgSavedChatId || '-100XXXXXXXXXX'"
+                  />
+                  <button
+                    :class="$style.smallButton"
+                    @click="handleTelegramSave"
+                    :disabled="tgLoading || !telegramToken || !telegramChatId"
+                  >
+                    {{ tgLoading ? '...' : 'Сохранить' }}
+                  </button>
+                </div>
+                <p :class="$style.hint">Создайте приватный канал, добавьте бота как admin, скопируйте ID канала.</p>
+              </div>
+
+              <div v-if="tgStatus !== 'idle'" :class="[$style.syncBadge, $style[`badge_${tgStatus}`]]">
+                <span v-if="tgStatus === 'checking'">Проверка...</span>
+                <span v-else-if="tgStatus === 'ok'">✓ Подключено · {{ tgSavedChatId }}</span>
+                <span v-else-if="tgStatus === 'error'">✗ {{ tgError }}</span>
+                <span v-else-if="tgStatus === 'saved'">Сохранено</span>
+              </div>
+            </div>
+
+            <div v-if="tgSavedChatId" :class="$style.syncActions">
+              <div :class="$style.syncRow">
+                <div :class="$style.syncInfo">
+                  <span :class="$style.syncLabel">Full Sync</span>
+                  <span :class="$style.syncHint">Заменяет всё на принимающей стороне</span>
+                </div>
+                <div :class="$style.syncButtons">
+                  <button
+                    :class="[$style.smallButton, $style.syncBtn]"
+                    @click="handleTelegramPush('full')"
+                    :disabled="!!tgSyncLoading"
+                  >{{ tgSyncLoading === 'push' ? '...' : 'Отправить' }}</button>
+                  <button
+                    :class="[$style.smallButton, $style.syncBtn]"
+                    @click="handleTelegramPull"
+                    :disabled="!!tgSyncLoading"
+                  >{{ tgSyncLoading === 'pull' ? '...' : 'Получить' }}</button>
+                </div>
+              </div>
+              <div :class="$style.syncRow">
+                <div :class="$style.syncInfo">
+                  <span :class="$style.syncLabel">Diff Sync</span>
+                  <span :class="$style.syncHint">Только добавляет новое</span>
+                </div>
+                <div :class="$style.syncButtons">
+                  <button
+                    :class="[$style.smallButton, $style.syncBtn]"
+                    @click="handleTelegramPush('diff')"
+                    :disabled="!!tgSyncLoading"
+                  >{{ tgSyncLoading === 'push_diff' ? '...' : 'Отправить' }}</button>
+                </div>
+              </div>
+
+              <p v-if="tgSyncError" :class="$style.syncError">{{ tgSyncError }}</p>
+              <p v-if="tgSyncSuccess" :class="$style.syncSuccess">{{ tgSyncSuccess }}</p>
+            </div>
+          </section>
+
           <!-- Providers Settings -->
           <section :class="$style.section">
             <h3 :class="$style.sectionTitle">Провайдеры</h3>
@@ -145,7 +225,7 @@
 import { ref, watch, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { AppConfig } from '@/types/types';
+import type { AppConfig, SyncType } from '@/types/types';
 import { useVkStore } from '@/stores/vk';
 import { useThemeStore } from '@/stores/theme';
 
@@ -177,6 +257,86 @@ const config = ref<AppConfig>({
   },
   network: { timeoutSeconds: 30, chunkSize: 1048576, bufferSize: 10485760 },
 });
+
+// ── Telegram Sync ─────────────────────────────────────────────────────────────
+const telegramToken = ref('');
+const telegramChatId = ref('');
+const tgSavedChatId = ref('');
+const tgStatus = ref<'idle' | 'checking' | 'ok' | 'error' | 'saved'>('idle');
+const tgError = ref('');
+const tgLoading = ref(false);
+const tgSyncLoading = ref<false | 'push' | 'push_diff' | 'pull'>(false);
+const tgSyncError = ref('');
+const tgSyncSuccess = ref('');
+
+const loadTelegramConfig = async () => {
+  try {
+    const cfg = await invoke<{ chatId: string } | null>('telegram_get_config');
+    if (cfg) {
+      tgSavedChatId.value = cfg.chatId;
+      tgStatus.value = 'idle';
+    }
+  } catch {
+    // not configured yet — silent
+  }
+};
+
+const handleTelegramSave = async () => {
+  if (!telegramToken.value || !telegramChatId.value) return;
+  tgLoading.value = true;
+  tgStatus.value = 'checking';
+  tgError.value = '';
+  try {
+    await invoke('telegram_save_config', {
+      botToken: telegramToken.value,
+      chatId: telegramChatId.value,
+    });
+    const ok = await invoke<boolean>('telegram_check_config');
+    if (ok) {
+      tgSavedChatId.value = telegramChatId.value;
+      tgStatus.value = 'ok';
+      telegramToken.value = '';
+      telegramChatId.value = '';
+    } else {
+      tgStatus.value = 'error';
+      tgError.value = 'Бот не отвечает. Проверьте токен и Chat ID.';
+    }
+  } catch (e) {
+    tgStatus.value = 'error';
+    tgError.value = String(e);
+  } finally {
+    tgLoading.value = false;
+  }
+};
+
+const handleTelegramPush = async (syncType: SyncType) => {
+  tgSyncLoading.value = syncType === 'full' ? 'push' : 'push_diff';
+  tgSyncError.value = '';
+  tgSyncSuccess.value = '';
+  try {
+    await invoke('telegram_push', { syncType, deviceName: null });
+    tgSyncSuccess.value = syncType === 'full' ? 'Full sync отправлен.' : 'Diff sync отправлен.';
+  } catch (e) {
+    tgSyncError.value = String(e);
+  } finally {
+    tgSyncLoading.value = false;
+  }
+};
+
+const handleTelegramPull = async () => {
+  tgSyncLoading.value = 'pull';
+  tgSyncError.value = '';
+  tgSyncSuccess.value = '';
+  try {
+    await invoke('telegram_pull');
+    tgSyncSuccess.value = 'Синхронизация применена.';
+  } catch (e) {
+    tgSyncError.value = String(e);
+  } finally {
+    tgSyncLoading.value = false;
+  }
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 const fetchConfig = async () => {
   loading.value = true;
@@ -279,6 +439,7 @@ watch(
   (newVal) => {
     if (newVal) {
       fetchConfig();
+      loadTelegramConfig();
     }
   }
 );
@@ -571,5 +732,92 @@ watch(
   font-family: monospace !important;
   font-size: $font-size-xs !important;
   resize: vertical;
+}
+
+.syncBadge {
+  margin-top: $spacing-sm;
+  padding: $spacing-xs $spacing-sm;
+  border-radius: $radius-sm;
+  font-size: $font-size-sm;
+  display: inline-block;
+
+  &.badge_checking {
+    background-color: var(--color-bg-hover);
+    color: var(--color-text-secondary);
+  }
+
+  &.badge_ok {
+    background-color: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+
+  &.badge_error {
+    background-color: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  &.badge_saved {
+    background-color: var(--color-bg-hover);
+    color: var(--color-text-secondary);
+  }
+}
+
+.syncActions {
+  margin-top: $spacing-md;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.syncRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-sm $spacing-md;
+  background-color: var(--modal-card-bg);
+  border-radius: $radius-md;
+  gap: $spacing-md;
+}
+
+.syncInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.syncLabel {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: var(--color-text-primary);
+}
+
+.syncHint {
+  font-size: $font-size-xs;
+  color: var(--color-text-secondary);
+}
+
+.syncButtons {
+  display: flex;
+  gap: $spacing-xs;
+  flex-shrink: 0;
+}
+
+.syncBtn {
+  min-width: 80px;
+}
+
+.syncError {
+  font-size: $font-size-sm;
+  color: #ef4444;
+  margin-top: $spacing-xs;
+}
+
+.syncSuccess {
+  font-size: $font-size-sm;
+  color: #22c55e;
+  margin-top: $spacing-xs;
 }
 </style>
