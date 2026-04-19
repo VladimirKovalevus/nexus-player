@@ -48,6 +48,7 @@ impl StreamingService {
         let manager = DownloadManager::new(ManagerConfig {
             waveform_enabled: config_audio.waveform_enabled,
             mem_limit_bytes: config_audio.mem_limit,
+            prefetch_limit: config_audio.prefetch_limit,
             default_callbacks,
         });
 
@@ -67,6 +68,7 @@ impl StreamingService {
         let mut manager_config = self.download_manager.config.read().await.clone();
         manager_config.waveform_enabled = config_audio.waveform_enabled;
         manager_config.mem_limit_bytes = config_audio.mem_limit;
+        manager_config.prefetch_limit = config_audio.prefetch_limit;
 
         self.download_manager
             .update_config(manager_config)
@@ -308,9 +310,9 @@ impl StreamingService {
             _ => todo!(),
         }
     }
-    pub async fn set_context(&self, track_id: u64, next: Option<u64>) {
+    pub async fn set_context(&self, track_id: u64, active_ids: Vec<u64>) {
         self.download_manager
-            .set_context(Some(track_id), next)
+            .set_context(Some(track_id), active_ids)
             .await;
     }
 

@@ -54,6 +54,9 @@ impl Default for ProviderConfig {
 pub struct AudioConfig {
     pub waveform_enabled: bool,
     pub mem_limit: u64,
+    /// Fraction (0.0–1.0) of each upcoming track to pre-download before fully downloading any one.
+    /// Default: 0.2 (20%).
+    pub prefetch_limit: f64,
 }
 
 impl Default for AudioConfig {
@@ -61,6 +64,7 @@ impl Default for AudioConfig {
         Self {
             waveform_enabled: true,
             mem_limit: 100 * 1024 * 1024,
+            prefetch_limit: 0.2,
         }
     }
 }

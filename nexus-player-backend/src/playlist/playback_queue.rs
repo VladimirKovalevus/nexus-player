@@ -76,13 +76,22 @@ impl CursorQueue {
     }
 
     pub fn peek_next(&self) -> Option<Track> {
-        // 1. Try manual queue first
         if let Some(track) = self.manual_queue.front() {
             return Some(track.clone());
         }
-
-        // 2. We don't peek into cursor because it's async and stateful
         None
+    }
+
+    pub fn peek_upcoming_ids(&self, limit: usize) -> Vec<u64> {
+        self.manual_queue
+            .iter()
+            .take(limit)
+            .map(|t| t.id as u64)
+            .collect()
+    }
+
+    pub fn peek_upcoming_tracks(&self, limit: usize) -> Vec<Track> {
+        self.manual_queue.iter().take(limit).cloned().collect()
     }
 
     pub fn current(&self) -> Option<&Track> {
@@ -522,6 +531,20 @@ impl ActiveQueue {
         match self {
             ActiveQueue::Cursor(o) => o.peek_next(),
             ActiveQueue::Search(o) => o.peek_next(),
+        }
+    }
+
+    pub fn peek_upcoming_ids(&self, limit: usize) -> Vec<u64> {
+        match self {
+            ActiveQueue::Cursor(o) => o.peek_upcoming_ids(limit),
+            ActiveQueue::Search(_) => vec![],
+        }
+    }
+
+    pub fn peek_upcoming_tracks(&self, limit: usize) -> Vec<Track> {
+        match self {
+            ActiveQueue::Cursor(o) => o.peek_upcoming_tracks(limit),
+            ActiveQueue::Search(_) => vec![],
         }
     }
 }

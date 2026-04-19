@@ -10,9 +10,12 @@ const audioStore = useAudioStore();
 const localVolume = ref(audioStore.volume);
 
 // Keep local volume in sync with store (e.g. if changed elsewhere)
-watch(() => audioStore.volume, (newVol) => {
-  localVolume.value = newVol;
-});
+watch(
+  () => audioStore.volume,
+  (newVol) => {
+    localVolume.value = newVol;
+  },
+);
 
 interface Props {
   queueVisible?: boolean;
@@ -40,7 +43,10 @@ const toggleVolumePopup = () => {
 };
 
 const handleDocumentClick = (e: MouseEvent) => {
-  if (volumeWrapperRef.value && !volumeWrapperRef.value.contains(e.target as Node)) {
+  if (
+    volumeWrapperRef.value &&
+    !volumeWrapperRef.value.contains(e.target as Node)
+  ) {
     volumePopupOpen.value = false;
   }
 };
@@ -71,15 +77,14 @@ const fetchQueueState = async () => {
 
 const togglePlayPause = async () => {
   audioStore.startLoading();
-  console.log(audioStore.isPlaying,audioStore.isStopped,"STORE");
+  console.log(audioStore.isPlaying, audioStore.isStopped, 'STORE');
   try {
     if (audioStore.isPlaying) {
       await invoke('pause');
     } else if (audioStore.isPaused) {
       await invoke('resume');
-      }
+    }
     if (audioStore.isStopped) {
-
       await invoke('play_at_index', { index: 0 });
     }
   } catch (e) {
@@ -91,6 +96,7 @@ const togglePlayPause = async () => {
 const playNext = async () => {
   audioStore.startLoading();
   try {
+    console.log('tuz');
     await invoke('play_next');
   } catch (e) {
     console.error('Failed to play next:', e);
@@ -144,11 +150,11 @@ const setVolume = async (event: Event) => {
 const handleVolumeWheel = async (event: WheelEvent) => {
   // Prevent page scroll when hovering volume
   event.preventDefault();
-  
+
   const step = 0.05;
   const delta = event.deltaY < 0 ? step : -step;
   const newVolume = Math.min(1, Math.max(0, audioStore.volume + delta));
-  
+
   if (newVolume !== audioStore.volume) {
     localVolume.value = newVolume;
     try {
@@ -208,31 +214,40 @@ onUnmounted(() => {
     <div class="left-section">
       <div class="track-info">
         <div v-if="audioStore.currentTrack?.artworkUrl" class="track-art">
-            <img height="64" width="64" :src="audioStore.currentTrack?.artworkUrl" style="filter:none !important;">
+          <img
+            height="64"
+            width="64"
+            :src="audioStore.currentTrack?.artworkUrl"
+            style="filter: none !important"
+          />
         </div>
-        <div style="display:flex; flex-direction: column; min-width: 0; flex: 1;">
-        <div v-if="audioStore.currentTrack" class="current-track">
-          <MarqueeText active>{{ audioStore.currentTrack.title }}</MarqueeText>
-        </div>
-        <div v-else class="no-track">No track playing</div>
-        <div v-if="audioStore.currentTrack" class="track-artist">
-          <MarqueeText active>{{ audioStore.currentTrack.artist || 'Unknown Artist' }}</MarqueeText>
-        </div>
+        <div
+          style="display: flex; flex-direction: column; min-width: 0; flex: 1"
+        >
+          <div v-if="audioStore.currentTrack" class="current-track">
+            <MarqueeText active>{{
+              audioStore.currentTrack.title
+            }}</MarqueeText>
+          </div>
+          <div v-else class="no-track">No track playing</div>
+          <div v-if="audioStore.currentTrack" class="track-artist">
+            <MarqueeText active>{{
+              audioStore.currentTrack.artist || 'Unknown Artist'
+            }}</MarqueeText>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Center: Waveform + Controls -->
     <div class="center-section">
-
       <div class="controls">
         <button
           class="control-btn medium-btn"
           @click="playPrevious"
           title="Previous"
-          :disabled="audioStore.isLoading"
         >
-            <img  src="/icon/prev.svg">
+          <img src="/icon/prev.svg" />
         </button>
         <button
           class="control-btn play-btn"
@@ -242,19 +257,14 @@ onUnmounted(() => {
         >
           <span v-if="audioStore.isLoading" class="loader">●●●</span>
           <span v-else>
-            <img v-if="!audioStore.isPlaying" src="/icon/play.svg" alt="Play">
+            <img v-if="!audioStore.isPlaying" src="/icon/play.svg" alt="Play" />
             <span v-else>
-                <img src="/icon/pause.svg">
+              <img src="/icon/pause.svg" />
             </span>
           </span>
         </button>
-        <button
-          class="control-btn medium-btn"
-          @click="playNext"
-          title="Next"
-          :disabled="audioStore.isLoading"
-        >
-            <img src="/icon/next.svg">
+        <button class="control-btn medium-btn" @click="playNext" title="Next">
+          <img src="/icon/next.svg" />
         </button>
       </div>
       <div class="waveform-section">
@@ -273,26 +283,32 @@ onUnmounted(() => {
         @click="emit('toggleVisualizer')"
         title="Открыть визуализатор"
       >
-        <span style="filter: grayscale(1);">📊</span>
+        <span style="filter: grayscale(1)">📊</span>
       </button>
 
-      <div class="volume-wrapper" ref="volumeWrapperRef" @wheel.stop.prevent="handleVolumeWheel">
+      <div
+        class="volume-wrapper"
+        ref="volumeWrapperRef"
+        @wheel.stop.prevent="handleVolumeWheel"
+      >
         <button
           class="volume-btn"
           :class="{ active: volumePopupOpen }"
           @click.stop="toggleVolumePopup"
           :title="'Громкость: ' + Math.round(audioStore.volume * 100) + '%'"
         >
-        <img src="/icon/volume.svg">
+          <img src="/icon/volume.svg" />
         </button>
         <Transition name="volume-popup">
           <div v-if="volumePopupOpen" class="volume-popup" @click.stop>
-            <span class="volume-percent">{{ Math.round(audioStore.volume * 100) }}%</span>
+            <span class="volume-percent"
+              >{{ Math.round(audioStore.volume * 100) }}%</span
+            >
             <input
               type="range"
               class="volume-slider-vertical"
               :style="{
-                background: `linear-gradient(to right, white ${localVolume * 100}%, black ${localVolume * 100}%)`
+                background: `linear-gradient(to right, white ${localVolume * 100}%, black ${localVolume * 100}%)`,
               }"
               :value="localVolume"
               min="0"
@@ -310,7 +326,7 @@ onUnmounted(() => {
         @click="emit('toggleQueue')"
         :title="queueVisible ? 'Скрыть очередь' : 'Показать очередь'"
       >
-      <img src="/icon/queue.svg">
+        <img src="/icon/queue.svg" />
       </button>
     </div>
   </div>
@@ -357,9 +373,9 @@ onUnmounted(() => {
 .left-section {
   flex: 1;
   min-width: 0;
-@media (max-width: 480px){
-        display:none;
-}
+  @media (max-width: 480px) {
+    display: none;
+  }
 }
 
 .track-info {
@@ -375,8 +391,8 @@ onUnmounted(() => {
 }
 
 .track-art {
-    width:64px;
-filter:none !important;
+  width: 64px;
+  filter: none !important;
 }
 .track-artist {
   font-weight: var(--font-weight-bold);
@@ -470,9 +486,15 @@ filter:none !important;
 }
 
 @keyframes pulse {
-  0% { opacity: 0.5; }
-  50% { opacity: 1; }
-  100% { opacity: 0.5; }
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+  }
 }
 
 .right-section {
@@ -553,13 +575,13 @@ filter:none !important;
   -webkit-appearance: none;
   appearance: none;
   width: 100px; /* Длина ползунка (станет высотой после поворота) */
-  height: 4px;   /* Толщина линии */
+  height: 4px; /* Толщина линии */
   outline: none;
   cursor: pointer;
   padding: 0;
   margin: 45px -48px;
   display: block;
-  
+
   /* Поворачиваем горизонтальный слайдер вертикально */
   transform: rotate(-90deg);
 
@@ -580,7 +602,6 @@ filter:none !important;
     height: 4px;
   }
 
-
   &::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
@@ -592,7 +613,7 @@ filter:none !important;
     cursor: pointer;
     box-shadow: none;
     /* Выравнивание по центру линии 4px: (12 - 4) / 2 = 4 */
-    margin-top: -5px; 
+    margin-top: -5px;
   }
 
   &::-moz-range-track {
@@ -614,7 +635,9 @@ filter:none !important;
 /* Popup transition */
 .volume-popup-enter-active,
 .volume-popup-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
 }
 .volume-popup-enter-from,
 .volume-popup-leave-to {
@@ -635,7 +658,8 @@ filter:none !important;
   color: var(--color-text-secondary);
 }
 
-.queue-toggle-btn.active, .queue-toggle-btn:hover {
+.queue-toggle-btn.active,
+.queue-toggle-btn:hover {
   background-color: var(--color-bg-secondary);
   color: var(--color-accent-primary);
   border-color: var(--color-accent-primary);
@@ -647,4 +671,3 @@ filter:none !important;
   min-width: 35px;
 }
 </style>
-

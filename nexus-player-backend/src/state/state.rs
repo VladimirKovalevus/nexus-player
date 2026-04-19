@@ -138,6 +138,7 @@ impl AppState {
     // --- Playback Control ---
 
     pub async fn play_next(&self) {
+        let cancel = self.begin_exclusive_op().await;
         loop {
             let result = {
                 let mut queue = self.queue.lock().await;
@@ -157,16 +158,15 @@ impl AppState {
             match result {
                 NextResult::Track(track) => {
                     tracing::info!("Next track: {}", track.id);
-                    self.play(Some(track)).await;
+                    self.play_cancellable(Some(track), cancel).await;
                     return;
                 }
                 NextResult::NeedExpand(idx) => {
                     if let Err(e) = self.expand_search_container(idx).await {
                         tracing::error!("Failed to expand container {}: {}", idx, e);
-                        self.play(None).await;
+                        self.play_cancellable(None, cancel).await;
                         return;
                     }
-                    // After expansion, play the current track (which is now available)
                     let track = {
                         let queue = self.queue.lock().await;
                         match &*queue {
@@ -174,16 +174,15 @@ impl AppState {
                             _ => None,
                         }
                     };
-                    self.play(track).await;
+                    self.play_cancellable(track, cancel).await;
                     return;
                 }
                 NextResult::NeedMorePages => {
                     if let Err(e) = self.fetch_more_search_results().await {
                         tracing::error!("Failed to fetch more pages: {}", e);
-                        self.play(None).await;
+                        self.play_cancellable(None, cancel).await;
                         return;
                     }
-                    // After fetching, play the current track
                     let track = {
                         let queue = self.queue.lock().await;
                         match &*queue {
@@ -191,12 +190,12 @@ impl AppState {
                             _ => None,
                         }
                     };
-                    self.play(track).await;
+                    self.play_cancellable(track, cancel).await;
                     return;
                 }
                 NextResult::End => {
                     tracing::info!("End of queue");
-                    self.play(None).await;
+                    self.play_cancellable(None, cancel).await;
                     return;
                 }
             }
@@ -235,6 +234,7 @@ impl AppState {
     }
 
     pub async fn play_previous(&self) {
+        let cancel = self.begin_exclusive_op().await;
         loop {
             let result = {
                 let mut queue = self.queue.lock().await;
@@ -250,16 +250,15 @@ impl AppState {
             match result {
                 NextResult::Track(track) => {
                     tracing::info!("Previous track: {}", track.id);
-                    self.play(Some(track)).await;
+                    self.play_cancellable(Some(track), cancel).await;
                     return;
                 }
                 NextResult::NeedExpand(idx) => {
                     if let Err(e) = self.expand_search_container(idx).await {
                         tracing::error!("Failed to expand container {}: {}", idx, e);
-                        self.play(None).await;
+                        self.play_cancellable(None, cancel).await;
                         return;
                     }
-                    // After expansion, play the current track
                     let track = {
                         let queue = self.queue.lock().await;
                         match &*queue {
@@ -267,11 +266,11 @@ impl AppState {
                             _ => None,
                         }
                     };
-                    self.play(track).await;
+                    self.play_cancellable(track, cancel).await;
                     return;
                 }
                 _ => {
-                    self.play(None).await;
+                    self.play_cancellable(None, cancel).await;
                     return;
                 }
             }
@@ -297,25 +296,45 @@ impl AppState {
                 let _ = lib.add_play_history(entry).await;
             });
 
-            // Get next track for preloading context
-            let next_track = {
+            // Get upcoming tracks for audio preload and download manager
+            let upcoming = {
                 let queue = self.queue.lock().await;
-                queue.peek_next()
+                queue.peek_upcoming_tracks(9)
             };
-            let next_track_id = next_track.as_ref().map(|t| t.id as u64);
+            let active_ids: Vec<u64> = upcoming.iter().map(|t| t.id as u64).collect();
 
-            // Trigger resolution for next track to start its download/init process
-            if let Some(next) = next_track {
+            // Preload next track in audio engine for gapless playback
+            if let Some(next) = upcoming.first().cloned() {
                 let streaming = self.streaming.clone();
-                let nx = next.clone();
                 let engine = self.audio_engine.clone();
                 tokio::spawn(async move {
                     match streaming
-                        .resolve(nx.source.clone(), nx.id.clone() as u64, None)
+                        .resolve(next.source.clone(), next.id as u64, None)
                         .await
                     {
-                        Ok(wrapper) => wrapper.preload(&engine, nx),
+                        Ok(wrapper) => {
+                            if let Err(e) = wrapper.prepare().await {
+                                tracing::warn!(
+                                    "Preload prepare failed for track {}: {}",
+                                    next.id,
+                                    e
+                                );
+                                return;
+                            }
+                            wrapper.preload(&engine, next);
+                        }
                         Err(_) => {}
+                    }
+                });
+            }
+
+            // Resolve remaining upcoming tracks so they enter the download queue
+            if upcoming.len() > 1 {
+                let streaming = self.streaming.clone();
+                let rest = upcoming[1..].to_vec();
+                tokio::spawn(async move {
+                    for t in rest {
+                        let _ = streaming.resolve(t.source.clone(), t.id as u64, None).await;
                     }
                 });
             }
@@ -328,7 +347,7 @@ impl AppState {
             {
                 Ok(wrapper) => {
                     self.streaming()
-                        .set_context(track.id as u64, next_track_id)
+                        .set_context(track.id as u64, active_ids)
                         .await;
 
                     if let Err(e) = wrapper.prepare().await {
@@ -489,12 +508,21 @@ impl AppState {
     /// Like `play()` but stops silently if the cancel token is triggered before reaching the
     /// audio engine. Prevents stale play commands from a superseded operation reaching the driver.
     async fn play_cancellable(&self, track: Option<Track>, cancel: CancellationToken) {
+        tracing::info!(
+            "play_cancellable: start, track={:?}",
+            track.as_ref().map(|t| (t.id, &t.title))
+        );
         if let Some(track) = track {
+            tracing::info!("play_cancellable: set_loading track_id={}", track.id);
             self.audio_engine().set_loading(track.clone());
 
             let lib = self.library.clone();
             let track_for_history = track.clone();
             tokio::spawn(async move {
+                tracing::info!(
+                    "play_cancellable[history]: saving play history for track_id={}",
+                    track_for_history.id
+                );
                 let entry = PlayHistoryEntry {
                     id: 0,
                     title: track_for_history.title.clone(),
@@ -503,44 +531,93 @@ impl AppState {
                     artwork_url: track_for_history.artwork_url.clone(),
                     played_at: chrono::Utc::now().timestamp(),
                 };
-                let _ = lib.add_play_history(entry).await;
+                match lib.add_play_history(entry).await {
+                    Ok(_) => tracing::info!(
+                        "play_cancellable[history]: saved ok for track_id={}",
+                        track_for_history.id
+                    ),
+                    Err(e) => tracing::warn!(
+                        "play_cancellable[history]: failed for track_id={}: {}",
+                        track_for_history.id,
+                        e
+                    ),
+                }
             });
 
-            let next_track = {
+            let upcoming = {
                 let queue = self.queue.lock().await;
-                queue.peek_next()
+                queue.peek_upcoming_tracks(9)
             };
-            let next_track_id = next_track.as_ref().map(|t| t.id as u64);
+            tracing::info!("play_cancellable: upcoming tracks count={}", upcoming.len());
+            let active_ids: Vec<u64> = upcoming.iter().map(|t| t.id as u64).collect();
 
-            if let Some(next) = next_track {
+
+            // Resolve remaining upcoming tracks so they enter the download queue
+            if upcoming.len() > 1 {
+                tracing::info!(
+                    "play_cancellable: spawning background resolve for {} remaining tracks",
+                    upcoming.len() - 1
+                );
                 let streaming = self.streaming.clone();
-                let nx = next.clone();
-                let engine = self.audio_engine.clone();
+                let rest = upcoming[1..].to_vec();
+                let rest_cancel = cancel.clone();
                 tokio::spawn(async move {
-                    match streaming
-                        .resolve(nx.source.clone(), nx.id.clone() as u64, None)
-                        .await
-                    {
-                        Ok(wrapper) => wrapper.preload(&engine, nx),
-                        Err(_) => {}
+                    for t in rest {
+                        if rest_cancel.is_cancelled() {
+                            tracing::info!(
+                                "play_cancellable[bg_resolve]: cancelled, stopping batch resolve"
+                            );
+                            return;
+                        }
+                        tracing::info!("play_cancellable[bg_resolve]: resolving track_id={}", t.id);
+                        match streaming.resolve(t.source.clone(), t.id as u64, None).await {
+                            Ok(_) => tracing::info!(
+                                "play_cancellable[bg_resolve]: resolve ok track_id={}",
+                                t.id
+                            ),
+                            Err(e) => tracing::warn!(
+                                "play_cancellable[bg_resolve]: resolve failed track_id={}: {}",
+                                t.id,
+                                e
+                            ),
+                        }
                     }
                 });
             }
 
+            tracing::info!(
+                "play_cancellable: resolving source for track_id={}",
+                track.id
+            );
             let resolve_result = tokio::select! {
                 r = self.streaming().resolve(track.source.clone(), track.id as u64, None) => r,
-                _ = cancel.cancelled() => return,
+                _ = cancel.cancelled() => {
+                    tracing::info!("play_cancellable: cancelled during resolve for track_id={}", track.id);
+                    return;
+                },
             };
 
             match resolve_result {
                 Ok(wrapper) => {
+                    tracing::info!("play_cancellable: resolve ok for track_id={}", track.id);
+                    if cancel.is_cancelled() {
+                        tracing::info!(
+                            "play_cancellable: cancelled after resolve for track_id={}",
+                            track.id
+                        );
+                        return;
+                    }
                     self.streaming()
-                        .set_context(track.id as u64, next_track_id)
+                        .set_context(track.id as u64, active_ids)
                         .await;
 
+                    tracing::info!("play_cancellable: preparing track_id={}", track.id);
                     let prepare_result = tokio::select! {
                         r = wrapper.prepare() => r,
-                        _ = cancel.cancelled() => return,
+                        _ = cancel.cancelled() => {
+                            tracing::info!("play_cancellable: cancelled during prepare for track_id={}", track.id);
+                            return;
+                        },
                     };
 
                     if let Err(e) = prepare_result {
@@ -550,8 +627,16 @@ impl AppState {
                     }
 
                     if cancel.is_cancelled() {
+                        tracing::info!(
+                            "play_cancellable: cancelled after prepare for track_id={}",
+                            track.id
+                        );
                         return;
                     }
+                    tracing::info!(
+                        "play_cancellable: calling wrapper.play for track_id={}",
+                        track.id
+                    );
                     wrapper.play(self.audio_engine(), track);
                 }
                 Err(e) => {
@@ -565,7 +650,21 @@ impl AppState {
                         );
                         let lib = self.library.clone();
                         tokio::spawn(async move {
-                            let _ = lib.set_track_unavailable(TrackId(id), true).await;
+                            tracing::info!(
+                                "play_cancellable[unavailable]: marking track_id={} as unavailable",
+                                id
+                            );
+                            match lib.set_track_unavailable(TrackId(id), true).await {
+                                Ok(_) => tracing::info!(
+                                    "play_cancellable[unavailable]: marked ok track_id={}",
+                                    id
+                                ),
+                                Err(e) => tracing::warn!(
+                                    "play_cancellable[unavailable]: failed track_id={}: {}",
+                                    id,
+                                    e
+                                ),
+                            }
                         });
                     }
                     self.audio_engine().stop();
@@ -573,6 +672,7 @@ impl AppState {
                 }
             }
         } else {
+            tracing::info!("play_cancellable: no track provided, stopping");
             self.stop();
         }
     }
@@ -671,7 +771,11 @@ impl AppState {
         Ok(total_pages)
     }
 
-    async fn fill_context_queue(&self, context: ContainerContext, cancel: &CancellationToken) -> Result<()> {
+    async fn fill_context_queue(
+        &self,
+        context: ContainerContext,
+        cancel: &CancellationToken,
+    ) -> Result<()> {
         let cursor = tokio::select! {
             r = PlayerCursor::from_context(context, self.cursor_resolver.clone()) => r?,
             _ = cancel.cancelled() => return Ok(()),
@@ -680,7 +784,10 @@ impl AppState {
         {
             let mut queue = self.queue.lock().await;
             let cq = match &mut *queue {
-                ActiveQueue::Cursor(cq) => { cq.clear(); cq }
+                ActiveQueue::Cursor(cq) => {
+                    cq.clear();
+                    cq
+                }
                 _ => {
                     *queue = ActiveQueue::new_cursor();
                     match &mut *queue {
@@ -707,14 +814,23 @@ impl AppState {
         self.fill_context_queue(context, &cancel).await
     }
 
-    pub async fn load_context_and_play(&self, context: ContainerContext, start_index: usize) -> Result<()> {
+    pub async fn load_context_and_play(
+        &self,
+        context: ContainerContext,
+        start_index: usize,
+    ) -> Result<()> {
         let cancel = self.begin_exclusive_op().await;
         self.fill_context_queue(context, &cancel).await?;
-        if cancel.is_cancelled() { return Ok(()); }
+        if cancel.is_cancelled() {
+            return Ok(());
+        }
         let track = {
             let mut queue = self.queue.lock().await;
             match &mut *queue {
-                ActiveQueue::Cursor(cq) => { cq.jump_to(start_index); cq.current_track.clone() }
+                ActiveQueue::Cursor(cq) => {
+                    cq.jump_to(start_index);
+                    cq.current_track.clone()
+                }
                 _ => None,
             }
         };
@@ -723,11 +839,17 @@ impl AppState {
     }
 
     pub async fn load_playlist_to_queue(&self, playlist_id: PlaylistId) -> Result<()> {
-        self.load_context_to_queue(ContainerContext::LocalPlaylist(playlist_id.0)).await
+        self.load_context_to_queue(ContainerContext::LocalPlaylist(playlist_id.0))
+            .await
     }
 
-    pub async fn load_playlist_and_play(&self, playlist_id: PlaylistId, start_index: usize) -> Result<()> {
-        self.load_context_and_play(ContainerContext::LocalPlaylist(playlist_id.0), start_index).await
+    pub async fn load_playlist_and_play(
+        &self,
+        playlist_id: PlaylistId,
+        start_index: usize,
+    ) -> Result<()> {
+        self.load_context_and_play(ContainerContext::LocalPlaylist(playlist_id.0), start_index)
+            .await
     }
 
     async fn fill_search_queue(
@@ -750,7 +872,10 @@ impl AppState {
 
         let mut queue = self.queue.lock().await;
         let cq = match &mut *queue {
-            ActiveQueue::Cursor(cq) => { cq.clear(); cq }
+            ActiveQueue::Cursor(cq) => {
+                cq.clear();
+                cq
+            }
             _ => {
                 *queue = ActiveQueue::new_cursor();
                 match &mut *queue {
@@ -770,7 +895,10 @@ impl AppState {
         }
 
         if !found {
-            tracing::warn!("Selected track {} not found in search results initial batch", selected_track_id);
+            tracing::warn!(
+                "Selected track {} not found in search results initial batch",
+                selected_track_id
+            );
         }
 
         cq.prefetch(50).await?;
@@ -786,7 +914,8 @@ impl AppState {
     ) -> Result<()> {
         tracing::info!("Loading search context: {} from {}", query, system);
         let cancel = self.begin_exclusive_op().await;
-        self.fill_search_queue(&system, &query, content_type, selected_track_id, &cancel).await
+        self.fill_search_queue(&system, &query, content_type, selected_track_id, &cancel)
+            .await
     }
 
     pub async fn load_search_and_play(
@@ -797,8 +926,11 @@ impl AppState {
         selected_track_id: usize,
     ) -> Result<()> {
         let cancel = self.begin_exclusive_op().await;
-        self.fill_search_queue(&system, &query, content_type, selected_track_id, &cancel).await?;
-        if cancel.is_cancelled() { return Ok(()); }
+        self.fill_search_queue(&system, &query, content_type, selected_track_id, &cancel)
+            .await?;
+        if cancel.is_cancelled() {
+            return Ok(());
+        }
         let track = {
             let mut queue = self.queue.lock().await;
             match &mut *queue {
@@ -819,14 +951,20 @@ impl AppState {
             cq.jump_to(0);
             *queue = ActiveQueue::Cursor(cq);
         }
-        if cancel.is_cancelled() { return Ok(()); }
+        if cancel.is_cancelled() {
+            return Ok(());
+        }
         self.play_cancellable(Some(track), cancel).await;
         Ok(())
     }
 
     pub async fn play_library_track(&self, track_id: TrackId) -> Result<()> {
         let cancel = self.begin_exclusive_op().await;
-        let lib_track = self.library.get_track(track_id).await?.ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+        let lib_track = self
+            .library
+            .get_track(track_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
         let track: AudioTrack = lib_track.into();
         {
             let mut queue = self.queue.lock().await;
@@ -835,7 +973,9 @@ impl AppState {
             cq.jump_to(0);
             *queue = ActiveQueue::Cursor(cq);
         }
-        if cancel.is_cancelled() { return Ok(()); }
+        if cancel.is_cancelled() {
+            return Ok(());
+        }
         self.play_cancellable(Some(track), cancel).await;
         Ok(())
     }
