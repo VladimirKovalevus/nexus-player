@@ -1,3 +1,4 @@
+use crate::audio::eq::EqSettings;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -74,6 +75,8 @@ pub enum AudioCommand {
 
     SetVolume(f32),
 
+    SetEq(EqSettings),
+
     Shutdown,
 }
 #[derive(Debug, Clone)]
@@ -138,6 +141,8 @@ pub struct AudioState {
     pub current_track: Option<Track>,
 
     pub next_track: Option<Track>,
+
+    pub eq_settings: EqSettings,
 }
 
 impl Default for AudioState {
@@ -153,6 +158,7 @@ impl Default for AudioState {
             total_size_bytes: None,
             current_track: None,
             next_track: None,
+            eq_settings: EqSettings::default(),
         }
     }
 }

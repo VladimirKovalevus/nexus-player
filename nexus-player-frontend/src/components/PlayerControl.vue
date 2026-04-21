@@ -3,10 +3,13 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useAudioStore } from '../stores/audio';
+import { useEqStore } from '../stores/eq';
 import WaveformBar from './common/WaveformBar.vue';
 import MarqueeText from './common/MarqueeText.vue';
+import EqPanel from './EqPanel.vue';
 
 const audioStore = useAudioStore();
+const eqStore = useEqStore();
 const localVolume = ref(audioStore.volume);
 
 // Keep local volume in sync with store (e.g. if changed elsewhere)
@@ -175,6 +178,7 @@ const formatTime = (seconds: number): string => {
 onMounted(async () => {
   fetchAudioState();
   fetchQueueState();
+  eqStore.load();
   document.addEventListener('click', handleDocumentClick);
 
   try {
@@ -285,6 +289,17 @@ onUnmounted(() => {
       >
         <span style="filter: grayscale(1)">📊</span>
       </button>
+
+      <button
+        class="eq-btn"
+        :class="{ active: eqStore.isOpen, 'eq-on': eqStore.settings.enabled }"
+        @click="eqStore.toggleOpen()"
+        title="Эквалайзер"
+      >
+        EQ
+      </button>
+
+      <EqPanel />
 
       <div
         class="volume-wrapper"
@@ -473,6 +488,36 @@ onUnmounted(() => {
   font-size: 0.8rem;
   border: none;
   opacity: 0.7;
+}
+
+.eq-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-bold);
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.05em;
+
+  &:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+    border-color: var(--color-text-muted);
+  }
+
+  &.active {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+    border-color: var(--color-accent-primary);
+  }
+
+  &.eq-on {
+    color: var(--color-accent-primary);
+    border-color: var(--color-accent-primary);
+  }
 }
 
 .control-btn.active {

@@ -1,3 +1,4 @@
+use super::eq::EqSettings;
 use super::playback::PlaybackEngine;
 use super::types::{
     AudioCommand, AudioEvent, AudioState, BufferedRange, PlaybackState, Track, TrackSource,
@@ -103,6 +104,14 @@ impl AudioEngine {
 
     pub fn set_volume(&self, volume: f32) {
         let _ = self.command_tx.send(AudioCommand::SetVolume(volume));
+    }
+
+    pub fn set_eq(&self, settings: EqSettings) {
+        let _ = self.command_tx.send(AudioCommand::SetEq(settings));
+    }
+
+    pub fn get_eq(&self) -> EqSettings {
+        self.state.read().unwrap().eq_settings.clone()
     }
 
     pub fn state(&self) -> AudioState {
@@ -602,6 +611,12 @@ impl AudioEngine {
                         state.write().unwrap().volume = volume;
                         playback.set_volume(volume);
                         let _ = event_tx.send(AudioEvent::VolumeChanged { volume });
+                    }
+
+                    AudioCommand::SetEq(settings) => {
+                        info!("Обновление настроек EQ, enabled={}", settings.enabled);
+                        state.write().unwrap().eq_settings = settings.clone();
+                        playback.set_eq(settings);
                     }
 
                     AudioCommand::Shutdown => {

@@ -1,4 +1,5 @@
 use crate::audio::engine::AudioEngine;
+use crate::audio::eq::{builtin_presets, EqSettings};
 use crate::audio::types::Track;
 use crate::audio::types::Track as AudioTrack;
 use crate::config::{AppConfig, ConfigManager};
@@ -52,6 +53,8 @@ impl AppState {
         let config = config_manager.get();
 
         let audio_engine = Arc::new(AudioEngine::new()?);
+        // Apply saved EQ settings on startup so the first track already has correct EQ.
+        audio_engine.set_eq(config.eq.clone());
 
         let _cache_dir = db_path.parent().unwrap().join("cache");
         let streaming = StreamingService::new(
@@ -1361,6 +1364,25 @@ impl AppState {
     }
     pub fn poll_audio_events(&self) -> Vec<crate::audio::types::AudioEvent> {
         self.audio_engine.poll_all_events()
+    }
+
+    pub fn set_eq_settings(&self, settings: EqSettings) -> anyhow::Result<()> {
+        self.audio_engine.set_eq(settings.clone());
+        let mut config = self.config_manager.get();
+        config.eq = settings;
+        self.config_manager.update(config)?;
+        Ok(())
+    }
+
+    pub fn get_eq_settings(&self) -> EqSettings {
+        self.config_manager.get().eq
+    }
+
+    pub fn get_eq_presets(&self) -> Vec<(String, [f32; 10])> {
+        builtin_presets()
+            .into_iter()
+            .map(|(name, gains)| (name.to_string(), gains))
+            .collect()
     }
 
     // --- Library Proxies (unchanged mostly) ---

@@ -1,4 +1,5 @@
 use super::decoder::{AudioDecoder, DecoderType};
+use super::eq::{EqProcessor, EqSettings};
 use super::hls_decoder::HlsAudioDecoder;
 use crate::audio::types::{AudioSource, MediaSource, SampleRate as MSR, TrackSource};
 use crate::error::AudioError;
@@ -132,6 +133,8 @@ pub struct PlaybackEngine {
     volume: Arc<Mutex<f32>>,
     recent_samples: Arc<Mutex<Vec<f32>>>,
     needs_recreation: Arc<AtomicBool>,
+    eq_settings: Arc<Mutex<EqSettings>>,
+    eq_dirty: Arc<AtomicBool>,
 }
 
 impl PlaybackEngine {
@@ -170,6 +173,8 @@ impl PlaybackEngine {
             volume: Arc::new(Mutex::new(0.1)),
             recent_samples: Arc::new(Mutex::new(Vec::with_capacity(8192))),
             needs_recreation: Arc::new(AtomicBool::new(false)),
+            eq_settings: Arc::new(Mutex::new(EqSettings::default())),
+            eq_dirty: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -354,12 +359,17 @@ impl PlaybackEngine {
         let volume = Arc::clone(&self.volume);
         let recent_samples = Arc::clone(&self.recent_samples);
         let needs_recreation = Arc::clone(&self.needs_recreation);
+        let eq_settings = Arc::clone(&self.eq_settings);
+        let eq_dirty = Arc::clone(&self.eq_dirty);
 
         let config = self.config.clone();
         let sample_rate = config.sample_rate.0;
         let mut current_ramp_gain = 0.0f32;
         // 10ms ramp
         let ramp_step = 1.0 / (sample_rate as f32 * 0.01);
+        // EQ processor lives entirely inside this closure; state (z1/z2) is never shared.
+        let initial_eq = eq_settings.lock().unwrap().clone();
+        let mut eq_proc = EqProcessor::new(&initial_eq, sample_rate, config.channels as usize);
 
         let err_fn = move |err| {
             warn!("Ошибка стрима: {}", err);
@@ -462,6 +472,14 @@ impl PlaybackEngine {
                         *current_position.lock().unwrap() = Duration::from_secs_f64(position_secs);
                     }
 
+                    // Rebuild EQ filters when settings changed from the command channel.
+                    if eq_dirty.load(Ordering::Relaxed) {
+                        eq_dirty.store(false, Ordering::Relaxed);
+                        if let Ok(settings) = eq_settings.try_lock() {
+                            eq_proc.rebuild(&settings, sample_rate);
+                        }
+                    }
+
                     // Apply volume ramp and master volume
                     let vol = *volume.lock().unwrap();
                     for sample in data.iter_mut() {
@@ -472,6 +490,9 @@ impl PlaybackEngine {
                         }
                         *sample *= current_ramp_gain * vol;
                     }
+
+                    // Apply EQ after volume ramp.
+                    eq_proc.process(data, config.channels as usize);
 
                     {
                         if let Ok(mut recent) = recent_samples.try_lock() {
@@ -693,5 +714,18 @@ impl PlaybackEngine {
 
     pub fn volume(&self) -> f32 {
         *self.volume.lock().unwrap()
+    }
+
+    pub fn set_eq(&self, settings: EqSettings) {
+        *self.eq_settings.lock().unwrap() = settings;
+        self.eq_dirty.store(true, Ordering::SeqCst);
+    }
+
+    pub fn get_eq(&self) -> EqSettings {
+        self.eq_settings.lock().unwrap().clone()
+    }
+
+    pub fn current_output_sample_rate(&self) -> u32 {
+        self.config.sample_rate.0
     }
 }

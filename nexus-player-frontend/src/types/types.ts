@@ -1,3 +1,14 @@
+export interface EqSettingsDto {
+  enabled: boolean;
+  gains: number[];
+  presetName: string | null;
+}
+
+export interface EqPresetDto {
+  name: string;
+  gains: number[];
+}
+
 export interface TrackSourceDto {
   url: string;
   system: string;

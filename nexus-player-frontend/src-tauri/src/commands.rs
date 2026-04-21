@@ -2,9 +2,10 @@ use nexus_player_backend::sync::{SyncApplier, SyncBuilder, SyncStore, SyncType, 
 
 use crate::dto::{
     hash_str_to_i64, AudioStateDto, ContainerMetaDto, CreatePlaylistRequest,
-    CreatePlaylistWithTracksRequest, CurrentPositionDto, LibraryPageDto, PlayHistoryEntryDto,
-    PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, PlaylistWithTracksDto, QueueEntryDto,
-    QueueStateDto, SearchContextDto, SearchResultDto, TaskInfoDto, TrackDto, TrackSourceDto,
+    CreatePlaylistWithTracksRequest, CurrentPositionDto, EqPresetDto, EqSettingsDto, LibraryPageDto,
+    PlayHistoryEntryDto, PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, PlaylistWithTracksDto,
+    QueueEntryDto, QueueStateDto, SearchContextDto, SearchResultDto, TaskInfoDto, TrackDto,
+    TrackSourceDto,
 };
 use crate::events::FrontendEvent;
 use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
@@ -1343,4 +1344,33 @@ pub async fn telegram_pull(
     let file = tg.pull().await.map_err(|e| e.to_string())?;
     let applier = SyncApplier::new(state.library());
     applier.apply(file).await.map_err(|e| e.to_string())
+}
+
+// ─── EQ ────────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_eq_settings(state: State<'_, Arc<AppState>>) -> Result<EqSettingsDto> {
+    Ok(state.get_eq_settings().into())
+}
+
+#[tauri::command]
+pub async fn set_eq_settings(
+    state: State<'_, Arc<AppState>>,
+    settings: EqSettingsDto,
+) -> Result<()> {
+    state
+        .set_eq_settings(settings.into())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_eq_presets(_state: State<'_, Arc<AppState>>) -> Result<Vec<EqPresetDto>> {
+    let presets = nexus_player_backend::audio::eq::builtin_presets()
+        .into_iter()
+        .map(|(name, gains)| EqPresetDto {
+            name: name.to_string(),
+            gains: gains.to_vec(),
+        })
+        .collect();
+    Ok(presets)
 }

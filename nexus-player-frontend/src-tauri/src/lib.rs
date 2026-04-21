@@ -139,6 +139,9 @@ pub fn run() {
             commands::telegram_check_config,
             commands::telegram_push,
             commands::telegram_pull,
+            commands::get_eq_settings,
+            commands::set_eq_settings,
+            commands::get_eq_presets,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,3 +1,4 @@
+use crate::audio::eq::EqSettings;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -93,6 +94,7 @@ pub struct AppConfig {
     pub providers: ProviderConfig,
     pub audio: AudioConfig,
     pub network: NetworkConfig,
+    pub eq: EqSettings,
     #[serde(skip)]
     config_path: Option<PathBuf>,
 }
@@ -103,6 +105,7 @@ impl Default for AppConfig {
             providers: ProviderConfig::default(),
             audio: AudioConfig::default(),
             network: NetworkConfig::default(),
+            eq: EqSettings::default(),
             config_path: None,
         }
     }
