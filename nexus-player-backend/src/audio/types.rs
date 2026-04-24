@@ -77,6 +77,11 @@ pub enum AudioCommand {
 
     SetEq(EqSettings),
 
+    SetFade {
+        fade_in_ms: u32,
+        fade_out_ms: u32,
+    },
+
     Shutdown,
 }
 #[derive(Debug, Clone)]

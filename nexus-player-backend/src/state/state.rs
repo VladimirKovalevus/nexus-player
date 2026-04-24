@@ -53,8 +53,14 @@ impl AppState {
         let config = config_manager.get();
 
         let audio_engine = Arc::new(AudioEngine::new()?);
-        // Apply saved EQ settings on startup so the first track already has correct EQ.
+        // Apply saved EQ and fade settings on startup.
         audio_engine.set_eq(config.eq.clone());
+        {
+            let a = &config.audio;
+            let fin = if a.fade_in_enabled { a.fade_in_ms } else { 0 };
+            let fout = if a.fade_out_enabled { a.fade_out_ms } else { 0 };
+            audio_engine.set_fade(fin, fout);
+        }
 
         let _cache_dir = db_path.parent().unwrap().join("cache");
         let streaming = StreamingService::new(
@@ -85,6 +91,9 @@ impl AppState {
 
     pub async fn update_config(&self, config: AppConfig) -> anyhow::Result<()> {
         self.config_manager.update(config.clone())?;
+        let fade_in_ms = if config.audio.fade_in_enabled { config.audio.fade_in_ms } else { 0 };
+        let fade_out_ms = if config.audio.fade_out_enabled { config.audio.fade_out_ms } else { 0 };
+        self.audio_engine.set_fade(fade_in_ms, fade_out_ms);
         self.streaming
             .update_config(config.providers, config.audio)
             .await;

@@ -114,7 +114,7 @@ impl MediaSource for HlsReaderAdapter {
     }
 }
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 pub struct PlaybackEngine {
     decoder: Arc<Mutex<Option<DecoderType>>>,
@@ -135,6 +135,12 @@ pub struct PlaybackEngine {
     needs_recreation: Arc<AtomicBool>,
     eq_settings: Arc<Mutex<EqSettings>>,
     eq_dirty: Arc<AtomicBool>,
+    /// Total samples for fade-in after a track switch (0 = disabled).
+    fade_in_samples: Arc<AtomicU64>,
+    /// Total samples for fade-out before track end (0 = disabled).
+    fade_out_samples: Arc<AtomicU64>,
+    /// Set to true by play() calls so the callback initialises fade_in_remaining.
+    fade_in_pending: Arc<AtomicBool>,
 }
 
 impl PlaybackEngine {
@@ -175,6 +181,9 @@ impl PlaybackEngine {
             needs_recreation: Arc::new(AtomicBool::new(false)),
             eq_settings: Arc::new(Mutex::new(EqSettings::default())),
             eq_dirty: Arc::new(AtomicBool::new(false)),
+            fade_in_samples: Arc::new(AtomicU64::new(0)),
+            fade_out_samples: Arc::new(AtomicU64::new(0)),
+            fade_in_pending: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -208,6 +217,7 @@ impl PlaybackEngine {
         *self.current_position.lock().unwrap() = Duration::ZERO;
         *self.sample_rate.lock().unwrap() = sample_rate;
         *self.samples_played.lock().unwrap() = 0;
+        self.fade_in_pending.store(true, Ordering::Relaxed);
 
         self.sample_buffer.lock().unwrap().clear();
         *self.buffer_position.lock().unwrap() = 0;
@@ -237,6 +247,7 @@ impl PlaybackEngine {
         *self.current_position.lock().unwrap() = Duration::ZERO;
         *self.sample_rate.lock().unwrap() = sample_rate;
         *self.samples_played.lock().unwrap() = 0;
+        self.fade_in_pending.store(true, Ordering::Relaxed);
 
         self.sample_buffer.lock().unwrap().clear();
         *self.buffer_position.lock().unwrap() = 0;
@@ -299,6 +310,7 @@ impl PlaybackEngine {
             *self.current_position.lock().unwrap() = Duration::ZERO;
             *self.sample_rate.lock().unwrap() = sample_rate;
             *self.samples_played.lock().unwrap() = 0;
+            self.fade_in_pending.store(true, Ordering::Relaxed);
 
             self.sample_buffer.lock().unwrap().clear();
             *self.buffer_position.lock().unwrap() = 0;
@@ -332,6 +344,7 @@ impl PlaybackEngine {
         *self.current_position.lock().unwrap() = Duration::ZERO;
         *self.sample_rate.lock().unwrap() = sample_rate;
         *self.samples_played.lock().unwrap() = 0;
+        self.fade_in_pending.store(true, Ordering::Relaxed);
 
         self.sample_buffer.lock().unwrap().clear();
         *self.buffer_position.lock().unwrap() = 0;
@@ -359,6 +372,9 @@ impl PlaybackEngine {
         let volume = Arc::clone(&self.volume);
         let recent_samples = Arc::clone(&self.recent_samples);
         let needs_recreation = Arc::clone(&self.needs_recreation);
+        let fade_in_smp = Arc::clone(&self.fade_in_samples);
+        let fade_out_smp = Arc::clone(&self.fade_out_samples);
+        let fade_in_pending_arc = Arc::clone(&self.fade_in_pending);
         let eq_settings = Arc::clone(&self.eq_settings);
         let eq_dirty = Arc::clone(&self.eq_dirty);
 
@@ -367,6 +383,7 @@ impl PlaybackEngine {
         let mut current_ramp_gain = 0.0f32;
         // 10ms ramp
         let ramp_step = 1.0 / (sample_rate as f32 * 0.01);
+        let mut fade_in_remaining: u64 = 0;
         // EQ processor lives entirely inside this closure; state (z1/z2) is never shared.
         let initial_eq = eq_settings.lock().unwrap().clone();
         let mut eq_proc = EqProcessor::new(&initial_eq, sample_rate, config.channels as usize);
@@ -414,12 +431,13 @@ impl PlaybackEngine {
                                             info!("Бесшовный переход на следующий трек");
                                             let next_duration = next.duration().map(Duration::from_secs_f64);
                                             let next_sr = next.sample_rate();
-                                            
+
                                             *dec = next;
                                             *duration_arc.lock().unwrap() = next_duration;
                                             *samples_played.lock().unwrap() = 0;
                                             *sample_rate_arc.lock().unwrap() = next_sr;
                                             track_switched.store(true, Ordering::SeqCst);
+                                            fade_in_remaining = fade_in_smp.load(Ordering::Relaxed);
                                             // Продолжаем цикл для нового декодера
                                             continue;
                                         } else {
@@ -480,15 +498,64 @@ impl PlaybackEngine {
                         }
                     }
 
-                    // Apply volume ramp and master volume
+                    // Apply volume ramp and master volume (per-frame to support fade)
                     let vol = *volume.lock().unwrap();
-                    for sample in data.iter_mut() {
+                    let channels = config.channels as usize;
+                    let num_frames = data.len() / channels;
+
+                    // Initialise fade-in when a new track has just been started.
+                    if fade_in_pending_arc.swap(false, Ordering::Relaxed) {
+                        fade_in_remaining = fade_in_smp.load(Ordering::Relaxed);
+                        info!("[fade] pending fired: fade_in_remaining={}", fade_in_remaining);
+                    }
+
+                    let fin_total = fade_in_smp.load(Ordering::Relaxed);
+                    let fout_total = fade_out_smp.load(Ordering::Relaxed);
+                    // frames_so_far already includes this block; subtract to get block start.
+                    let block_start = samples_played
+                        .lock()
+                        .unwrap()
+                        .saturating_sub(num_frames as u64);
+                    let dur_frames = duration_arc
+                        .lock()
+                        .unwrap()
+                        .map(|d| (d.as_secs_f64() * sample_rate as f64) as u64);
+
+                    for frame_idx in 0..num_frames {
                         if playing {
                             current_ramp_gain = (current_ramp_gain + ramp_step).min(1.0);
                         } else {
                             current_ramp_gain = (current_ramp_gain - ramp_step).max(0.0);
                         }
-                        *sample *= current_ramp_gain * vol;
+
+                        let fin_gain = if fin_total > 0 && fade_in_remaining > 0 {
+                            let g = 1.0 - fade_in_remaining as f32 / fin_total as f32;
+                            fade_in_remaining = fade_in_remaining.saturating_sub(1);
+                            g.clamp(0.0, 1.0)
+                        } else {
+                            1.0
+                        };
+
+                        let fout_gain = if fout_total > 0 {
+                            if let Some(dur) = dur_frames {
+                                let abs_frame = block_start + frame_idx as u64;
+                                let remaining = dur.saturating_sub(abs_frame);
+                                if remaining < fout_total {
+                                    (remaining as f32 / fout_total as f32).clamp(0.0, 1.0)
+                                } else {
+                                    1.0
+                                }
+                            } else {
+                                1.0
+                            }
+                        } else {
+                            1.0
+                        };
+
+                        let combined = current_ramp_gain * fin_gain * fout_gain * vol;
+                        for c in 0..channels {
+                            data[frame_idx * channels + c] *= combined;
+                        }
                     }
 
                     // Apply EQ after volume ramp.
@@ -714,6 +781,15 @@ impl PlaybackEngine {
 
     pub fn volume(&self) -> f32 {
         *self.volume.lock().unwrap()
+    }
+
+    pub fn set_fade(&self, fade_in_ms: u32, fade_out_ms: u32) {
+        let sr = self.config.sample_rate.0 as f64;
+        let fin = (fade_in_ms as f64 / 1000.0 * sr) as u64;
+        let fout = (fade_out_ms as f64 / 1000.0 * sr) as u64;
+        info!("[fade] set_fade: in={}ms→{}smp, out={}ms→{}smp, sr={}", fade_in_ms, fin, fade_out_ms, fout, sr);
+        self.fade_in_samples.store(fin, Ordering::Relaxed);
+        self.fade_out_samples.store(fout, Ordering::Relaxed);
     }
 
     pub fn set_eq(&self, settings: EqSettings) {

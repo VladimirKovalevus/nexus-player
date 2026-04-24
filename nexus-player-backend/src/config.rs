@@ -58,6 +58,12 @@ pub struct AudioConfig {
     /// Fraction (0.0–1.0) of each upcoming track to pre-download before fully downloading any one.
     /// Default: 0.2 (20%).
     pub prefetch_limit: f64,
+    pub fade_in_enabled: bool,
+    pub fade_out_enabled: bool,
+    /// Duration of fade-in at the start of a track, in milliseconds.
+    pub fade_in_ms: u32,
+    /// Duration of fade-out at the end of a track, in milliseconds.
+    pub fade_out_ms: u32,
 }
 
 impl Default for AudioConfig {
@@ -66,6 +72,10 @@ impl Default for AudioConfig {
             waveform_enabled: true,
             mem_limit: 100 * 1024 * 1024,
             prefetch_limit: 0.2,
+            fade_in_enabled: false,
+            fade_out_enabled: false,
+            fade_in_ms: 500,
+            fade_out_ms: 500,
         }
     }
 }

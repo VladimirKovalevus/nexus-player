@@ -106,6 +106,10 @@ impl AudioEngine {
         let _ = self.command_tx.send(AudioCommand::SetVolume(volume));
     }
 
+    pub fn set_fade(&self, fade_in_ms: u32, fade_out_ms: u32) {
+        let _ = self.command_tx.send(AudioCommand::SetFade { fade_in_ms, fade_out_ms });
+    }
+
     pub fn set_eq(&self, settings: EqSettings) {
         let _ = self.command_tx.send(AudioCommand::SetEq(settings));
     }
@@ -289,10 +293,16 @@ impl AudioEngine {
                     if let Some(duration) = playback.duration() {
                         let threshold = Duration::from_millis(100);
                         if position + threshold >= duration {
-                            info!("Трек завершен");
-                            let _ = event_tx.send(AudioEvent::TrackFinished);
-                            state.write().unwrap().playback_state = PlaybackState::Stopped;
-                            playback.stop();
+                            // If the next track is already preloaded, let the gapless decoder
+                            // swap happen naturally inside the audio callback instead of killing
+                            // the stream early.
+                            let has_next = state.read().unwrap().next_track.is_some();
+                            if !has_next {
+                                info!("Трек завершен");
+                                let _ = event_tx.send(AudioEvent::TrackFinished);
+                                state.write().unwrap().playback_state = PlaybackState::Stopped;
+                                playback.stop();
+                            }
                         }
                     }
                 }
@@ -617,6 +627,11 @@ impl AudioEngine {
                         info!("Обновление настроек EQ, enabled={}", settings.enabled);
                         state.write().unwrap().eq_settings = settings.clone();
                         playback.set_eq(settings);
+                    }
+
+                    AudioCommand::SetFade { fade_in_ms, fade_out_ms } => {
+                        info!("Обновление настроек fade: in={}ms, out={}ms", fade_in_ms, fade_out_ms);
+                        playback.set_fade(fade_in_ms, fade_out_ms);
                     }
 
                     AudioCommand::Shutdown => {

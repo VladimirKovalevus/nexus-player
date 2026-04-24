@@ -43,6 +43,42 @@
               <input type="number" v-model.number="config.audio.memLimit" />
               <p :class="$style.hint">Например, 104857600 для 100MB.</p>
             </div>
+
+            <div :class="$style.field">
+              <label :class="$style.checkboxLabel">
+                <input type="checkbox" v-model="config.audio.fadeInEnabled" />
+                Fade-in при смене треков
+              </label>
+              <div v-if="config.audio.fadeInEnabled" :class="$style.fadeRow">
+                <input
+                  type="range"
+                  min="100"
+                  max="3000"
+                  step="100"
+                  v-model.number="config.audio.fadeInMs"
+                  :class="$style.fadeSlider"
+                />
+                <span :class="$style.fadeValue">{{ config.audio.fadeInMs }} мс</span>
+              </div>
+            </div>
+
+            <div :class="$style.field">
+              <label :class="$style.checkboxLabel">
+                <input type="checkbox" v-model="config.audio.fadeOutEnabled" />
+                Fade-out в конце треков
+              </label>
+              <div v-if="config.audio.fadeOutEnabled" :class="$style.fadeRow">
+                <input
+                  type="range"
+                  min="100"
+                  max="3000"
+                  step="100"
+                  v-model.number="config.audio.fadeOutMs"
+                  :class="$style.fadeSlider"
+                />
+                <span :class="$style.fadeValue">{{ config.audio.fadeOutMs }} мс</span>
+              </div>
+            </div>
           </section>
 
           <!-- Appearance Settings -->
@@ -253,7 +289,11 @@ const config = ref<AppConfig>({
   },
   audio: {
     waveformEnabled: true,
-    memLimit: 104857600
+    memLimit: 104857600,
+    fadeInEnabled: false,
+    fadeOutEnabled: false,
+    fadeInMs: 500,
+    fadeOutMs: 500,
   },
   network: { timeoutSeconds: 30, chunkSize: 1048576, bufferSize: 10485760 },
 });
@@ -725,6 +765,25 @@ watch(
     box-shadow: 0 0 0 1px var(--color-accent-primary);
     color: var(--color-text-primary);
   }
+}
+
+.fadeRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  margin-top: $spacing-xs;
+}
+
+.fadeSlider {
+  flex: 1;
+  accent-color: var(--color-accent-primary);
+}
+
+.fadeValue {
+  font-size: $font-size-sm;
+  color: var(--color-text-secondary);
+  min-width: 56px;
+  text-align: right;
 }
 
 .customCssInput {

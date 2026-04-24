@@ -181,6 +181,10 @@ export interface ProviderConfig {
 export interface AudioConfig {
   waveformEnabled: boolean;
   memLimit: number;
+  fadeInEnabled: boolean;
+  fadeOutEnabled: boolean;
+  fadeInMs: number;
+  fadeOutMs: number;
 }
 
 export interface NetworkConfig {
