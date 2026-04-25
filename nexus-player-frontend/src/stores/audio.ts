@@ -64,7 +64,7 @@ export const useAudioStore = defineStore('audio', () => {
         navigator.mediaSession.setPositionState({
           duration: audioState.value.durationSecs,
           playbackRate: 1,
-          position: currentPositionSecs.value,
+          position: Math.min(currentPositionSecs.value, audioState.value.durationSecs),
         });
       }
     }

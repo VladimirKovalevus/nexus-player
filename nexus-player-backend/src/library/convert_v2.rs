@@ -289,7 +289,7 @@ impl From<models::Playlist> for entities_v2::playlist::Model {
             title: playlist.metadata.title,
             description: playlist.metadata.description,
             creator: playlist.creator,
-            artwork_id: None,
+            artwork_id: playlist.metadata.artwork.map(|a| a.id.0),
             created_at: datetime_to_timestamp(playlist.created_at),
             updated_at: datetime_to_timestamp(playlist.updated_at),
         }
