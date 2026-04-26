@@ -4,7 +4,8 @@ use rsoundcloud::models::track::BasicTrack;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 
-use rsoundcloud::{PlaylistsApi, ResourceId, SearchApi, SoundCloudClient, TracksApi};
+use rsoundcloud::{MiscApi, PlaylistsApi, ResourceId, SearchApi, SoundCloudClient, TracksApi};
+use rsoundcloud::models::SearchItem;
 
 use crate::audio::types::MediaSource;
 use crate::library::TrackSource;
@@ -346,6 +347,80 @@ impl StreamProvider for SoundCloudProvider {
 
         println!("TRACKS LEN {:?}", track_infos.len());
         Ok(track_infos)
+    }
+
+    async fn direct_link_resolve(&self, url: &str) -> StreamResult<SearchResult> {
+        if !Self::is_soundcloud_url(url) {
+            return Err(StreamError::NotSupported);
+        }
+
+        let client = self.get_client().await?;
+        let item = client.resolve(url).await.map_err(|e| {
+            StreamError::MetadataError(format!("SoundCloud resolve error: {}", e))
+        })?;
+
+        match item {
+            SearchItem::Track(track) => Ok(SearchResult::Track(TrackInfo {
+                source: TrackSource::External {
+                    system: "soundcloud".to_string(),
+                    id: track.track.permalink_url.clone(),
+                },
+                title: track.track.title,
+                artist: track.user.username,
+                duration: Some(std::time::Duration::from_millis(track.track.duration as u64)),
+                thumbnail: track.track.artwork_url,
+                description: track.track.description,
+            })),
+            SearchItem::AlbumPlaylist(item) => {
+                let tracks: Vec<TrackInfo> = item
+                    .album_playlist
+                    .tracks
+                    .into_iter()
+                    .filter_map(|tt| match tt {
+                        TrackType::Basic(t) => Some(TrackInfo {
+                            source: TrackSource::External {
+                                system: "soundcloud".to_string(),
+                                id: t.track.permalink_url,
+                            },
+                            title: t.track.title,
+                            artist: t.user.username,
+                            duration: Some(std::time::Duration::from_millis(t.track.duration as u64)),
+                            thumbnail: t.track.artwork_url,
+                            description: t.track.description,
+                        }),
+                        TrackType::Mini(_) => None,
+                    })
+                    .collect();
+
+                if item.album_playlist.is_album {
+                    Ok(SearchResult::Album(AlbumInfo {
+                        id: item.album_playlist.permalink_url.clone(),
+                        url: item.album_playlist.permalink_url,
+                        service: StreamingService::SoundCloud,
+                        title: item.album_playlist.title,
+                        artist: item.user.user.username,
+                        tracks,
+                        track_count: item.album_playlist.track_count as usize,
+                        year: None,
+                        thumbnail: item.album_playlist.artwork_url,
+                        description: item.album_playlist.description,
+                    }))
+                } else {
+                    Ok(SearchResult::Playlist(PlaylistInfo {
+                        id: item.album_playlist.permalink_url.clone(),
+                        url: item.album_playlist.permalink_url,
+                        service: StreamingService::SoundCloud,
+                        title: item.album_playlist.title,
+                        creator: item.user.user.username,
+                        tracks,
+                        track_count: item.album_playlist.track_count as usize,
+                        thumbnail: item.album_playlist.artwork_url,
+                        description: item.album_playlist.description,
+                    }))
+                }
+            }
+            SearchItem::User(_) => Err(StreamError::NotSupported),
+        }
     }
 
     async fn is_available(&self) -> bool {

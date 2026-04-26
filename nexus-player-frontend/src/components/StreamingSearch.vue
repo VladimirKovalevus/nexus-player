@@ -55,15 +55,44 @@ const mapContentType = (type: string) => {
 
 const currentPage = computed(() => Math.floor(offset.value / limit.value) + 1);
 
-const search_q = () => {
+const URL_REGEX = /^https?:\/\/.+/;
+
+const search_q = async () => {
   if (!query.value.trim()) {
     error.value = 'Please enter a search query';
     return;
   }
+
+  if (URL_REGEX.test(query.value.trim())) {
+    await resolveDirectLink(query.value.trim());
+    return;
+  }
+
   activeQuery.value = query.value;
   activeProvider.value = selectedProvider.value;
   activeContentType.value = selectedContentType.value;
   search(0);
+};
+
+const resolveDirectLink = async (url: string) => {
+  try {
+    loading.value = true;
+    error.value = null;
+    const result = await invoke<SearchResult>('direct_link_resolve', {
+      provider: selectedProvider.value,
+      url,
+    });
+    searchResults.value = [result];
+    expandedContainers.value.clear();
+    activeQuery.value = url;
+    activeProvider.value = selectedProvider.value;
+    activeContentType.value = selectedContentType.value;
+  } catch (e) {
+    error.value = `Ошибка: ${e}`;
+    console.error('direct_link_resolve error:', e);
+  } finally {
+    loading.value = false;
+  }
 };
 
 const search = async (newOffset = 0) => {

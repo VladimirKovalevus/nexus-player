@@ -319,4 +319,16 @@ impl StreamingService {
     pub async fn has_track(&self, track_id: u64) -> bool {
         self.download_manager.get_track(track_id).await.is_some()
     }
+
+    pub async fn direct_link_resolve(
+        &self,
+        provider_name: &str,
+        url: &str,
+    ) -> StreamResult<SearchResult> {
+        let provider = self
+            .providers
+            .get(provider_name)
+            .ok_or(StreamError::NoProviderFound)?;
+        provider.direct_link_resolve(url).await
+    }
 }

@@ -147,6 +147,14 @@ impl AppState {
         }
     }
 
+    pub async fn direct_link_resolve(
+        &self,
+        provider: &str,
+        url: &str,
+    ) -> Result<crate::streaming::types::SearchResult> {
+        Ok(self.streaming.direct_link_resolve(provider, url).await?)
+    }
+
     // --- Playback Control ---
 
     pub async fn play_next(&self) {
@@ -195,15 +203,7 @@ impl AppState {
                         self.play_cancellable(None, cancel).await;
                         return;
                     }
-                    let track = {
-                        let queue = self.queue.lock().await;
-                        match &*queue {
-                            ActiveQueue::Search(sq) => sq.current_track(),
-                            _ => None,
-                        }
-                    };
-                    self.play_cancellable(track, cancel).await;
-                    return;
+                    // Loop again — sq.next() will now find the newly loaded item at current+1
                 }
                 NextResult::End => {
                     tracing::info!("End of queue");
@@ -563,6 +563,34 @@ impl AppState {
             tracing::info!("play_cancellable: upcoming tracks count={}", upcoming.len());
             let active_ids: Vec<u64> = upcoming.iter().map(|t| t.id as u64).collect();
 
+            // Preload next track into audio engine for gapless playback
+            if let Some(next) = upcoming.first().cloned() {
+                let streaming = self.streaming.clone();
+                let engine = self.audio_engine.clone();
+                let preload_cancel = cancel.clone();
+                tokio::spawn(async move {
+                    if preload_cancel.is_cancelled() {
+                        return;
+                    }
+                    match streaming.resolve(next.source.clone(), next.id as u64, None).await {
+                        Ok(wrapper) => {
+                            if let Err(e) = wrapper.prepare().await {
+                                tracing::warn!(
+                                    "play_cancellable[preload]: prepare failed for track {}: {}",
+                                    next.id,
+                                    e
+                                );
+                                return;
+                            }
+                            if preload_cancel.is_cancelled() {
+                                return;
+                            }
+                            wrapper.preload(&engine, next);
+                        }
+                        Err(_) => {}
+                    }
+                });
+            }
 
             // Resolve remaining upcoming tracks so they enter the download queue
             if upcoming.len() > 1 {

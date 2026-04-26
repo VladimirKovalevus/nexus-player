@@ -45,4 +45,9 @@ pub trait StreamProvider: Send + Sync {
     }
 
     async fn set_credentials(&self, _credentials: Option<String>) {}
+
+    async fn direct_link_resolve(&self, _url: &str) -> StreamResult<SearchResult> {
+        use super::error::StreamError;
+        Err(StreamError::NotSupported)
+    }
 }

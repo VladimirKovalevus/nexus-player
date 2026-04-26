@@ -313,6 +313,50 @@ impl StreamProvider for BandcampProvider {
         }
     }
 
+    async fn direct_link_resolve(&self, url: &str) -> StreamResult<SearchResult> {
+        if !Self::is_bandcamp_url(url) {
+            return Err(StreamError::NotSupported);
+        }
+
+        if url.contains("/track/") {
+            let album = bandcamp::track_from_url(url).await.map_err(|e| {
+                StreamError::MetadataError(format!("Bandcamp API error: {:?}", e))
+            })?;
+
+            let img_url = album.image.get_url();
+            let track = album.tracks.into_iter().next().ok_or_else(|| {
+                StreamError::NoStreamAvailable("No tracks found".to_string())
+            })?;
+
+            let mut info = Self::convert_track_to_track_info(track, url).ok_or_else(|| {
+                StreamError::Unavailable("Track is not streamable".to_string())
+            })?;
+
+            if info.thumbnail.is_none() {
+                info.thumbnail = img_url;
+            }
+
+            Ok(SearchResult::Track(info))
+        } else {
+            let album = bandcamp::album_from_url(url).await.map_err(|e| {
+                StreamError::MetadataError(format!("Bandcamp API error: {:?}", e))
+            })?;
+
+            Ok(SearchResult::Album(AlbumInfo {
+                id: url.to_string(),
+                url: url.to_string(),
+                service: StreamingService::Bandcamp,
+                title: album.title,
+                artist: album.band.name,
+                tracks: vec![],
+                track_count: album.tracks.len(),
+                year: None,
+                thumbnail: album.image.get_url(),
+                description: None,
+            }))
+        }
+    }
+
     async fn is_available(&self) -> bool {
         true
     }

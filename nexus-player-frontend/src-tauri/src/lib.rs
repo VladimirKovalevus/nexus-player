@@ -142,6 +142,7 @@ pub fn run() {
             commands::get_eq_settings,
             commands::set_eq_settings,
             commands::get_eq_presets,
+            commands::direct_link_resolve,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

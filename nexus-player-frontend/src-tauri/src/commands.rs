@@ -1374,3 +1374,18 @@ pub async fn get_eq_presets(_state: State<'_, Arc<AppState>>) -> Result<Vec<EqPr
         .collect();
     Ok(presets)
 }
+
+// ─── Direct Link Resolve ────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn direct_link_resolve(
+    state: State<'_, Arc<AppState>>,
+    provider: String,
+    url: String,
+) -> Result<SearchResultDto> {
+    let result = state
+        .direct_link_resolve(&provider, &url)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(SearchResultDto::from(result))
+}
