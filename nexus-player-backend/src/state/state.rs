@@ -66,6 +66,7 @@ impl AppState {
         let streaming = StreamingService::new(
             config.providers.clone(),
             config.audio.clone(),
+            config.network.clone(),
             library.clone(),
             default_callbacks,
         )
@@ -95,7 +96,7 @@ impl AppState {
         let fade_out_ms = if config.audio.fade_out_enabled { config.audio.fade_out_ms } else { 0 };
         self.audio_engine.set_fade(fade_in_ms, fade_out_ms);
         self.streaming
-            .update_config(config.providers, config.audio)
+            .update_config(config.providers, config.audio, config.network)
             .await;
         Ok(())
     }

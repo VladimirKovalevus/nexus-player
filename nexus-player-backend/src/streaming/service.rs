@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use crate::audio::types::{MediaSource, TrackSource};
-use crate::config::{AudioConfig, ProviderConfig};
+use crate::config::{AudioConfig, NetworkConfig, ProviderConfig};
 use crate::library::{CacheStatus, LibraryService};
 use crate::streaming::external::{StreamingMediaSource, StreamingSourceWrapper};
 use crate::streaming::types::{AlbumInfo, ResolveOptions, TrackInfo};
@@ -31,6 +31,7 @@ impl StreamingService {
     pub fn new(
         config: ProviderConfig,
         config_audio: AudioConfig,
+        config_network: NetworkConfig,
         library: Arc<LibraryService>,
         default_callbacks: DefaultCallbacks,
     ) -> StreamResult<Self> {
@@ -49,6 +50,7 @@ impl StreamingService {
             waveform_enabled: config_audio.waveform_enabled,
             mem_limit_bytes: config_audio.mem_limit,
             prefetch_limit: config_audio.prefetch_limit,
+            chunk_size: config_network.chunk_size as u64,
             default_callbacks,
         });
 
@@ -60,15 +62,16 @@ impl StreamingService {
         })
     }
 
-    pub async fn update_config(&self, config: ProviderConfig, config_audio: AudioConfig) {
+    pub async fn update_config(&self, config: ProviderConfig, config_audio: AudioConfig, config_network: NetworkConfig) {
         if let Ok(mut c) = self.config.write() {
             *c = config.clone();
         }
-        
+
         let mut manager_config = self.download_manager.config.read().await.clone();
         manager_config.waveform_enabled = config_audio.waveform_enabled;
         manager_config.mem_limit_bytes = config_audio.mem_limit;
         manager_config.prefetch_limit = config_audio.prefetch_limit;
+        manager_config.chunk_size = config_network.chunk_size as u64;
 
         self.download_manager
             .update_config(manager_config)
