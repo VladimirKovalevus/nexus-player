@@ -2,39 +2,68 @@ use async_trait::async_trait;
 use rsoundcloud::models::playlist::TrackType;
 use rsoundcloud::models::track::BasicTrack;
 use std::sync::Arc;
-use tokio::sync::OnceCell;
+use tokio::sync::RwLock;
 
 use rsoundcloud::{MiscApi, PlaylistsApi, ResourceId, SearchApi, SoundCloudClient, TracksApi};
 use rsoundcloud::models::SearchItem;
 
 use crate::audio::types::MediaSource;
 use crate::library::TrackSource;
-use crate::streaming::error::{StreamError, StreamResult};
+use crate::streaming::error::{StreamResult, StreamError};
 use crate::streaming::provider::StreamProvider;
 use crate::streaming::types::{
     AlbumInfo, ContentType, PlaylistInfo, ResolveOptions, ResolvedContent, SearchResult,
-    StreamMetadata, StreamingService, TrackInfo,
+    StreamMetadata, TrackInfo,
 };
 
 pub struct SoundCloudProvider {
-    client: OnceCell<SoundCloudClient>,
+    client: RwLock<Option<SoundCloudClient>>,
 }
 
 impl SoundCloudProvider {
-    pub fn new() -> Self {
+    pub fn new(client_id: Option<String>) -> Self {
+        let client = client_id.map(SoundCloudClient::with_client_id);
         Self {
-            client: OnceCell::new(),
+            client: RwLock::new(client),
         }
     }
 
-    async fn get_client(&self) -> StreamResult<&SoundCloudClient> {
-        self.client
-            .get_or_try_init(|| async {
-                SoundCloudClient::default().await.map_err(|e| {
-                    StreamError::Other(format!("Failed to create SoundCloud client: {}", e))
-                })
-            })
-            .await
+    async fn get_client(&self) -> StreamResult<SoundCloudClient> {
+        let client = self.client.read().await;
+        if let Some(c) = &*client {
+            return Ok(c.clone());
+        }
+        drop(client);
+
+        let mut client_lock = self.client.write().await;
+        if let Some(c) = &*client_lock {
+            return Ok(c.clone());
+        }
+
+        let new_client = SoundCloudClient::default().await.map_err(|e| {
+            let msg = format!("{}", e);
+            if msg.contains("403") || msg.to_lowercase().contains("forbidden") || msg.contains("client id generation failed") {
+                StreamError::ChallengeRequired {
+                    provider: "soundcloud".to_string(),
+                    url: "https://soundcloud.com".to_string(),
+                }
+            } else {
+                StreamError::Other(format!("Failed to create SoundCloud client: {}", e))
+            }
+        })?;
+
+        *client_lock = Some(new_client.clone());
+        Ok(new_client)
+    }
+
+    pub async fn set_client_id(&self, client_id: String) {
+        tracing::info!("SoundCloudProvider: updating client_id (len={})", client_id.len());
+        let mut client_lock = self.client.write().await;
+        if let Some(c) = &mut *client_lock {
+            c.set_client_id(client_id);
+        } else {
+            *client_lock = Some(SoundCloudClient::with_client_id(client_id));
+        }
     }
 
     fn is_soundcloud_url(url: &str) -> bool {
@@ -43,6 +72,20 @@ impl SoundCloudProvider {
 
     fn extract_track_id_from_url(url: &str) -> Option<String> {
         url.split('/').last().map(|s| s.to_string())
+    }
+
+    fn map_error(&self, e: impl std::fmt::Display, url: String) -> StreamError {
+        let msg = format!("{}", e);
+        if msg.contains("404") || msg.to_lowercase().contains("not found") {
+            StreamError::Unavailable("Track not found (404)".to_string())
+        } else if msg.contains("403") || msg.to_lowercase().contains("forbidden") {
+            StreamError::ChallengeRequired {
+                provider: "soundcloud".to_string(),
+                url,
+            }
+        } else {
+            StreamError::MetadataError(format!("SoundCloud API error: {}", e))
+        }
     }
 }
 
@@ -65,18 +108,9 @@ impl StreamProvider for SoundCloudProvider {
 
         let client = self.get_client().await?;
         let track = client
-            .get_track(ResourceId::Url(url))
+            .get_track(ResourceId::Url(url.clone()))
             .await
-            .map_err(|e| {
-                let msg = format!("{}", e);
-                if msg.contains("404") || msg.to_lowercase().contains("not found") {
-                    StreamError::Unavailable("Track not found (404)".to_string())
-                } else if msg.contains("403") || msg.to_lowercase().contains("forbidden") {
-                    StreamError::Unavailable("Track forbidden (403)".to_string())
-                } else {
-                    StreamError::MetadataError(format!("SoundCloud API error: {}", e))
-                }
-            })?;
+            .map_err(|e| self.map_error(e, url.clone()))?;
 
         // Find HLS transcoding
         let transcoding = track
@@ -101,7 +135,10 @@ impl StreamProvider for SoundCloudProvider {
             if msg.contains("404") || msg.to_lowercase().contains("not found") {
                 StreamError::Unavailable("Stream URL not found (404)".to_string())
             } else if msg.contains("403") || msg.to_lowercase().contains("forbidden") {
-                StreamError::Unavailable("Stream URL forbidden (403)".to_string())
+                StreamError::ChallengeRequired {
+                    provider: "soundcloud".to_string(),
+                    url,
+                }
             } else {
                 StreamError::Other(format!("Failed to get SoundCloud stream URL: {}", e))
             }
@@ -134,18 +171,9 @@ impl StreamProvider for SoundCloudProvider {
 
         let client = self.get_client().await?;
         let track = client
-            .get_track(ResourceId::Url(url))
+            .get_track(ResourceId::Url(url.clone()))
             .await
-            .map_err(|e| {
-                let msg = format!("{}", e);
-                if msg.contains("404") || msg.to_lowercase().contains("not found") {
-                    StreamError::Unavailable("Track not found (404)".to_string())
-                } else if msg.contains("403") || msg.to_lowercase().contains("forbidden") {
-                    StreamError::Unavailable("Track forbidden (403)".to_string())
-                } else {
-                    StreamError::MetadataError(format!("SoundCloud API error: {}", e))
-                }
-            })?;
+            .map_err(|e| self.map_error(e, url))?;
 
         Ok(StreamMetadata {
             title: Some(track.track.title),
@@ -192,9 +220,7 @@ impl StreamProvider for SoundCloudProvider {
                 let results = client
                     .search_tracks(query, collection_params)
                     .await
-                    .map_err(|e| {
-                        StreamError::MetadataError(format!("SoundCloud search error: {}", e))
-                    })?;
+                    .map_err(|e| self.map_error(e, "https://soundcloud.com/search/tracks".to_string()))?;
 
                 let search_results: Vec<SearchResult> = results
                     .into_iter()
@@ -220,9 +246,7 @@ impl StreamProvider for SoundCloudProvider {
                 let results = client
                     .search_playlists(query, collection_params)
                     .await
-                    .map_err(|e| {
-                        StreamError::MetadataError(format!("SoundCloud search error: {}", e))
-                    })?;
+                    .map_err(|e| self.map_error(e, "https://soundcloud.com/search/playlists".to_string()))?;
 
                 let mut search_results = Vec::new();
                 for item in results {
@@ -253,7 +277,7 @@ impl StreamProvider for SoundCloudProvider {
                     search_results.push(SearchResult::Playlist(PlaylistInfo {
                         id: item.album_playlist.permalink_url.clone(),
                         url: item.album_playlist.permalink_url,
-                        service: StreamingService::SoundCloud,
+                        service: crate::streaming::types::StreamingService::SoundCloud,
                         title: item.album_playlist.title,
                         creator: item.user.user.username,
                         tracks,
@@ -268,9 +292,7 @@ impl StreamProvider for SoundCloudProvider {
                 let results = client
                     .search_albums(query, collection_params)
                     .await
-                    .map_err(|e| {
-                        StreamError::MetadataError(format!("SoundCloud search error: {}", e))
-                    })?;
+                    .map_err(|e| self.map_error(e, "https://soundcloud.com/search/albums".to_string()))?;
 
                 let mut search_results = Vec::new();
                 for item in results {
@@ -302,7 +324,7 @@ impl StreamProvider for SoundCloudProvider {
                         id: item.album_playlist.permalink_url.clone(),
                         tracks,
                         url: item.album_playlist.permalink_url,
-                        service: StreamingService::SoundCloud,
+                        service: crate::streaming::types::StreamingService::SoundCloud,
                         title: item.album_playlist.title,
                         artist: item.user.user.username,
                         track_count: item.album_playlist.track_count as usize,
@@ -328,7 +350,7 @@ impl StreamProvider for SoundCloudProvider {
         let tracks = client
             .get_playlist_tracks(ResourceId::Url(url.clone()))
             .await
-            .map_err(|e| StreamError::MetadataError(format!("SoundCloud API error: {}", e)))?;
+            .map_err(|e| self.map_error(e, url.to_string()))?;
 
         let track_infos: Vec<TrackInfo> = tracks
             .into_iter()
@@ -356,7 +378,7 @@ impl StreamProvider for SoundCloudProvider {
 
         let client = self.get_client().await?;
         let item = client.resolve(url).await.map_err(|e| {
-            StreamError::MetadataError(format!("SoundCloud resolve error: {}", e))
+            self.map_error(e, url.to_string())
         })?;
 
         match item {
@@ -396,7 +418,7 @@ impl StreamProvider for SoundCloudProvider {
                     Ok(SearchResult::Album(AlbumInfo {
                         id: item.album_playlist.permalink_url.clone(),
                         url: item.album_playlist.permalink_url,
-                        service: StreamingService::SoundCloud,
+                        service: crate::streaming::types::StreamingService::SoundCloud,
                         title: item.album_playlist.title,
                         artist: item.user.user.username,
                         tracks,
@@ -409,7 +431,7 @@ impl StreamProvider for SoundCloudProvider {
                     Ok(SearchResult::Playlist(PlaylistInfo {
                         id: item.album_playlist.permalink_url.clone(),
                         url: item.album_playlist.permalink_url,
-                        service: StreamingService::SoundCloud,
+                        service: crate::streaming::types::StreamingService::SoundCloud,
                         title: item.album_playlist.title,
                         creator: item.user.user.username,
                         tracks,
@@ -425,5 +447,11 @@ impl StreamProvider for SoundCloudProvider {
 
     async fn is_available(&self) -> bool {
         true
+    }
+
+    async fn set_credentials(&self, credentials: Option<String>) {
+        if let Some(client_id) = credentials {
+            self.set_client_id(client_id).await;
+        }
     }
 }

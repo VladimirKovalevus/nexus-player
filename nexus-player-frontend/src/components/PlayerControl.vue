@@ -247,6 +247,14 @@ onUnmounted(() => {
     <div class="center-section">
       <div class="controls">
         <button
+          class="control-btn small-btn shuffle-btn"
+          :class="{ active: audioStore.shuffleEnabled }"
+          @click="toggleShuffleMode"
+          :title="audioStore.shuffleEnabled ? 'Выключить перемешивание' : 'Включить перемешивание'"
+        >
+          <span :style="{ fontSize: '1.2rem', filter: audioStore.shuffleEnabled ? 'none' : 'grayscale(1) opacity(0.5)' }">🔀</span>
+        </button>
+        <button
           class="control-btn medium-btn"
           @click="playPrevious"
           title="Previous"
@@ -269,6 +277,16 @@ onUnmounted(() => {
         </button>
         <button class="control-btn medium-btn" @click="playNext" title="Next">
           <img src="/icon/next.svg" />
+        </button>
+        <button
+          class="control-btn small-btn repeat-btn"
+          :class="{ active: audioStore.repeatMode !== 'off' }"
+          @click="cycleRepeatMode"
+          :title="'Повтор: ' + (audioStore.repeatMode === 'all' ? 'все' : audioStore.repeatMode === 'one' ? 'один' : 'выкл')"
+        >
+          <span :style="{ fontSize: '1.2rem', filter: audioStore.repeatMode !== 'off' ? 'none' : 'grayscale(1) opacity(0.5)' }">
+            {{ audioStore.repeatIcon }}
+          </span>
         </button>
       </div>
       <div class="waveform-section">

@@ -8,6 +8,7 @@ export const useAudioStore = defineStore('audio', () => {
   const notificationStore = useNotificationStore();
 
   const lastUnavailableTrackId = ref<number | null>(null);
+  const activeChallenge = ref<{ provider: string; url: string } | null>(null);
 
   // High-frequency state isolated to prevent unnecessary re-renders of the whole app
   const currentPositionSecs = ref(0);
@@ -285,6 +286,18 @@ export const useAudioStore = defineStore('audio', () => {
           notificationStore.addNotification('Трек недоступен и помечен как недоступный', 'error');
         }
         break;
+      case 'ProviderChallenge':
+        if (event.payload?.provider && event.payload?.url) {
+          activeChallenge.value = {
+            provider: event.payload.provider,
+            url: event.payload.url,
+          };
+          notificationStore.addNotification(
+            `Требуется проверка для ${event.payload.provider}. Пожалуйста, подождите...`,
+            'info',
+          );
+        }
+        break;
     }
   }
 
@@ -351,6 +364,7 @@ export const useAudioStore = defineStore('audio', () => {
     currentIndex,
     repeatIcon,
     lastUnavailableTrackId,
+    activeChallenge,
     handleAudioEvent,
     startLoading,
     stopLoading,

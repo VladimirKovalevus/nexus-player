@@ -36,9 +36,9 @@ impl StreamingService {
         default_callbacks: DefaultCallbacks,
     ) -> StreamResult<Self> {
         let bandcamp = Arc::new(BandcampProvider::new()) as Arc<dyn StreamProvider>;
-        let soundcloud = Arc::new(SoundCloudProvider::new()) as Arc<dyn StreamProvider>;
-        let vk =
-            Arc::new(VkProvider::new(config.vk.credentials.clone())) as Arc<dyn StreamProvider>;
+        let soundcloud = Arc::new(SoundCloudProvider::new(config.soundcloud.credentials.clone()))
+            as Arc<dyn StreamProvider>;
+        let vk = Arc::new(VkProvider::new(config.vk.credentials.clone())) as Arc<dyn StreamProvider>;
 
         let mut providers = HashMap::new();
 
@@ -77,8 +77,18 @@ impl StreamingService {
             .update_config(manager_config)
             .await;
 
-        if let Some(vk) = self.providers.get("vk") {
-            vk.set_credentials(config.vk.credentials.clone()).await;
+        tracing::debug!("StreamingService: updating provider credentials from config");
+        for (name, provider) in &self.providers {
+            let credentials = match name.as_str() {
+                "soundcloud" => config.soundcloud.credentials.clone(),
+                "vk" => config.vk.credentials.clone(),
+                "bandcamp" => config.bandcamp.credentials.clone(),
+                _ => None,
+            };
+            if let Some(creds) = credentials {
+                tracing::info!("StreamingService: updating credentials for {}", name);
+                provider.set_credentials(Some(creds)).await;
+            }
         }
     }
 
@@ -89,6 +99,13 @@ impl StreamingService {
     pub async fn remove_task(&self, track_id: u64) {
         self.download_manager.remove_track(track_id).await;
     }
+
+    pub async fn update_provider_auth(&self, provider_name: &str, auth_data: String) {
+        if let Some(provider) = self.providers.get(provider_name) {
+            provider.set_credentials(Some(auth_data)).await;
+        }
+    }
+
     pub async fn update_task(&self, task_id: u64, options: DownloadOptions) {
         self.download_manager.update_task(task_id, options).await;
     }
@@ -313,9 +330,9 @@ impl StreamingService {
             _ => todo!(),
         }
     }
-    pub async fn set_context(&self, track_id: u64, active_ids: Vec<u64>) {
+    pub async fn set_context(&self, current: Option<u64>, active_ids: Vec<u64>) {
         self.download_manager
-            .set_context(Some(track_id), active_ids)
+            .set_context(current, active_ids)
             .await;
     }
 

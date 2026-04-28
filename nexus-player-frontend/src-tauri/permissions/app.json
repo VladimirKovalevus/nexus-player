@@ -48,7 +48,11 @@
       "set_volume",
       "stop",
       "toggle_shuffle",
-      "update_app_config"
+      "update_app_config",
+      "update_provider_auth",
+      "submit_challenge_result",
+      "open_challenge_window",
+      "retry_playback"
     ]
   }
 }

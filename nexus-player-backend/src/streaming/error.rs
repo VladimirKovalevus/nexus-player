@@ -32,6 +32,9 @@ pub enum StreamError {
     #[error("Трек недоступен: {0}")]
     Unavailable(String),
 
+    #[error("Требуется прохождение челленджа для {provider}: {url}")]
+    ChallengeRequired { provider: String, url: String },
+
     #[error("Ошибка streaming: {0}")]
     Other(String),
 }

@@ -92,6 +92,12 @@ pub enum FrontendEvent {
     TrackUnavailable {
         track_id: i64,
     },
+
+    #[serde(rename_all = "camelCase")]
+    ProviderChallenge {
+        provider: String,
+        url: String,
+    },
 }
 
 pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
@@ -117,7 +123,9 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                     }
                     AudioEvent::TrackFinished => {
                         let cl = state.clone();
-                        cl.handle_track_finished(0).await;
+                        tokio::spawn(async move {
+                            cl.handle_track_finished(0).await;
+                        });
                         emit_state_update = true;
                         FrontendEvent::TrackFinished { track_id: 0 }
                     }
@@ -125,9 +133,10 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                         // Gapless switch: the audio engine already switched to the next track
                         // seamlessly. We only need to advance the queue cursor to stay in sync,
                         // without triggering playback (the track is already playing).
-                        {
+                        let cl = state.clone();
+                        tokio::spawn(async move {
                             use nexus_player_backend::playlist::playback_queue::ActiveQueue;
-                            let mut queue = state.lock_queue().await;
+                            let mut queue = cl.lock_queue().await;
                             match &mut *queue {
                                 ActiveQueue::Cursor(cq) => {
                                     let _ = cq.next().await;
@@ -136,7 +145,7 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                                     sq.next();
                                 }
                             }
-                        }
+                        });
                         emit_state_update = true;
                         FrontendEvent::PlaybackStarted { track_id: track.id }
                     }
@@ -179,6 +188,9 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                     }
                     AudioEvent::TrackUnavailable { track_id } => {
                         FrontendEvent::TrackUnavailable { track_id }
+                    }
+                    AudioEvent::ProviderChallenge { provider, url } => {
+                        FrontendEvent::ProviderChallenge { provider, url }
                     }
                     _ => {
                         continue;
@@ -274,11 +286,24 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                             item_index: p.item_index,
                             track_within_container: p.track_within_container,
                         });
+
+                        let repeat_mode = match sq.repeat_mode {
+                            nexus_player_backend::playlist::playback_queue::RepeatMode::Off => {
+                                "off"
+                            }
+                            nexus_player_backend::playlist::playback_queue::RepeatMode::All => {
+                                "all"
+                            }
+                            nexus_player_backend::playlist::playback_queue::RepeatMode::One => {
+                                "one"
+                            }
+                        };
+
                         QueueStateDto {
                             entries: entries_dto,
                             current_position,
-                            repeat_mode: "off".to_string(),
-                            shuffle_enabled: false,
+                            repeat_mode: repeat_mode.to_string(),
+                            shuffle_enabled: sq.shuffle_enabled,
                             search_context: Some(SearchContextDto {
                                 system: sq.system.clone(),
                                 query: sq.query.clone(),

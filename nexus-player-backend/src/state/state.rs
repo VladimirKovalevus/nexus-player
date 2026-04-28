@@ -207,11 +207,54 @@ impl AppState {
                     // Loop again — sq.next() will now find the newly loaded item at current+1
                 }
                 NextResult::End => {
-                    tracing::info!("End of queue");
+                    let (repeat_mode, context, is_search) = {
+                        let queue = self.queue.lock().await;
+                        match &*queue {
+                            ActiveQueue::Cursor(cq) => (cq.repeat_mode, cq.context.clone(), false),
+                            ActiveQueue::Search(sq) => (sq.repeat_mode, None, true),
+                        }
+                    };
+
+                    tracing::info!("End of queue reached. Repeat mode: {:?}, is_search: {}", repeat_mode, is_search);
+
+                    if repeat_mode == RepeatMode::All {
+                        if is_search {
+                             // SearchQueue handles it internally in next(), 
+                             // but if it returned End, maybe something is wrong or items are empty
+                             tracing::warn!("SearchQueue returned End even with Repeat::All");
+                        } else if let Some(ctx) = context {
+                            tracing::info!("Restarting context queue: {:?}", ctx);
+                            if let Err(e) = self.fill_context_queue(ctx, &cancel).await {
+                                tracing::error!("Failed to restart queue for Repeat::All: {}", e);
+                            } else {
+                                tracing::info!("Queue restarted successfully. Continuing loop...");
+                                continue; // Loop again to get the first track of the restarted queue
+                            }
+                        } else {
+                            tracing::warn!("End reached with Repeat::All but no context available to restart");
+                        }
+                    }
+
+                    tracing::info!("Playback truly ended.");
                     self.play_cancellable(None, cancel).await;
                     return;
                 }
             }
+        }
+    }
+
+    pub async fn play_current(&self) -> anyhow::Result<()> {
+        let cancel = self.begin_exclusive_op().await;
+        let track = {
+            let queue = self.queue.lock().await;
+            queue.current_track()
+        };
+
+        if let Some(track) = track {
+            self.play_cancellable(Some(track), cancel).await;
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("No current track to play"))
         }
     }
 
@@ -360,7 +403,7 @@ impl AppState {
             {
                 Ok(wrapper) => {
                     self.streaming()
-                        .set_context(track.id as u64, active_ids)
+                        .set_context(Some(track.id as u64), active_ids)
                         .await;
 
                     if let Err(e) = wrapper.prepare().await {
@@ -373,7 +416,11 @@ impl AppState {
                 }
                 Err(e) => {
                     tracing::warn!("Error resolving track source: {}", e);
-                    if matches!(e, crate::streaming::error::StreamError::Unavailable(_))
+                    if let crate::streaming::error::StreamError::ChallengeRequired { provider, url } = e {
+                        self.audio_engine().push_event(
+                            crate::audio::types::AudioEvent::ProviderChallenge { provider, url },
+                        );
+                    } else if matches!(e, crate::streaming::error::StreamError::Unavailable(_))
                         && track.state == crate::audio::types::TrackState::Saved
                     {
                         let id = track.id as i64;
@@ -427,10 +474,14 @@ impl AppState {
 
     pub async fn clear_queue(&self) {
         let mut queue = self.queue.lock().await;
+        let (repeat, shuffle) = match &*queue {
+            ActiveQueue::Cursor(cq) => (cq.repeat_mode, cq.shuffle_enabled),
+            ActiveQueue::Search(sq) => (sq.repeat_mode, sq.shuffle_enabled),
+        };
         match &mut *queue {
             ActiveQueue::Cursor(cq) => cq.clear(),
             ActiveQueue::Search(_) => {
-                *queue = ActiveQueue::new_cursor();
+                *queue = ActiveQueue::new_cursor_with_settings(repeat, shuffle);
             }
         }
     }
@@ -529,6 +580,18 @@ impl AppState {
             tracing::info!("play_cancellable: set_loading track_id={}", track.id);
             self.audio_engine().set_loading(track.clone());
 
+            let upcoming = {
+                let queue = self.queue.lock().await;
+                queue.peek_upcoming_tracks(9)
+            };
+            tracing::info!("play_cancellable: upcoming tracks count={}", upcoming.len());
+            let active_ids: Vec<u64> = upcoming.iter().map(|t| t.id as u64).collect();
+
+            // Set context early so the download manager knows this track is high priority
+            self.streaming()
+                .set_context(Some(track.id as u64), active_ids.clone())
+                .await;
+
             let lib = self.library.clone();
             let track_for_history = track.clone();
             tokio::spawn(async move {
@@ -556,13 +619,6 @@ impl AppState {
                     ),
                 }
             });
-
-            let upcoming = {
-                let queue = self.queue.lock().await;
-                queue.peek_upcoming_tracks(9)
-            };
-            tracing::info!("play_cancellable: upcoming tracks count={}", upcoming.len());
-            let active_ids: Vec<u64> = upcoming.iter().map(|t| t.id as u64).collect();
 
             // Preload next track into audio engine for gapless playback
             if let Some(next) = upcoming.first().cloned() {
@@ -648,9 +704,6 @@ impl AppState {
                         );
                         return;
                     }
-                    self.streaming()
-                        .set_context(track.id as u64, active_ids)
-                        .await;
 
                     tracing::info!("play_cancellable: preparing track_id={}", track.id);
                     let prepare_result = tokio::select! {
@@ -682,7 +735,11 @@ impl AppState {
                 }
                 Err(e) => {
                     tracing::warn!("Error resolving track source: {}", e);
-                    if matches!(e, crate::streaming::error::StreamError::Unavailable(_))
+                    if let crate::streaming::error::StreamError::ChallengeRequired { provider, url } = e {
+                        self.audio_engine().push_event(
+                            crate::audio::types::AudioEvent::ProviderChallenge { provider, url },
+                        );
+                    } else if matches!(e, crate::streaming::error::StreamError::Unavailable(_))
                         && track.state == crate::audio::types::TrackState::Saved
                     {
                         let id = track.id as i64;
@@ -818,29 +875,32 @@ impl AppState {
         cancel: &CancellationToken,
     ) -> Result<()> {
         let cursor = tokio::select! {
-            r = PlayerCursor::from_context(context, self.cursor_resolver.clone()) => r?,
+            r = PlayerCursor::from_context(context.clone(), self.cursor_resolver.clone()) => r?,
             _ = cancel.cancelled() => return Ok(()),
         };
 
         {
             let mut queue = self.queue.lock().await;
+            let (repeat_mode, shuffle_enabled) = match &*queue {
+                ActiveQueue::Cursor(cq) => (cq.repeat_mode, cq.shuffle_enabled),
+                ActiveQueue::Search(sq) => (sq.repeat_mode, sq.shuffle_enabled),
+            };
+
             let cq = match &mut *queue {
                 ActiveQueue::Cursor(cq) => {
                     cq.clear();
                     cq
                 }
                 _ => {
-                    *queue = ActiveQueue::new_cursor();
+                    *queue = ActiveQueue::new_cursor_with_settings(repeat_mode, shuffle_enabled);
                     match &mut *queue {
                         ActiveQueue::Cursor(cq) => cq,
                         _ => unreachable!(),
                     }
                 }
             };
+            cq.context = Some(context);
             cq.set_cursor(cursor);
-            if let Ok(Some(first)) = cq.next().await {
-                tracing::info!("First track loaded: {}", first.id);
-            }
             let prefetched = cq.prefetch(50).await?;
             tracing::info!("Prefetched {} tracks from cursor", prefetched);
         }
@@ -854,6 +914,7 @@ impl AppState {
         let cancel = self.begin_exclusive_op().await;
         self.fill_context_queue(context, &cancel).await
     }
+
 
     pub async fn load_context_and_play(
         &self,
@@ -870,9 +931,15 @@ impl AppState {
             match &mut *queue {
                 ActiveQueue::Cursor(cq) => {
                     cq.jump_to(start_index);
+                    if cq.current_track.is_none() && start_index == 0 {
+                        let _ = cq.next().await;
+                    }
                     cq.current_track.clone()
                 }
-                _ => None,
+                ActiveQueue::Search(sq) => {
+                    sq.jump_to(start_index);
+                    sq.current_track()
+                }
             }
         };
         self.play_cancellable(track, cancel).await;
@@ -1631,8 +1698,9 @@ impl AppState {
 
     pub async fn set_repeat_mode(&self, mode: RepeatMode) {
         let mut queue = self.queue.lock().await;
-        if let ActiveQueue::Cursor(cq) = &mut *queue {
-            cq.repeat_mode = mode;
+        match &mut *queue {
+            ActiveQueue::Cursor(cq) => cq.repeat_mode = mode,
+            ActiveQueue::Search(sq) => sq.repeat_mode = mode,
         }
         tracing::info!("Repeat mode set to {:?}", mode);
     }
@@ -1641,23 +1709,21 @@ impl AppState {
         let queue = self.queue.lock().await;
         match &*queue {
             ActiveQueue::Cursor(cq) => cq.repeat_mode,
-            ActiveQueue::Search(_) => RepeatMode::Off,
+            ActiveQueue::Search(sq) => sq.repeat_mode,
         }
     }
 
     pub async fn toggle_shuffle(&self) {
         let mut queue = self.queue.lock().await;
-        if let ActiveQueue::Cursor(cq) = &mut *queue {
-            cq.shuffle_enabled = !cq.shuffle_enabled;
-            tracing::info!("Shuffle toggled to {}", cq.shuffle_enabled);
-        }
+        queue.toggle_shuffle();
+        tracing::info!("Shuffle toggled");
     }
 
     pub async fn is_shuffle_enabled(&self) -> bool {
         let queue = self.queue.lock().await;
         match &*queue {
             ActiveQueue::Cursor(cq) => cq.shuffle_enabled,
-            ActiveQueue::Search(_) => false,
+            ActiveQueue::Search(sq) => sq.shuffle_enabled,
         }
     }
 

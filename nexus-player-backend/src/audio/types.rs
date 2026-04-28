@@ -123,6 +123,8 @@ pub enum AudioEvent {
     LoadingStarted { track: Track },
 
     TrackUnavailable { track_id: i64 },
+
+    ProviderChallenge { provider: String, url: String },
 }
 
 #[derive(Debug, Clone)]
