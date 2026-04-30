@@ -19,6 +19,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri::plugin::Builder::<_, ()>::new("vkLogin").build())
+        .plugin(tauri::plugin::Builder::<_, ()>::new("soundCloudChallenge").build())
         .setup(|app| {
             let app_handle = app.handle().clone();
             let app_data_dir = app

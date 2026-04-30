@@ -1,10 +1,20 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useEqStore, EQ_FREQUENCIES } from '@/stores/eq';
+import { onClickOutside } from '@vueuse/core';
 
 const eqStore = useEqStore();
+const panelRef = ref<HTMLElement | null>(null);
 
 const FREQ_LABELS = ['32', '64', '125', '250', '500', '1K', '2K', '4K', '8K', '16K'];
+
+onClickOutside(panelRef, () => {
+  if (eqStore.isOpen) {
+    eqStore.close();
+  }
+}, {
+  ignore: ['.eq-btn']
+});
 
 onMounted(() => {
   if (eqStore.presets.length === 0) {
@@ -33,8 +43,8 @@ function formatGain(db: number): string {
 <template>
   <Teleport to="body">
     <Transition name="eq-panel">
-      <div v-if="eqStore.isOpen" class="eq-overlay" @click.self="eqStore.close">
-        <div class="eq-panel">
+      <div v-if="eqStore.isOpen" class="eq-overlay">
+        <div class="eq-panel" ref="panelRef">
           <!-- Header -->
           <div class="eq-header">
             <span class="eq-title">Эквалайзер</span>

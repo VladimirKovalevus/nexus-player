@@ -951,7 +951,7 @@ pub async fn open_vk_login(app: AppHandle) -> Result<()> {
                 let token = vk_api::extract_token_from_url(url_str);
                 let _ = app_handle.emit("vk-token-received", token);
                 if let Some(w) = app_handle.get_webview_window("vk-login") {
-                    let _ = w.destroy();
+                    let _ = w.close();
                 }
                 return false;
             }
@@ -1061,16 +1061,24 @@ pub async fn open_challenge_window(
 ) -> Result<()> {
     tracing::info!("Opening challenge window: {} for {}", label, url);
 
-    // If window already exists, destroy it
-    if let Some(win) = tauri::Manager::get_webview_window(&app, &label) {
-        let _ = win.destroy();
+    #[cfg(desktop)]
+    {
+        if let Some(win) = tauri::Manager::get_webview_window(&app, &label) {
+            let _ = win.close();
+        }
+
+        tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(url.parse().unwrap()))
+            .initialization_script(&script)
+            .visible(false)
+            .build()
+            .map_err(|e: tauri::Error| e.to_string())?;
     }
 
-    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(url.parse().unwrap()))
-        .initialization_script(&script)
-        .visible(false)
-        .build()
-        .map_err(|e| e.to_string())?;
+    // On Android the native SoundCloudChallengePlugin handles this:
+    // it opens a Dialog with a WebView, injects the XHR/fetch interception script,
+    // and calls submit_challenge_result via JavascriptInterface when client_id is found.
+    // The Kotlin plugin fires the resolve() callback which the frontend awaits.
+    // Nothing to do here on mobile — the frontend calls the Kotlin command directly.
 
     Ok(())
 }

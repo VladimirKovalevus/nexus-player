@@ -52,6 +52,7 @@ class MainActivity : TauriActivity() {
         super.onWebViewCreate(webView)
         mainWebView = webView
         pluginManager.load(webView, "vkLogin", VkLoginPlugin(this), "{}")
+        pluginManager.load(webView, "soundCloudChallenge", SoundCloudChallengePlugin(this), "{}")
         webView.addJavascriptInterface(NexusAudioBridge(this), "_NexusAudio")
     }
 

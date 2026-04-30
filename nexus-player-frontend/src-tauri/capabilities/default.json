@@ -12,6 +12,8 @@
     "fs:allow-read",
     "fs:allow-exists",
     "vkLogin:allow-open",
+    "soundCloudChallenge:allow-open",
+    "soundCloudChallenge:allow-close",
     "core:event:default",
     "core:window:allow-destroy",
     "core:webview:default",
