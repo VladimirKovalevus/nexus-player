@@ -24,22 +24,21 @@ tracing = "0.1"
 anyhow = "1.0"
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
-streaming = { path = "../streaming" }
-vk-api = { path = "../vk-down" }
-rsoundcloud = { path = "../rsoundcloud" }
+streaming = { path = "vendor/streaming" }
+vk-api = { path = "vendor/vk-down" }
+rsoundcloud = { path = "vendor/rsoundcloud" }
 
 [patch.crates-io]
-symphonia-core = { path = "../Symphonia/symphonia-core" }
-symphonia-metadata = { path = "../Symphonia/symphonia-metadata" }
-symphonia-bundle-flac = { path = "../Symphonia/symphonia-bundle-flac" }
-symphonia-bundle-mp3 = { path = "../Symphonia/symphonia-bundle-mp3" }
-symphonia-codec-aac = { path = "../Symphonia/symphonia-codec-aac" }
-symphonia-codec-adpcm = { path = "../Symphonia/symphonia-codec-adpcm" }
-symphonia-codec-alac = { path = "../Symphonia/symphonia-codec-alac" }
-symphonia-codec-pcm = { path = "../Symphonia/symphonia-codec-pcm" }
-symphonia-codec-vorbis = { path = "../Symphonia/symphonia-codec-vorbis" }
-symphonia-format-isomp4 = { path = "../Symphonia/symphonia-format-isomp4" }
-symphonia-format-mkv = { path = "../Symphonia/symphonia-format-mkv" }
-symphonia-format-ogg = { path = "../Symphonia/symphonia-format-ogg" }
-symphonia-format-riff = { path = "../Symphonia/symphonia-format-riff" }
-
+symphonia-core = { path = "vendor/Symphonia/symphonia-core" }
+symphonia-metadata = { path = "vendor/Symphonia/symphonia-metadata" }
+symphonia-bundle-flac = { path = "vendor/Symphonia/symphonia-bundle-flac" }
+symphonia-bundle-mp3 = { path = "vendor/Symphonia/symphonia-bundle-mp3" }
+symphonia-codec-aac = { path = "vendor/Symphonia/symphonia-codec-aac" }
+symphonia-codec-adpcm = { path = "vendor/Symphonia/symphonia-codec-adpcm" }
+symphonia-codec-alac = { path = "vendor/Symphonia/symphonia-codec-alac" }
+symphonia-codec-pcm = { path = "vendor/Symphonia/symphonia-codec-pcm" }
+symphonia-codec-vorbis = { path = "vendor/Symphonia/symphonia-codec-vorbis" }
+symphonia-format-isomp4 = { path = "vendor/Symphonia/symphonia-format-isomp4" }
+symphonia-format-mkv = { path = "vendor/Symphonia/symphonia-format-mkv" }
+symphonia-format-ogg = { path = "vendor/Symphonia/symphonia-format-ogg" }
+symphonia-format-riff = { path = "vendor/Symphonia/symphonia-format-riff" }

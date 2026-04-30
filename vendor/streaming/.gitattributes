@@ -1,0 +1,20 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Source code
+*.rs text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+
+# Configuration files
+.gitignore text eol=lf
+.gitattributes text eol=lf
+makefile text eol=lf
+
+# Exclude files from linguist statistics
+target/** linguist-generated
+*.lock linguist-generated
+Cargo.lock linguist-generated
+
+# Mark as Rust project
+*.rs linguist-language=Rust

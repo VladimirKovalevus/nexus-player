@@ -1,0 +1,30 @@
+name: Security Audit
+
+on:
+  # allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'Cargo.toml'
+  # schedule:
+  #   - cron: '0 2 * * *' # run at 2 AM UTC
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-deny:
+    name: Cargo Deny
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    
+    permissions:
+      checks: write
+      contents: read
+      issues: write
+    
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2

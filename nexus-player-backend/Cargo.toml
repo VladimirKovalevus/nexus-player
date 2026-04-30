@@ -18,7 +18,7 @@ anyhow = { workspace = true }
 #===============
 #===AUDIO=======
 #===============
-symphonia = { path = "../../Symphonia/symphonia", features = ["all", "ogg", "vorbis", "opus"] }
+symphonia = { path = "../vendor/Symphonia/symphonia", features = ["all", "ogg", "vorbis", "opus"] }
 lofty = "0.21"
 cpal = "0.15"
 resampler = "0.4.1"
@@ -50,7 +50,7 @@ parking_lot = "0.12"
 chrono = { workspace = true }
 #===============
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "stream", "blocking", "multipart", "json"] }
-bandcamp = {path = "../../bandcamp"}
+bandcamp = { path = "../vendor/bandcamp" }
 rsoundcloud = { workspace = true }
 vk-api = { workspace = true }
 sha2 = "0.10.9"
@@ -59,4 +59,3 @@ streaming = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.0"
-

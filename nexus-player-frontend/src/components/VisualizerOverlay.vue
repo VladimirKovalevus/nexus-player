@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import WaveformBar from './common/WaveformBar.vue';
 
 // @ts-ignore
-import butterchurn from '../../../../butterchurn/dist/butterchurn.min.js';
+import butterchurn from 'butterchurn/dist/butterchurn.min.js';
 // @ts-ignore
 import butterchurnPresets from 'butterchurn-presets';
 

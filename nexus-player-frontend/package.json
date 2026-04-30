@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "npm run build:vendor && vite",
+    "build": "npm run build:vendor && vite build",
+    "build:vendor": "PUPPETEER_SKIP_DOWNLOAD=true npm --prefix ../vendor/butterchurn install && npm --prefix ../vendor/butterchurn run build",
     "preview": "vite preview",
     "tauri": "tauri",
     "andr": "NO_STRIP=true tauri android build --target aarch64",
@@ -22,7 +23,7 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2.4.2",
     "@vueuse/core": "^14.1.0",
-    "butterchurn": "file:../../butterchurn",
+    "butterchurn": "file:../vendor/butterchurn",
     "butterchurn-presets": "^2.4.7",
     "pinia": "^3.0.4",
     "vue": "^3.5.13"

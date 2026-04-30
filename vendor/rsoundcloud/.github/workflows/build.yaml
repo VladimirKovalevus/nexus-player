@@ -1,0 +1,38 @@
+name: CI
+
+on: 
+  push:
+    branches:
+      - main
+  pull_request:
+  # allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  # allow the workflow to be re-used in other workflows
+  workflow_call:
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check
+        run: cargo check --locked
+      
+      - name: Test
+        run: cargo test --locked -- --test-threads=1
+      
+      - name: Build
+        run: cargo build --release

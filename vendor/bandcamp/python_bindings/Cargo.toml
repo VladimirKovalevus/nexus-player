@@ -1,0 +1,14 @@
+[package]
+name = "bandcamp_lib"
+version = "0.3.4"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "bandcamp_lib"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.26.0", features = ["extension-module"]}
+pyo3-async-runtimes = { version = "0.26", features = ["tokio-runtime"] }
+bandcamp = { path = "..", features = ["pyo3"] }

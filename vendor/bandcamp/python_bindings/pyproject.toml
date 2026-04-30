@@ -1,0 +1,28 @@
+[build-system]
+requires = ["maturin>=1.8,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "bandcamp_lib"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+readme = "README.md"
+license = "MIT"
+dynamic = ["version"]
+
+[project.urls]
+Documentation = "https://docs.rs/bandcamp/latest/bandcamp/"
+Repository = "https://github.com/fabi321/bandcamp"
+Issues = "https://github.com/fabi321/bandcamp/issues"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
