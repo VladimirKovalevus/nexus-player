@@ -12,6 +12,14 @@ export default defineConfig(async () => ({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      'butterchurn/dist/butterchurn.min.js': path.resolve(
+        __dirname,
+        '../vendor/butterchurn/dist/butterchurn.min.js',
+      ),
+      'butterchurn-presets': path.resolve(
+        __dirname,
+        '../vendor/butterchurn/node_modules/butterchurn-presets-js',
+      ),
     },
   },
 
