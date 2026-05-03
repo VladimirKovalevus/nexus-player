@@ -21,7 +21,7 @@ use chrono::Utc;
 
 /// Service for managing music library (tracks and playlists)
 pub struct LibraryService {
-    pool: SqlitePool,
+    pub(crate) pool: SqlitePool,
     db: DatabaseConnection,
     track_repo: Arc<dyn TrackRepositoryV2>,
     playlist_repo: Arc<dyn PlaylistRepositoryV2>,
@@ -146,7 +146,7 @@ impl LibraryService {
 
         // If we unliked the track, check if it's in any playlist.
         // If not, delete it from library entirely.
-        if !new_liked_state {
+        if !new_liked_state && !self.is_indexed_local_track(id).await? {
             let in_playlists = self.playlist_repo.is_track_in_any_playlist(id).await?;
             if !in_playlists {
                 tracing::info!(

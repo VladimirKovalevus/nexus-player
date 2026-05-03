@@ -3,10 +3,10 @@ mod dto;
 mod events;
 
 use nexus_player_backend::state::state::AppState;
-use streaming::state::types::{DefaultCallbacks, TaskInfo, DefaultCallback};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::{Manager, AppHandle, Emitter};
+use streaming::state::types::{DefaultCallback, DefaultCallbacks, TaskInfo};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -76,6 +76,12 @@ pub fn run() {
             commands::get_track,
             commands::search_tracks,
             commands::add_track_from_file,
+            commands::get_local_library,
+            commands::scan_local_library,
+            commands::import_android_media,
+            commands::get_music_sources,
+            commands::add_music_source,
+            commands::remove_music_source,
             commands::delete_track,
             commands::get_all_playlists,
             commands::get_playlist_with_tracks,

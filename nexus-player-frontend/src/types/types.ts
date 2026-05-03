@@ -28,6 +28,28 @@ export interface TrackDto {
   unavailable?: boolean;
 }
 
+export interface MusicSourceDto {
+  id: number;
+  path: string;
+  isDefault: boolean;
+}
+
+export interface LocalScanResult {
+  found: number;
+  added: number;
+  updated: number;
+  skipped: number;
+  unavailable: number;
+  errors: number;
+}
+
+export interface AndroidMediaEntry {
+  sourceKey: string;
+  path: string;
+  size: number | null;
+  modifiedAt: number | null;
+}
+
 export interface PlaylistDto {
   id: number;
   title: string;

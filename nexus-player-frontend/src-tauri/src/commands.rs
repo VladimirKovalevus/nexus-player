@@ -1,13 +1,16 @@
-use nexus_player_backend::sync::{SyncApplier, SyncBuilder, SyncStore, SyncType, TelegramConfig, TelegramSync};
+use nexus_player_backend::sync::{
+    SyncApplier, SyncBuilder, SyncStore, SyncType, TelegramConfig, TelegramSync,
+};
 
 use crate::dto::{
     hash_str_to_i64, AudioStateDto, ContainerMetaDto, CreatePlaylistRequest,
-    CreatePlaylistWithTracksRequest, CurrentPositionDto, EqPresetDto, EqSettingsDto, LibraryPageDto,
-    PlayHistoryEntryDto, PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, PlaylistWithTracksDto,
-    QueueEntryDto, QueueStateDto, SearchContextDto, SearchResultDto, TaskInfoDto, TrackDto,
-    TrackSourceDto,
+    CreatePlaylistWithTracksRequest, CurrentPositionDto, EqPresetDto, EqSettingsDto,
+    LibraryPageDto, PlayHistoryEntryDto, PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto,
+    PlaylistWithTracksDto, QueueEntryDto, QueueStateDto, SearchContextDto, SearchResultDto,
+    TaskInfoDto, TrackDto, TrackSourceDto,
 };
 use crate::events::FrontendEvent;
+use nexus_player_backend::library::local_library::{AndroidMediaEntry, MusicSource, ScanResult};
 use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
 use nexus_player_backend::library::types::{
     AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackOrder, TrackSource,
@@ -94,6 +97,92 @@ pub async fn add_track_from_file(state: State<'_, Arc<AppState>>, path: String) 
     );
 
     Ok(track_id.0)
+}
+
+#[tauri::command]
+pub async fn get_local_library(state: State<'_, Arc<AppState>>) -> Result<Vec<TrackDto>> {
+    let tracks = state
+        .library()
+        .local_tracks()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(tracks.into_iter().map(Into::into).collect())
+}
+
+#[tauri::command]
+pub async fn scan_local_library(state: State<'_, Arc<AppState>>) -> Result<ScanResult> {
+    #[cfg(target_os = "android")]
+    return Err("Android scan must be supplied by MediaStore".into());
+    #[cfg(not(target_os = "android"))]
+    state
+        .library()
+        .scan_desktop_music()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn import_android_media(
+    state: State<'_, Arc<AppState>>,
+    entries: Vec<AndroidMediaEntry>,
+) -> Result<ScanResult> {
+    state
+        .library()
+        .import_android_media(entries)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_music_sources(state: State<'_, Arc<AppState>>) -> Result<Vec<MusicSource>> {
+    state
+        .library()
+        .music_sources()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[cfg(not(target_os = "android"))]
+pub async fn add_music_source(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Option<MusicSource>> {
+    let Some(folder) = app.dialog().file().blocking_pick_folder() else {
+        return Ok(None);
+    };
+    let path = folder.into_path().map_err(|e| e.to_string())?;
+    state
+        .library()
+        .add_music_source(&path)
+        .await
+        .map_err(|e| e.to_string())?;
+    let sources = state
+        .library()
+        .music_sources()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(sources
+        .into_iter()
+        .find(|source| Path::new(&source.path) == path))
+}
+
+#[tauri::command]
+#[cfg(target_os = "android")]
+pub async fn add_music_source(
+    _app: AppHandle,
+    _state: State<'_, Arc<AppState>>,
+) -> Result<Option<MusicSource>> {
+    Err("Дополнительные папки на Android управляются через MediaStore".into())
+}
+
+#[tauri::command]
+pub async fn remove_music_source(state: State<'_, Arc<AppState>>, source_id: i64) -> Result<()> {
+    state
+        .library()
+        .remove_music_source(source_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -437,10 +526,7 @@ pub async fn load_and_play_library_page_at_track(
 }
 
 #[tauri::command]
-pub async fn play_library_track(
-    state: State<'_, Arc<AppState>>,
-    track_id: i64,
-) -> Result<()> {
+pub async fn play_library_track(state: State<'_, Arc<AppState>>, track_id: i64) -> Result<()> {
     state
         .play_library_track(TrackId(track_id))
         .await
@@ -903,9 +989,15 @@ pub async fn handle_streaming_track(
                         id: playlist.id,
                     };
                     if should_play {
-                        state.load_context_and_play(context, 0).await.map_err(|e| e.to_string())?;
+                        state
+                            .load_context_and_play(context, 0)
+                            .await
+                            .map_err(|e| e.to_string())?;
                     } else {
-                        state.load_context_to_queue(context).await.map_err(|e| e.to_string())?;
+                        state
+                            .load_context_to_queue(context)
+                            .await
+                            .map_err(|e| e.to_string())?;
                     }
                 }
                 SearchResult::Album(album) => {
@@ -914,9 +1006,15 @@ pub async fn handle_streaming_track(
                         id: album.id,
                     };
                     if should_play {
-                        state.load_context_and_play(context, 0).await.map_err(|e| e.to_string())?;
+                        state
+                            .load_context_and_play(context, 0)
+                            .await
+                            .map_err(|e| e.to_string())?;
                     } else {
-                        state.load_context_to_queue(context).await.map_err(|e| e.to_string())?;
+                        state
+                            .load_context_to_queue(context)
+                            .await
+                            .map_err(|e| e.to_string())?;
                     }
                 }
                 _ => todo!(),
@@ -1009,8 +1107,12 @@ pub async fn update_provider_auth(
     provider: String,
     auth_data: String,
 ) -> Result<()> {
-    tracing::info!("Updating auth for provider {}: (data len={})", provider, auth_data.len());
-    
+    tracing::info!(
+        "Updating auth for provider {}: (data len={})",
+        provider,
+        auth_data.len()
+    );
+
     // 1. Update the active provider in memory
     state
         .streaming()
@@ -1030,7 +1132,10 @@ pub async fn update_provider_auth(
             config.providers.bandcamp.credentials = Some(auth_data);
         }
         _ => {
-            tracing::warn!("Unknown provider: {}, skipping config persistence", provider);
+            tracing::warn!(
+                "Unknown provider: {}, skipping config persistence",
+                provider
+            );
         }
     }
 
@@ -1045,10 +1150,14 @@ pub async fn submit_challenge_result(
 ) -> Result<()> {
     tracing::info!("Challenge result submitted from {}: {}", label, client_id);
     // Emit a global event from the backend which is more reliable
-    app.emit("challenge-solved-global", serde_json::json!({
-        "clientId": client_id,
-        "label": label
-    })).map_err(|e| e.to_string())?;
+    app.emit(
+        "challenge-solved-global",
+        serde_json::json!({
+            "clientId": client_id,
+            "label": label
+        }),
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1067,11 +1176,15 @@ pub async fn open_challenge_window(
             let _ = win.close();
         }
 
-        tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(url.parse().unwrap()))
-            .initialization_script(&script)
-            .visible(false)
-            .build()
-            .map_err(|e: tauri::Error| e.to_string())?;
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            &label,
+            tauri::WebviewUrl::External(url.parse().unwrap()),
+        )
+        .initialization_script(&script)
+        .visible(false)
+        .build()
+        .map_err(|e: tauri::Error| e.to_string())?;
     }
 
     // On Android the native SoundCloudChallengePlugin handles this:
@@ -1166,7 +1279,11 @@ pub async fn save_track_to_file(
         }) as Arc<streaming::state::types::TaskCallback>),
         on_progress: Some(Arc::new({
             let app_handle = app.clone();
-            move |res: std::result::Result<streaming::state::types::BufferType, streaming::error::StreamingError>, _| {
+            move |res: std::result::Result<
+                streaming::state::types::BufferType,
+                streaming::error::StreamingError,
+            >,
+                  _| {
                 if let Ok(buffer) = res {
                     let progress = buffer.progress();
                     let byte_size = buffer.byte_size();
@@ -1185,7 +1302,11 @@ pub async fn save_track_to_file(
             let app_handle = app.clone();
             let state_arc = state_arc.clone();
             let track_title = track_title.clone();
-            move |res: std::result::Result<streaming::state::types::BufferType, streaming::error::StreamingError>, _| {
+            move |res: std::result::Result<
+                streaming::state::types::BufferType,
+                streaming::error::StreamingError,
+            >,
+                  _| {
                 let success = res.is_ok();
                 if let Ok(buffer) = res {
                     let file_path = downloads_dir.join(format!(
@@ -1222,7 +1343,8 @@ pub async fn save_track_to_file(
                         success,
                     },
                 );
-                let _ = app_handle.emit("download-finish", (track_id, success, track_title.clone()));
+                let _ =
+                    app_handle.emit("download-finish", (track_id, success, track_title.clone()));
             }
         }) as Arc<streaming::state::types::TaskCallback>),
     };
@@ -1356,7 +1478,9 @@ pub async fn import_sync(
         .join("sync");
 
     let store = SyncStore::new(sync_dir);
-    let file = store.load(std::path::Path::new(&path)).map_err(|e| e.to_string())?;
+    let file = store
+        .load(std::path::Path::new(&path))
+        .map_err(|e| e.to_string())?;
 
     let applier = SyncApplier::new(state.library());
     applier.apply(file).await.map_err(|e| e.to_string())
@@ -1387,7 +1511,11 @@ pub async fn telegram_save_config(
     chat_id: String,
 ) -> Result<()> {
     let path = telegram_config_path(&app)?;
-    let config = TelegramConfig { bot_token, chat_id, last_message_id: None };
+    let config = TelegramConfig {
+        bot_token,
+        chat_id,
+        last_message_id: None,
+    };
     config.save(&path).map_err(|e| e.to_string())
 }
 
@@ -1423,10 +1551,7 @@ pub async fn telegram_push(
 }
 
 #[tauri::command]
-pub async fn telegram_pull(
-    app: AppHandle,
-    state: State<'_, Arc<AppState>>,
-) -> Result<()> {
+pub async fn telegram_pull(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<()> {
     let path = telegram_config_path(&app)?;
     let tg = TelegramSync::load(&path)
         .map_err(|e| e.to_string())?

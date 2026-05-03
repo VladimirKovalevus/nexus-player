@@ -54,6 +54,7 @@ class MainActivity : TauriActivity() {
         pluginManager.load(webView, "vkLogin", VkLoginPlugin(this), "{}")
         pluginManager.load(webView, "soundCloudChallenge", SoundCloudChallengePlugin(this), "{}")
         webView.addJavascriptInterface(NexusAudioBridge(this), "_NexusAudio")
+        webView.addJavascriptInterface(NexusLibraryBridge(this), "_NexusLibrary")
     }
 
     override fun onNewIntent(intent: Intent) {

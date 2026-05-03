@@ -13,6 +13,7 @@ import PlaylistDetailView from './views/PlaylistDetailView.vue';
 import VkView from './views/VkView.vue';
 import HistoryView from './views/HistoryView.vue';
 import DownloadsView from './views/DownloadsView.vue';
+import LibraryView from './views/LibraryView.vue';
 import StreamingSearch from './components/StreamingSearch.vue';
 import GlobalNotifications from './components/common/GlobalNotifications.vue';
 import VisualizerOverlay from './components/VisualizerOverlay.vue';
@@ -129,6 +130,7 @@ provide('clearQueue', () => playbackQueueRef.value?.clearQueue());
     <VkView v-else-if="currentView === 'vk'" />
     <HistoryView v-else-if="currentView === 'history'" />
     <DownloadsView v-else-if="currentView === 'downloads'" />
+    <LibraryView v-else-if="currentView === 'library'" />
     <div v-else :style="{ padding: '40px', textAlign: 'center' }">
       <h2>Раздел в разработке</h2>
       <p>Вы перешли в раздел: {{ currentView }}</p>

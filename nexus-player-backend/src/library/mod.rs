@@ -4,6 +4,7 @@ pub mod convert;
 pub mod convert_v2;
 pub mod entities_v2;
 pub mod metadata;
+pub mod local_library;
 pub mod models;
 pub mod repository;
 pub mod repository_v2;
