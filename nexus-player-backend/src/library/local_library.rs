@@ -105,7 +105,7 @@ impl LibraryService {
 
     pub async fn local_tracks(&self) -> Result<Vec<Track>> {
         let ids: Vec<i64> = sqlx::query_scalar(
-            "SELECT track_id FROM local_media_index ORDER BY unavailable, track_id DESC",
+            "SELECT track_id FROM local_media_index ORDER BY position, track_id DESC",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -113,6 +113,25 @@ impl LibraryService {
         for id in ids {
             if let Some(track) = self.get_track(TrackId(id)).await? {
                 tracks.push(track);
+            }
+        }
+        Ok(tracks)
+    }
+
+    pub async fn local_tracks_by_ids(&self, ids: &[TrackId]) -> Result<Vec<Track>> {
+        let mut tracks = Vec::with_capacity(ids.len());
+        for id in ids {
+            let indexed = sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM local_media_index WHERE track_id = ? AND unavailable = 0",
+            )
+            .bind(id.0)
+            .fetch_one(&self.pool)
+            .await?
+                > 0;
+            if indexed {
+                if let Some(track) = self.get_track(*id).await? {
+                    tracks.push(track);
+                }
             }
         }
         Ok(tracks)
@@ -226,8 +245,20 @@ impl LibraryService {
         .await
         .unwrap_or(0)
             > 0;
-        if sqlx::query("INSERT INTO local_media_index(track_id, source_key, source_id, file_size, modified_at, last_seen_scan, unavailable) VALUES (?, ?, ?, ?, ?, ?, 0) ON CONFLICT(source_key) DO UPDATE SET track_id=excluded.track_id, source_id=excluded.source_id, file_size=excluded.file_size, modified_at=excluded.modified_at, last_seen_scan=excluded.last_seen_scan, unavailable=0")
-            .bind(track_id.0).bind(source_key).bind(source_id).bind(size).bind(modified).bind(scan).execute(&self.pool).await.is_err() { result.errors += 1; return; }
+        let position = if existed {
+            None
+        } else {
+            Some(
+                sqlx::query_scalar::<_, i64>(
+                    "SELECT COALESCE(MAX(position), -1) + 1 FROM local_media_index",
+                )
+                .fetch_one(&self.pool)
+                .await
+                .unwrap_or(0),
+            )
+        };
+        if sqlx::query("INSERT INTO local_media_index(track_id, source_key, source_id, file_size, modified_at, last_seen_scan, unavailable, position) VALUES (?, ?, ?, ?, ?, ?, 0, ?) ON CONFLICT(source_key) DO UPDATE SET track_id=excluded.track_id, source_id=excluded.source_id, file_size=excluded.file_size, modified_at=excluded.modified_at, last_seen_scan=excluded.last_seen_scan, unavailable=0")
+            .bind(track_id.0).bind(source_key).bind(source_id).bind(size).bind(modified).bind(scan).bind(position).execute(&self.pool).await.is_err() { result.errors += 1; return; }
         if existed {
             result.updated += 1
         } else {

@@ -1088,6 +1088,36 @@ impl AppState {
         Ok(())
     }
 
+    pub async fn load_and_play_local_tracks(
+        &self,
+        track_ids: Vec<TrackId>,
+        selected_id: TrackId,
+    ) -> Result<()> {
+        let cancel = self.begin_exclusive_op().await;
+        let tracks = self.library.local_tracks_by_ids(&track_ids).await?;
+        let audio_tracks: Vec<AudioTrack> = tracks.into_iter().map(Into::into).collect();
+        let selected_index = audio_tracks
+            .iter()
+            .position(|track| i64::try_from(track.id).ok() == Some(selected_id.0))
+            .ok_or_else(|| anyhow::anyhow!("Selected local track is unavailable"))?;
+
+        self.fill_cursor_queue(audio_tracks).await;
+        let track = {
+            let mut queue = self.queue.lock().await;
+            match &mut *queue {
+                ActiveQueue::Cursor(cq) => {
+                    cq.jump_to(selected_index);
+                    cq.current_track.clone()
+                }
+                _ => None,
+            }
+        };
+        if !cancel.is_cancelled() {
+            self.play_cancellable(track, cancel).await;
+        }
+        Ok(())
+    }
+
     /// Load search results into a SearchQueue with full context (tracks, albums, playlists)
     pub async fn load_search_queue(
         &self,

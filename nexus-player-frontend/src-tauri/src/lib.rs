@@ -104,6 +104,7 @@ pub fn run() {
             commands::load_and_play_library_page,
             commands::load_playlist_and_play,
             commands::play_library_track,
+            commands::load_and_play_local_tracks,
             commands::play_at_index,
             commands::play_next,
             commands::play_previous,

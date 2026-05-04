@@ -43,13 +43,124 @@ impl LibraryService {
         let history_repo: Arc<dyn PlayHistoryRepository> =
             Arc::new(db_v2::SeaOrmHistoryRepository::new(db.clone()));
 
-        Ok(Self {
+        let service = Self {
             pool,
             db,
             track_repo,
             playlist_repo,
             history_repo,
-        })
+        };
+        service.repair_misclassified_local_sources().await?;
+        Ok(service)
+    }
+
+    /// Older frontend DTO conversion represented local files as External("unknown", path).
+    /// Repair those rows and merge them into their canonical local track when one exists.
+    async fn repair_misclassified_local_sources(&self) -> Result<()> {
+        use sqlx::Row;
+
+        let mut txn = self.pool.begin().await?;
+        let rows = sqlx::query(
+            "SELECT id, source_data, liked, liked_position, play_count FROM tracks_v2 WHERE source_type = 'external'",
+        )
+        .fetch_all(&mut *txn)
+        .await?;
+
+        for row in rows {
+            let bad_id: i64 = row.get("id");
+            let Some(source_data) = row.get::<Option<String>, _>("source_data") else {
+                continue;
+            };
+            let Ok(value) = serde_json::from_str::<serde_json::Value>(&source_data) else {
+                continue;
+            };
+            if value.get("system").and_then(|v| v.as_str()) != Some("unknown") {
+                continue;
+            }
+            let Some(path) = value.get("id").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            if !std::path::Path::new(path).is_absolute() {
+                continue;
+            }
+
+            let local_data = serde_json::to_string(&serde_json::json!({
+                "type": "local",
+                "path": path,
+            }))?;
+            let canonical_id = sqlx::query_scalar::<_, i64>(
+                "SELECT id FROM tracks_v2 WHERE source_type = 'local' AND source_data = ? LIMIT 1",
+            )
+            .bind(&local_data)
+            .fetch_optional(&mut *txn)
+            .await?;
+
+            if let Some(canonical_id) = canonical_id {
+                let bad_liked: i64 = row.get("liked");
+                let bad_liked_position: Option<i64> = row.get("liked_position");
+                let bad_play_count: i64 = row.get("play_count");
+                sqlx::query(
+                    "UPDATE tracks_v2 SET liked = MAX(liked, ?), liked_position = CASE WHEN liked_position IS NULL THEN ? ELSE liked_position END, play_count = MAX(play_count, ?) WHERE id = ?",
+                )
+                .bind(bad_liked)
+                .bind(bad_liked_position)
+                .bind(bad_play_count)
+                .bind(canonical_id)
+                .execute(&mut *txn)
+                .await?;
+
+                // Avoid violating the unique (playlist, type, item) index when both copies exist.
+                sqlx::query(
+                    "DELETE FROM playlist_items_v2 AS bad WHERE item_type = 'track' AND item_id = ? AND EXISTS (SELECT 1 FROM playlist_items_v2 AS good WHERE good.playlist_id = bad.playlist_id AND good.item_type = 'track' AND good.item_id = ?)",
+                )
+                .bind(bad_id)
+                .bind(canonical_id)
+                .execute(&mut *txn)
+                .await?;
+                sqlx::query(
+                    "UPDATE playlist_items_v2 SET item_id = ? WHERE item_type = 'track' AND item_id = ?",
+                )
+                .bind(canonical_id)
+                .bind(bad_id)
+                .execute(&mut *txn)
+                .await?;
+
+                let canonical_indexed = sqlx::query_scalar::<_, i64>(
+                    "SELECT COUNT(*) FROM local_media_index WHERE track_id = ?",
+                )
+                .bind(canonical_id)
+                .fetch_one(&mut *txn)
+                .await?
+                    > 0;
+                if canonical_indexed {
+                    sqlx::query("DELETE FROM local_media_index WHERE track_id = ?")
+                        .bind(bad_id)
+                        .execute(&mut *txn)
+                        .await?;
+                } else {
+                    sqlx::query("UPDATE local_media_index SET track_id = ? WHERE track_id = ?")
+                        .bind(canonical_id)
+                        .bind(bad_id)
+                        .execute(&mut *txn)
+                        .await?;
+                }
+                sqlx::query("DELETE FROM tracks_v2 WHERE id = ?")
+                    .bind(bad_id)
+                    .execute(&mut *txn)
+                    .await?;
+            } else {
+                sqlx::query(
+                    "UPDATE tracks_v2 SET source_type = 'local', source_data = ? WHERE id = ?",
+                )
+                .bind(local_data)
+                .bind(bad_id)
+                .execute(&mut *txn)
+                .await?;
+            }
+        }
+
+        txn.commit().await?;
+        Ok(())
     }
 
     // ========================================================================
@@ -312,19 +423,38 @@ impl LibraryService {
         runtime_playlist: crate::playlist::playlist::Playlist,
     ) -> Result<models::PlaylistWithItems> {
         use chrono::Utc;
-        use sea_orm::{ActiveModelTrait, ActiveValue, TransactionTrait};
+        use sea_orm::{
+            ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait,
+        };
 
         use super::entities_v2::{playlist, playlist_item, track};
 
         let txn = self.db.begin().await?;
 
         let mut saved_track_ids = Vec::new();
+        let mut seen_track_ids = std::collections::HashSet::new();
         let mut first_artwork = None;
         let mut fallback_url = None;
 
         for audio_track in runtime_playlist.tracks() {
             let library_track: models::Track = audio_track.clone().into();
             let entity_track: track::Model = library_track.into();
+
+            if let Some(existing) = track::Entity::find()
+                .filter(track::Column::SourceType.eq(entity_track.source_type.clone()))
+                .filter(track::Column::SourceData.eq(entity_track.source_data.clone()))
+                .one(&txn)
+                .await
+                .context("Failed to find existing track by source")?
+            {
+                if first_artwork.is_none() {
+                    first_artwork = existing.artwork_id;
+                }
+                if seen_track_ids.insert(existing.id) {
+                    saved_track_ids.push(TrackId(existing.id));
+                }
+                continue;
+            }
 
             let artwork_id = if let Some(url) = &audio_track.artwork_url {
                 let id = self.ensure_artwork(url, &txn).await?;
@@ -374,7 +504,9 @@ impl LibraryService {
                 .await
                 .context("Failed to insert track")?;
 
-            saved_track_ids.push(TrackId(result.id));
+            if seen_track_ids.insert(result.id) {
+                saved_track_ids.push(TrackId(result.id));
+            }
         }
 
         let now = Utc::now();

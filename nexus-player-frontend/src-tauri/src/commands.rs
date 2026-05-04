@@ -341,7 +341,11 @@ pub async fn create_playlist_with_tracks(
     state: State<'_, Arc<AppState>>,
     request: CreatePlaylistWithTracksRequest,
 ) -> Result<i64> {
-    let audio_tracks: Vec<_> = request.tracks.iter().map(|t| t.to_audio_track()).collect();
+    let audio_tracks: Vec<_> = request
+        .tracks
+        .iter()
+        .map(|t| t.try_to_audio_track())
+        .collect::<std::result::Result<_, _>>()?;
 
     let playlist_id = state
         .create_playlist_with_tracks(
@@ -363,7 +367,7 @@ pub async fn add_track_to_playlist(
     track: TrackDto,
 ) -> Result<()> {
     state
-        .add_track_to_playlist(PlaylistId(playlist_id), track.to_audio_track())
+        .add_track_to_playlist(PlaylistId(playlist_id), track.try_to_audio_track()?)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -529,6 +533,21 @@ pub async fn load_and_play_library_page_at_track(
 pub async fn play_library_track(state: State<'_, Arc<AppState>>, track_id: i64) -> Result<()> {
     state
         .play_library_track(TrackId(track_id))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn load_and_play_local_tracks(
+    state: State<'_, Arc<AppState>>,
+    track_ids: Vec<i64>,
+    selected_id: i64,
+) -> Result<()> {
+    state
+        .load_and_play_local_tracks(
+            track_ids.into_iter().map(TrackId).collect(),
+            TrackId(selected_id),
+        )
         .await
         .map_err(|e| e.to_string())
 }
@@ -1398,7 +1417,7 @@ pub async fn get_play_history(
 #[tauri::command]
 pub async fn toggle_liked(state: State<'_, Arc<AppState>>, track: TrackDto) -> Result<()> {
     state
-        .toggle_liked(track.to_audio_track())
+        .toggle_liked(track.try_to_audio_track()?)
         .await
         .map_err(|e| e.to_string())
 }

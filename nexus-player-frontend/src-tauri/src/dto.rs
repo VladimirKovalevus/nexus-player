@@ -215,17 +215,24 @@ pub struct CreatePlaylistWithTracksRequest {
 }
 
 impl TrackDto {
-    pub fn to_audio_track(&self) -> nexus_player_backend::audio::types::Track {
+    pub fn try_to_audio_track(
+        &self,
+    ) -> Result<nexus_player_backend::audio::types::Track, String> {
         use nexus_player_backend::audio::types::{Track, TrackSource, TrackState};
 
-        let source = match &self.source {
-            Some(src) => TrackSource::External {
+        let src = self
+            .source
+            .as_ref()
+            .ok_or_else(|| format!("Track '{}' has no source", self.title))?;
+        let source = match src.system.as_str() {
+            "local" => TrackSource::Local(src.url.clone().into()),
+            "http" => TrackSource::Http(src.url.clone()),
+            // A cached source is already a playable local file. TrackSourceDto does not carry
+            // original_url, so preserve playback correctness by treating it as local here.
+            "cache" => TrackSource::Local(src.url.clone().into()),
+            _ => TrackSource::External {
                 id: src.url.clone(),
                 system: src.system.clone(),
-            },
-            None => TrackSource::External {
-                id: String::new(),
-                system: "unknown".to_string(),
             },
         };
 
@@ -235,7 +242,7 @@ impl TrackDto {
             TrackStateDto::Cached => TrackState::Cached,
         };
 
-        Track {
+        Ok(Track {
             id: self.id as usize,
             title: self.title.clone(),
             artist: self.artist.clone(),
@@ -246,7 +253,7 @@ impl TrackDto {
             source,
             state,
             liked: self.liked,
-        }
+        })
     }
 }
 
@@ -472,12 +479,18 @@ impl StreamingTrackDto {
 impl From<nexus_player_backend::audio::types::TrackSource> for TrackSourceDto {
     fn from(track_source: nexus_player_backend::audio::types::TrackSource) -> Self {
         match track_source {
-            nexus_player_backend::audio::types::TrackSource::External { id, system } => {
-                Self { url: id, system }
-            }
-            _ => Self {
-                url: track_source.as_str(),
-                system: "unknown".to_string(),
+            nexus_player_backend::audio::types::TrackSource::Local(path) => Self {
+                url: path.display().to_string(),
+                system: "local".to_string(),
+            },
+            nexus_player_backend::audio::types::TrackSource::Http(url) => Self {
+                url,
+                system: "http".to_string(),
+            },
+            nexus_player_backend::audio::types::TrackSource::External { id, system } => Self { url: id, system },
+            nexus_player_backend::audio::types::TrackSource::Cached { cache_path, .. } => Self {
+                url: cache_path.display().to_string(),
+                system: "cache".to_string(),
             },
         }
     }
@@ -761,6 +774,44 @@ impl From<nexus_player_backend::streaming::types::TrackInfo> for TrackDto {
             state: TrackStateDto::Streaming,
             source: Some(TrackSourceDto { url, system }),
         }
+    }
+}
+
+#[cfg(test)]
+mod local_source_tests {
+    use super::*;
+    use nexus_player_backend::audio::types::TrackSource;
+
+    fn dto(source: Option<TrackSourceDto>) -> TrackDto {
+        TrackDto {
+            id: 42,
+            title: "Local track".into(),
+            artist: None,
+            album: None,
+            duration_secs: None,
+            artwork_url: None,
+            play_count: 0,
+            liked: false,
+            state: TrackStateDto::Saved,
+            source,
+            unavailable: false,
+        }
+    }
+
+    #[test]
+    fn local_source_round_trips_through_dto() {
+        let expected = TrackSource::Local("/music/track.flac".into());
+        let source_dto: TrackSourceDto = expected.clone().into();
+        assert_eq!(source_dto.system, "local");
+        assert_eq!(source_dto.url, "/music/track.flac");
+
+        let runtime = dto(Some(source_dto)).try_to_audio_track().unwrap();
+        assert_eq!(runtime.source, expected);
+    }
+
+    #[test]
+    fn missing_source_is_rejected() {
+        assert!(dto(None).try_to_audio_track().is_err());
     }
 }
 
