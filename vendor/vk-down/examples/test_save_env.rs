@@ -1,4 +1,4 @@
-use vk_down::auth;
+use vk_api::auth;
 
 fn main() -> anyhow::Result<()> {
     println!("Тестирование сохранения токена в .env файл...\n");

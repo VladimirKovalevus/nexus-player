@@ -1,4 +1,4 @@
-use vk_down::auth;
+use vk_api::auth;
 
 fn main() {
     println!("Тестирование загрузки токена из .env файла...\n");

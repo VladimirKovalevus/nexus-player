@@ -2,14 +2,15 @@ package com.nexus_player_frontend.app
 
 import android.annotation.SuppressLint
 import android.app.Dialog
-import android.content.Intent
 import android.graphics.Bitmap
-import android.net.Uri
+import android.util.Log
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.webkit.CookieManager
-import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import app.tauri.annotation.Command
@@ -20,25 +21,29 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 
 @InvokeArg
-class OpenArgs {
+class VkCaptchaArgs {
     lateinit var url: String
+    var interactive: Boolean = true
 }
 
+/** Native Android host for VK ID captcha. All VK network/auth calls stay in Rust. */
 @TauriPlugin
 class VkLoginPlugin(private val activity: android.app.Activity) : Plugin(activity) {
+    private val logTag = "NexusVkAuth"
+    private var captchaActive = false
 
-    companion object {
-        // Called from MainActivity.onNewIntent when VK returns via deep link
-        var pendingTokenCallback: ((String) -> Unit)? = null
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     @Command
-    fun open(invoke: Invoke) {
-        val args = invoke.parseArgs(OpenArgs::class.java)
-        val url = args.url
-
+    fun openCaptcha(invoke: Invoke) {
+        val args = invoke.parseArgs(VkCaptchaArgs::class.java)
+        Log.i(logTag, "openCaptcha received; interactive=${args.interactive}")
         activity.runOnUiThread {
+            if (captchaActive) {
+                Log.w(logTag, "openCaptcha rejected because a dialog is already active")
+                invoke.reject("VK captcha window is already open")
+                return@runOnUiThread
+            }
+            captchaActive = true
             val dialog = Dialog(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
             dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
             dialog.window?.setLayout(
@@ -56,152 +61,114 @@ class VkLoginPlugin(private val activity: android.app.Activity) : Plugin(activit
                 domStorageEnabled = true
                 loadWithOverviewMode = true
                 useWideViewPort = true
-                userAgentString = "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                userAgentString = "VKAndroidApp/8.154-99999 (Android 12; SDK 32; arm64-v8a; Pixel 6; ru; 2960x1440)"
             }
-
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
 
             var done = false
-
-            fun handleToken(token: String) {
-                if (done) return
+            fun resolve(token: String) {
+                if (done || token.isBlank()) return
+                Log.i(logTag, "captcha success token detected; resolving plugin invocation")
                 done = true
-                pendingTokenCallback = null
-                dialog.dismiss()
                 val result = JSObject()
-                result.put("token", token)
+                result.put("successToken", token)
                 invoke.resolve(result)
+                dialog.dismiss()
+                webView.destroy()
             }
 
-            // JS bridge: catches the token when VK's own JS navigates to blank.html#access_token=...
-            // This fires even when the WebView is in background (while VK app is open)
             webView.addJavascriptInterface(object : Any() {
                 @android.webkit.JavascriptInterface
-                fun onToken(token: String) {
-                    if (token.isNotEmpty()) {
-                        activity.runOnUiThread { handleToken(token) }
-                    }
+                fun onSuccessToken(token: String) {
+                    Log.i(logTag, "success token received from WebView JavaScript bridge")
+                    activity.runOnUiThread { resolve(token) }
                 }
-            }, "_NexusVkBridge")
+            }, "_NexusVkCaptcha")
 
-            // Register deep link callback so MainActivity can deliver the token
-            // when VK native app redirects back to our app
-            pendingTokenCallback = { token -> handleToken(token) }
+            val interceptionScript = """
+                (function () {
+                  if (window.__nexusVkCaptchaInstalled) return;
+                  window.__nexusVkCaptchaInstalled = true;
+                  var sent = false;
+                  function submit(value) {
+                    if (sent || !value) return;
+                    sent = true;
+                    _NexusVkCaptcha.onSuccessToken(String(value));
+                  }
+                  function inspect(data) {
+                    try {
+                      var value = typeof data === 'string' ? JSON.parse(data) : data;
+                      submit(value && value.response && value.response.success_token);
+                      submit(value && value.success_token);
+                      submit(value && value.token);
+                    } catch (_) {}
+                  }
+                  var oldFetch = window.fetch;
+                  window.fetch = async function () {
+                    var response = await oldFetch.apply(this, arguments);
+                    try { inspect(await response.clone().json()); } catch (_) {}
+                    return response;
+                  };
+                  var oldOpen = XMLHttpRequest.prototype.open;
+                  XMLHttpRequest.prototype.open = function () {
+                    this.addEventListener('load', function () { inspect(this.responseText); });
+                    return oldOpen.apply(this, arguments);
+                  };
+                  var timer = setInterval(function () {
+                    if (window.VKCaptcha) {
+                      window.VKCaptcha.onResult = function (result) {
+                        inspect(result);
+                        if (typeof result === 'string') submit(result);
+                      };
+                      clearInterval(timer);
+                    }
+                  }, 250);
+                })();
+            """.trimIndent()
 
             webView.webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(
-                    view: WebView,
-                    request: WebResourceRequest
-                ): Boolean {
-                    val urlStr = request.url.toString()
-
-                    if (urlStr.contains("access_token=")) {
-                        handleToken(extractToken(urlStr))
-                        return true
-                    }
-
-                    // Handle intent:// — VK wants to open the native app
-                    if (urlStr.startsWith("intent://")) {
-                        try {
-                            val intent = Intent.parseUri(urlStr, Intent.URI_INTENT_SCHEME)
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            try {
-                                activity.startActivity(intent)
-                            } catch (_: android.content.ActivityNotFoundException) {
-                                // VK app not installed — open fallback via system (not WebView)
-                                val fallback = intent.getStringExtra("browser_fallback_url")
-                                if (fallback != null) {
-                                    try {
-                                        activity.startActivity(
-                                            Intent(Intent.ACTION_VIEW, Uri.parse(fallback))
-                                        )
-                                    } catch (_: Exception) {}
-                                }
-                            }
-                        } catch (_: Exception) {}
-                        return true
-                    }
-
-                    // Handle market:// (Play Store)
-                    if (urlStr.startsWith("market://")) {
-                        try {
-                            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(urlStr)))
-                        } catch (_: Exception) {
-                            val webUrl = "https://play.google.com/store/apps/details" +
-                                urlStr.substringAfter("market://details")
-                            activity.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(webUrl))
-                            )
-                        }
-                        return true
-                    }
-
-                    return false
+                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                    Log.d(logTag, "captcha page started: ${android.net.Uri.parse(url).host ?: "unknown-host"}")
+                    view.evaluateJavascript(interceptionScript, null)
                 }
 
-                override fun onPageStarted(view: WebView, pageUrl: String, favicon: Bitmap?) {
-                    // Catch fragment-based token in page URL (may be stripped in some cases)
-                    if (pageUrl.contains("access_token=")) {
-                        handleToken(extractToken(pageUrl))
-                        return
-                    }
-                    // Inject JS that monitors hash changes — fires when VK's own JS
-                    // navigates to blank.html#access_token=TOKEN (works while WebView is in background)
-                    view.evaluateJavascript("""
-                        (function() {
-                            if (window._nexusVkWatching) return;
-                            window._nexusVkWatching = true;
-                            function checkHash() {
-                                var h = window.location.hash || '';
-                                if (h.indexOf('access_token=') !== -1) {
-                                    var parts = h.replace('#','').split('&');
-                                    for (var i = 0; i < parts.length; i++) {
-                                        var kv = parts[i].split('=');
-                                        if (kv[0] === 'access_token' && kv[1]) {
-                                            _NexusVkBridge.onToken(kv[1]);
-                                            return;
-                                        }
-                                    }
-                                }
-                            }
-                            checkHash();
-                            window.addEventListener('hashchange', checkHash);
-                            setInterval(checkHash, 500);
-                        })();
-                    """, null)
+                override fun onPageFinished(view: WebView, url: String) {
+                    Log.d(logTag, "captcha page finished: ${android.net.Uri.parse(url).host ?: "unknown-host"}")
+                    view.evaluateJavascript(interceptionScript, null)
                 }
             }
 
             dialog.setOnDismissListener {
-                pendingTokenCallback = null
+                Log.i(logTag, "captcha dialog dismissed; completed=$done")
+                captchaActive = false
                 if (!done) {
                     done = true
                     invoke.reject("cancelled")
+                    webView.destroy()
                 }
             }
-
-            webView.loadUrl(url)
-            dialog.setContentView(webView)
+            if (args.interactive) {
+                dialog.setContentView(webView)
+            } else {
+                val layout = LinearLayout(activity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(webView, LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+                    ))
+                }
+                val answer = EditText(activity).apply { hint = "Текст с картинки" }
+                val submit = Button(activity).apply {
+                    text = "Отправить"
+                    setOnClickListener { resolve(answer.text.toString()) }
+                }
+                layout.addView(answer)
+                layout.addView(submit)
+                dialog.setContentView(layout)
+            }
             dialog.show()
+            Log.i(logTag, "captcha dialog shown; loading URL")
+            webView.loadUrl(args.url)
         }
-    }
-
-    private fun extractToken(url: String): String {
-        val fragment = url.substringAfter("#", "")
-        if (fragment.isNotEmpty()) {
-            fragment.split("&").forEach { param ->
-                val kv = param.split("=", limit = 2)
-                if (kv.size == 2 && kv[0] == "access_token") return kv[1]
-            }
-        }
-        val query = url.substringAfter("?", "").substringBefore("#")
-        if (query.isNotEmpty()) {
-            query.split("&").forEach { param ->
-                val kv = param.split("=", limit = 2)
-                if (kv.size == 2 && kv[0] == "access_token") return kv[1]
-            }
-        }
-        return ""
     }
 }

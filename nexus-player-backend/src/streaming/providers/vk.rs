@@ -13,23 +13,59 @@ use crate::streaming::types::{
 
 pub struct VkProvider {
     client: RwLock<Option<VkClient>>,
+    session: RwLock<Option<vk_api::TokenSet>>,
 }
 
 impl VkProvider {
     pub fn new(token: Option<String>) -> Self {
-        let client = token.map(VkClient::new);
+        let (client, session) = token.map(Self::parse_credentials).unwrap_or((None, None));
         Self {
             client: RwLock::new(client),
+            session: RwLock::new(session),
         }
     }
 
     pub async fn update_token(&self, token: String) {
         let mut client = self.client.write().await;
 
-        *client = Some(VkClient::new(token));
+        let (new_client, new_session) = Self::parse_credentials(token);
+        *client = new_client;
+        *self.session.write().await = new_session;
+    }
+
+    fn parse_credentials(credentials: String) -> (Option<VkClient>, Option<vk_api::TokenSet>) {
+        if credentials.trim().is_empty() {
+            return (None, None);
+        }
+        match serde_json::from_str::<vk_api::TokenSet>(&credentials) {
+            Ok(session) => (
+                Some(VkClient::new(session.access_token.clone())),
+                Some(session),
+            ),
+            Err(_) => (Some(VkClient::new(credentials)), None),
+        }
     }
 
     async fn get_client(&self) -> StreamResult<VkClient> {
+        let session_to_refresh = self.session.read().await.clone().filter(|session| {
+            session.expires_at > 0
+                && session.expires_at <= chrono::Utc::now().timestamp() + 30
+                && session.exchange_token.is_some()
+        });
+        if let Some(session) = session_to_refresh {
+            let auth = vk_api::AndroidAuth::for_session(Some(&session))
+                .await
+                .map_err(|error| StreamError::Other(format!("VK auth refresh setup: {error}")))?;
+            let refreshed = auth
+                .refresh_tokens(
+                    &session.access_token,
+                    session.exchange_token.as_deref().unwrap_or_default(),
+                )
+                .await
+                .map_err(|error| StreamError::Other(format!("VK token refresh: {error}")))?;
+            *self.client.write().await = Some(VkClient::new(refreshed.access_token.clone()));
+            *self.session.write().await = Some(refreshed);
+        }
         let client = self.client.read().await;
         client
             .clone()
@@ -274,7 +310,10 @@ impl StreamProvider for VkProvider {
     }
 
     async fn set_credentials(&self, credentials: Option<String>) {
-        let mut client = self.client.write().await;
-        *client = credentials.map(VkClient::new);
+        let (new_client, new_session) = credentials
+            .map(Self::parse_credentials)
+            .unwrap_or((None, None));
+        *self.client.write().await = new_client;
+        *self.session.write().await = new_session;
     }
 }

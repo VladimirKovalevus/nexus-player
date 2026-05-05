@@ -57,25 +57,6 @@ class MainActivity : TauriActivity() {
         webView.addJavascriptInterface(NexusLibraryBridge(this), "_NexusLibrary")
     }
 
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        val data = intent.data ?: return
-
-        val fragment = data.fragment ?: ""
-        val query = data.query ?: ""
-
-        val token = (fragment + "&" + query)
-            .split("&")
-            .firstOrNull { it.startsWith("access_token=") }
-            ?.substringAfter("access_token=")
-            ?: ""
-
-        if (token.isNotEmpty()) {
-            VkLoginPlugin.pendingTokenCallback?.invoke(token)
-            VkLoginPlugin.pendingTokenCallback = null
-        }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         try { unregisterReceiver(mediaControlReceiver) } catch (_: Exception) {}

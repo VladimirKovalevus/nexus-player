@@ -16,6 +16,7 @@ url = "2.5"
 # Error handling
 anyhow = "1.0"
 thiserror = "2.0"
+tracing = "0.1"
 # Environment variables
 dotenv = "0.15"
 

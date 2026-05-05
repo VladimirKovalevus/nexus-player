@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vk_down::{auth, VkClient};
+use vk_api::{auth, VkClient};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -37,7 +37,11 @@ async fn main() -> Result<()> {
                 truncate(&track.title, 25),
                 duration
             );
-            println!("║      ID: {} | URL: {}", track.audio_id(), truncate(&track.url, 30));
+            println!(
+                "║      ID: {} | URL: {}",
+                track.audio_id(),
+                truncate(&track.url, 30)
+            );
             println!("╠────────────────────────────────────────────────────────╣");
         }
 

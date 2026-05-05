@@ -1,7 +1,5 @@
 use crate::auth::{get_or_create_device_id, VK_API_VERSION, VK_USER_AGENT};
-use crate::models::{
-    AudioList, Playlist, PlaylistList, Track, User, VkResult,
-};
+use crate::models::{AudioList, Playlist, PlaylistList, Track, User, VkResult};
 use anyhow::{Context, Result};
 use reqwest::{header, Client};
 
@@ -33,7 +31,11 @@ impl VkClient {
 
         let device_id = get_or_create_device_id();
 
-        Self { client, token, device_id }
+        Self {
+            client,
+            token,
+            device_id,
+        }
     }
 
     /// Базовые параметры для всех запросов (без access_token — он в заголовке)
@@ -167,12 +169,6 @@ impl VkClient {
         let mut params = self.base_params();
         params.push(("audios", audio_ids.join(",")));
 
-        eprintln!("[DEBUG] POST https://api.vk.ru/method/audio.getById");
-        eprintln!("[DEBUG] Authorization: Bearer {}...", &self.token[..self.token.len().min(12)]);
-        for (k, v) in &params {
-            eprintln!("[DEBUG]   {}={}", k, v);
-        }
-
         let response = self
             .client
             .post("https://api.vk.ru/method/audio.getById")
@@ -182,12 +178,12 @@ impl VkClient {
             .await
             .context("Не удалось отправить запрос к VK API")?;
 
-        let status = response.status();
-        let body = response.text().await.context("Не удалось прочитать ответ")?;
-        eprintln!("[DEBUG] HTTP {}: {}", status, body);
-
-        let result: VkResult<Vec<Track>> = serde_json::from_str(&body)
-            .context("Не удалось распарсить ответ VK API")?;
+        let body = response
+            .text()
+            .await
+            .context("Не удалось прочитать ответ")?;
+        let result: VkResult<Vec<Track>> =
+            serde_json::from_str(&body).context("Не удалось распарсить ответ VK API")?;
 
         match result {
             VkResult::Ok(data) => Ok(data.response),

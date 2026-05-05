@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main", "soundcloud-challenge"],
+  "windows": ["main", "soundcloud-challenge", "vk-captcha"],
   "permissions": [
     "core:default",
     "core:window:allow-set-fullscreen",
@@ -11,7 +11,7 @@
     "dialog:default",
     "fs:allow-read",
     "fs:allow-exists",
-    "vkLogin:allow-open",
+    "vkLogin:allow-openCaptcha",
     "soundCloudChallenge:allow-open",
     "soundCloudChallenge:allow-close",
     "core:event:default",

@@ -34,5 +34,8 @@ pub mod models;
 
 // Re-export основных типов для удобства
 pub use api::VkClient;
-pub use auth::{extract_token_from_url, get_auth_html, get_default_auth_url};
+pub use auth::{
+    extract_token_from_url, get_auth_html, get_default_auth_url, AndroidAuth, CaptchaRequired,
+    LoginResult, TokenSet, VerificationRequired,
+};
 pub use models::{AudioList, Playlist, PlaylistList, Track, User, VkError, VkResponse, VkResult};

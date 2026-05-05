@@ -1,4 +1,3 @@
-use anyhow::Result;
 use vk_api::{auth, Playlist, VkClient};
 
 #[tokio::main]

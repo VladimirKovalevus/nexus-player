@@ -68,6 +68,7 @@ pub fn run() {
             events::start_event_loop(app.handle().clone(), Arc::clone(&state));
 
             app.manage(state);
+            app.manage(commands::VkAuthState(tokio::sync::Mutex::new(None)));
 
             Ok(())
         })
@@ -132,10 +133,12 @@ pub fn run() {
             commands::submit_challenge_result,
             commands::open_challenge_window,
             commands::retry_playback,
-            commands::get_vk_auth_url,
-            commands::get_vk_auth_html,
-            commands::extract_vk_token,
-            commands::open_vk_login,
+            commands::start_vk_auth,
+            commands::submit_vk_captcha_result,
+            commands::continue_vk_verification,
+            commands::cancel_vk_auth,
+            commands::set_vk_manual_token,
+            commands::open_vk_captcha_window,
             commands::get_vk_profile,
             commands::get_play_history,
             commands::toggle_liked,

@@ -3,7 +3,7 @@ fn main() {
         tauri_build::Attributes::new()
             .plugin(
                 "vkLogin",
-                tauri_build::InlinedPlugin::new().commands(&["open"]),
+                tauri_build::InlinedPlugin::new().commands(&["openCaptcha"]),
             )
             .plugin(
                 "soundCloudChallenge",

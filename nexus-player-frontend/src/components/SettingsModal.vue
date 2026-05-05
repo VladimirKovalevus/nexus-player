@@ -221,27 +221,44 @@
                 </label>
               </div>
               <div v-if="config.providers.vk.enabled" :class="$style.providerDetails">
-                 <div :class="$style.field">
-                   <label>Token</label>
-                   <div :class="$style.inputGroup">
-                     <input  v-model="config.providers.vk.credentials" placeholder="Введите токен или войдите" />
-                     <button @click="handleVkAuth" :class="$style.smallButton">Войти</button>
-                   </div>
-                 </div>
+                <div :class="$style.field">
+                  <label>Телефон или email</label>
+                  <input v-model="vkLogin" autocomplete="username" placeholder="Логин VK" />
+                </div>
+                <div :class="$style.field">
+                  <label>Пароль</label>
+                  <div :class="$style.inputGroup">
+                    <input v-model="vkPassword" type="password" autocomplete="current-password" placeholder="Пароль VK" />
+                    <button @click="handleVkAuth" :class="$style.smallButton" :disabled="vkAuthLoading || !vkLogin || !vkPassword">
+                      {{ vkAuthLoading ? '...' : 'Войти' }}
+                    </button>
+                  </div>
+                  <p :class="$style.hint">Пароль используется только во время входа и не сохраняется.</p>
+                </div>
 
-                 <div v-if="isVkLoginActive" :class="$style.vkLoginBox">
-                   <p :class="$style.hint">Для авторизации:</p>
-                   <ol :class="$style.instructions">
-                     <li><a :href="vkLoginUrl" target="_blank" :class="$style.link">Перейдите по этой ссылке</a></li>
-                     <li>Разрешите доступ к музыке</li>
-                     <li>Скопируйте весь URL страницы, на которую вас перенаправит</li>
-                     <li>Вставьте его ниже:</li>
-                   </ol>
-                   <div :class="$style.inputGroup">
-                     <input v-model="vkRedirectUrl" placeholder="Вставьте полученный URL здесь" />
-                     <button @click="handleTokenExtraction" :class="$style.smallButton">ОК</button>
-                   </div>
-                 </div>
+                <div v-if="vkAuthStatus" :class="$style.vkLoginBox">
+                  <p :class="$style.hint">{{ vkAuthStatus }}</p>
+                  <div v-if="vkCaptchaUrl" :class="$style.field">
+                    <img :src="vkCaptchaUrl" alt="VK captcha" style="max-width: 100%; border-radius: 8px" />
+                    <div :class="$style.inputGroup">
+                      <input v-model="vkCaptchaAnswer" autocomplete="off" placeholder="Текст с картинки" />
+                      <button @click="handleVkCaptchaAnswer" :class="$style.smallButton" :disabled="!vkCaptchaAnswer">Отправить</button>
+                    </div>
+                  </div>
+                  <div v-if="vkNeedsVerification" :class="$style.inputGroup">
+                    <input v-model="vkVerificationCode" inputmode="numeric" autocomplete="one-time-code" placeholder="Код подтверждения" />
+                    <button @click="handleVkVerification" :class="$style.smallButton" :disabled="!vkVerificationCode">Отправить</button>
+                  </div>
+                </div>
+
+                <details :class="$style.field">
+                  <summary>Расширенные настройки</summary>
+                  <label>Access token вручную</label>
+                  <div :class="$style.inputGroup">
+                    <input v-model="vkManualToken" type="password" autocomplete="off" placeholder="VK access token" />
+                    <button @click="handleVkManualToken" :class="$style.smallButton" :disabled="!vkManualToken">Применить</button>
+                  </div>
+                </details>
               </div>
             </div>
           </section>
@@ -258,9 +275,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { AppConfig, SyncType } from '@/types/types';
 import { useVkStore } from '@/stores/vk';
 import { useThemeStore } from '@/stores/theme';
@@ -278,9 +295,18 @@ const emit = defineEmits<{
 
 const loading = ref(false);
 const error = ref<string | null>(null);
-const vkLoginUrl = ref('');
-const vkRedirectUrl = ref('');
-const isVkLoginActive = ref(false);
+const vkLogin = ref('');
+const vkPassword = ref('');
+const vkManualToken = ref('');
+const vkVerificationCode = ref('');
+const vkCaptchaUrl = ref('');
+const vkCaptchaAnswer = ref('');
+const vkNeedsVerification = ref(false);
+const vkAuthLoading = ref(false);
+const vkCaptchaOpening = ref(false);
+const vkAuthStatus = ref('');
+let unlistenVkAuthStep: UnlistenFn | undefined;
+let vkAuthListenerGeneration = 0;
 const config = ref<AppConfig>({
   providers: {
     soundcloud: { enabled: true },
@@ -405,56 +431,156 @@ const save = async () => {
   }
 };
 
-const handleVkAuth = async () => {
-  if (/Android/.test(navigator.userAgent)) {
-    try {
-      const url = await invoke<string>('get_vk_auth_url');
-      const result = await invoke<{ token: string }>('plugin:vkLogin|open', { url });
-      if (config.value.providers.vk) {
-        config.value.providers.vk.credentials = result.token;
-        vkStore.clear();
-      }
-    } catch (e) {
-      if (e !== 'cancelled') {
-        alert(`Ошибка авторизации VK: ${e}`);
-      }
+type VkAuthStep =
+  | { status: 'authorized' }
+  | { status: 'captchaRequired'; url: string; interactive: boolean }
+  | { status: 'verificationRequired'; method: string; phoneMask?: string | null };
+
+const applyVkAuthStep = async (step: VkAuthStep) => {
+  console.info('[VK Auth][Frontend] applying auth step', step.status);
+  if (step.status === 'authorized') {
+    vkAuthStatus.value = '✓ VK подключён';
+    vkNeedsVerification.value = false;
+    vkVerificationCode.value = '';
+    vkPassword.value = '';
+    vkStore.clear();
+    await fetchConfig();
+    return;
+  }
+  if (step.status === 'verificationRequired') {
+    vkNeedsVerification.value = true;
+    vkAuthStatus.value = `Введите код (${step.method})${step.phoneMask ? `: ${step.phoneMask}` : ''}`;
+    return;
+  }
+
+  if (vkCaptchaOpening.value) return;
+  console.info('[VK Auth][Frontend] opening captcha', { interactive: step.interactive, android: /Android/.test(navigator.userAgent) });
+  vkCaptchaOpening.value = true;
+  vkAuthStatus.value = 'Решите captcha в открывшемся окне';
+  let nextStep: VkAuthStep | undefined;
+  try {
+    if (/Android/.test(navigator.userAgent)) {
+      const solved = await invoke<{ successToken: string }>('plugin:vkLogin|openCaptcha', {
+        url: step.url,
+        interactive: step.interactive,
+      });
+      console.info('[VK Auth][Frontend] Android captcha plugin resolved');
+      nextStep = await invoke<VkAuthStep>('submit_vk_captcha_result', { successToken: solved.successToken });
+      console.info('[VK Auth][Frontend] captcha result accepted by Rust', nextStep.status);
+    } else if (!step.interactive) {
+      vkCaptchaUrl.value = step.url;
+      vkAuthStatus.value = 'Введите текст с изображения';
+    } else {
+      await invoke('open_vk_captcha_window', { url: step.url });
+      console.info('[VK Auth][Frontend] desktop captcha window opened');
     }
-  } else {
-    try {
-      await invoke('open_vk_login');
-    } catch (e) {
-      alert(`Failed to start VK login: ${e}`);
-    }
+  } finally {
+    vkCaptchaOpening.value = false;
+  }
+  // A repeated captcha event can arrive while the Android plugin invocation
+  // is still active and is intentionally deduplicated above. Apply the command
+  // result after releasing the guard so that this next challenge is not lost.
+  if (nextStep?.status === 'captchaRequired') {
+    await applyVkAuthStep(nextStep);
   }
 };
 
-onMounted(async () => {
-  await listen('vk-token-received', (event: any) => {
-    const token = event.payload;
-    if (config.value.providers.vk) {
-      config.value.providers.vk.credentials = token;
-      vkStore.clear();
-      isVkLoginActive.value = false;
+const handleVkCaptchaAnswer = async () => {
+  try {
+    await invoke<VkAuthStep>('submit_vk_captcha_result', {
+      successToken: vkCaptchaAnswer.value,
+    });
+    vkCaptchaAnswer.value = '';
+    vkCaptchaUrl.value = '';
+  } catch (e) {
+    vkAuthStatus.value = `Ошибка: ${String(e)}`;
+  }
+};
+
+const handleVkAuth = async () => {
+  console.info('[VK Auth][Frontend] login requested');
+  vkAuthLoading.value = true;
+  vkAuthStatus.value = 'Выполняется вход...';
+  try {
+    const step = await invoke<VkAuthStep>('start_vk_auth', {
+      login: vkLogin.value,
+      password: vkPassword.value,
+    });
+    console.info('[VK Auth][Frontend] start_vk_auth returned', step.status);
+    await applyVkAuthStep(step);
+  } catch (e) {
+    console.error('[VK Auth][Frontend] login failed', e);
+    vkAuthStatus.value = `Ошибка: ${String(e)}`;
+  } finally {
+    vkAuthLoading.value = false;
+  }
+};
+
+const handleVkVerification = async () => {
+  console.info('[VK Auth][Frontend] verification code submitted');
+  vkAuthLoading.value = true;
+  try {
+    const step = await invoke<VkAuthStep>('continue_vk_verification', { code: vkVerificationCode.value });
+    await applyVkAuthStep(step);
+  } catch (e) {
+    console.error('[VK Auth][Frontend] verification failed', e);
+    vkAuthStatus.value = `Ошибка: ${String(e)}`;
+  } finally {
+    vkAuthLoading.value = false;
+  }
+};
+
+const handleVkManualToken = async () => {
+  try {
+    await invoke('set_vk_manual_token', { token: vkManualToken.value });
+    vkManualToken.value = '';
+    vkAuthStatus.value = '✓ Access token применён';
+    vkStore.clear();
+    await fetchConfig();
+  } catch (e) {
+    vkAuthStatus.value = `Ошибка: ${String(e)}`;
+  }
+};
+
+const startVkAuthStepListener = async () => {
+  const generation = ++vkAuthListenerGeneration;
+  unlistenVkAuthStep?.();
+  unlistenVkAuthStep = undefined;
+  const unlisten = await listen<VkAuthStep>('vk-auth-step', async (event) => {
+    console.info('[VK Auth][Frontend] vk-auth-step event received', event.payload.status);
+    try {
+      await applyVkAuthStep(event.payload);
+    } catch (e) {
+      vkAuthStatus.value = `Ошибка: ${String(e)}`;
     }
   });
-});
-
-const handleTokenExtraction = async () => {
-  if (!vkRedirectUrl.value) return;
-  try {
-    const token = await invoke<string>('extract_vk_token', {
-      urlOrToken: vkRedirectUrl.value,
-    });
-    if (config.value.providers.vk) {
-      config.value.providers.vk.credentials = token;
-      vkStore.clear();
-    }
-    isVkLoginActive.value = false;
-    vkRedirectUrl.value = '';
-  } catch (e) {
-    alert(`Ошибка: ${e}`);
+  // The modal may have closed while Tauri was registering the listener.
+  if (generation !== vkAuthListenerGeneration || !props.isOpen) {
+    unlisten();
+  } else {
+    unlistenVkAuthStep = unlisten;
   }
 };
+
+watch(
+  () => props.isOpen,
+  (isOpen) => {
+    if (isOpen) {
+      void startVkAuthStepListener();
+    } else {
+      vkAuthListenerGeneration++;
+      unlistenVkAuthStep?.();
+      unlistenVkAuthStep = undefined;
+    }
+  },
+  { immediate: true },
+);
+
+onUnmounted(() => {
+  vkAuthListenerGeneration++;
+  unlistenVkAuthStep?.();
+  unlistenVkAuthStep = undefined;
+});
 
 const formatThemeDisplayName = (theme: string) => {
   switch (theme) {
