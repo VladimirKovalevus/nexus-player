@@ -1,7 +1,7 @@
 <template>
   <nav :class="$style.nav">
     <button :class="$style.btn" title="Настройки" @click="isSettingsOpen = true">
-      <span :class="$style.icon">⚙️</span>
+      <AppIcon name="settings" :class="$style.icon" />
     </button>
     <button
       v-for="item in navItems"
@@ -10,7 +10,7 @@
       @click="$emit('changeView', item.view)"
       :title="item.label"
     >
-      <span :class="$style.icon">{{ item.icon }}</span>
+      <AppIcon :name="item.icon" :class="$style.icon" />
     </button>
 
 
@@ -21,6 +21,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import SettingsModal from '@/components/SettingsModal.vue';
+import AppIcon from '@/components/common/AppIcon.vue';
 
 defineProps<{
   activeView: string;
@@ -33,13 +34,13 @@ defineEmits<{
 const isSettingsOpen = ref(false);
 
 const navItems = [
-  { view: 'home', icon: '🏠', label: 'Главная' },
-  { view: 'search', icon: '🔍', label: 'Поиск' },
-  { view: 'library', icon: '🎵', label: 'Музыка' },
-  { view: 'playlists', icon: '📋', label: 'Плейлисты' },
-  { view: 'vk', icon: 'VK', label: 'VK Музыка' },
-  { view: 'history', icon: '🕒', label: 'История' },
-  { view: 'downloads', icon: '📥', label: 'Загрузки' },
+  { view: 'home', icon: 'home', label: 'Главная' },
+  { view: 'search', icon: 'search', label: 'Поиск' },
+  { view: 'library', icon: 'music-note', label: 'Музыка' },
+  { view: 'playlists', icon: 'playlist', label: 'Плейлисты' },
+  { view: 'history', icon: 'history', label: 'История' },
+  { view: 'cache', icon: 'album', label: 'Кэш' },
+  { view: 'downloads', icon: 'download-tray', label: 'Загрузки' },
 ];
 </script>
 

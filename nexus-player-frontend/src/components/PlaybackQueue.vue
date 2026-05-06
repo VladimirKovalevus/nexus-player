@@ -5,6 +5,7 @@ import MediaCard from './common/MediaCard.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import VirtualList from './common/VirtualList.vue';
 import MarqueeText from './common/MarqueeText.vue';
+import AppIcon from './common/AppIcon.vue';
 import { useAudioStore } from '../stores/audio';
 import { useThemeStore } from '../stores/theme';
 import type { QueueEntryDto } from '@/types/types';
@@ -321,7 +322,9 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
       <h2 :class="$style.title">В очереди</h2>
 
       <div :class="$style.actionsMenu" v-if="queue.length > 0">
-        <button :class="$style.menuToggle">⋮</button>
+        <button :class="$style.menuToggle">
+          <AppIcon name="more-horizontal" :size="16" style="transform: rotate(90deg)" />
+        </button>
         <div :class="$style.menuContent">
           <button @click="openCreatePlaylistModal">
             Сформировать плейлист
@@ -342,7 +345,7 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
     <div v-if="loading" :class="$style.loading">Загрузка...</div>
     <div v-else-if="error" :class="$style.error">{{ error }}</div>
     <div v-else-if="isEntryEmpty" :class="$style.empty">
-      <div :class="$style.emptyIcon">🎵</div>
+      <div :class="$style.emptyIcon"><AppIcon name="music-note" :size="64" /></div>
       <div :class="$style.emptyText">Очередь пуста</div>
       <div :class="$style.emptyHint">Добавьте треки для воспроизведения</div>
     </div>
@@ -528,6 +531,7 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
     background: transparent;
     border: 1px solid var(--color-border);
     border-radius: $radius-md;
+    clip-path: none !important;
     padding: 0 !important;
     color: var(--color-text-secondary);
     cursor: pointer;

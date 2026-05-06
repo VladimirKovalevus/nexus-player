@@ -203,6 +203,16 @@ impl LibraryService {
         self.track_repo.list_liked(order).await
     }
 
+    /// Get all cached tracks (cache_type = 'cached') with specified ordering
+    pub async fn get_cached_tracks(&self, order: TrackOrder) -> Result<Vec<models::Track>> {
+        self.track_repo.list_cached(order).await
+    }
+
+    /// Get one summary per album that has at least one cached track
+    pub async fn get_cached_albums(&self) -> Result<Vec<models::CachedAlbumSummary>> {
+        self.track_repo.list_cached_albums().await
+    }
+
     /// Search tracks by query
     pub async fn search_tracks(&self, query: &str) -> Result<Vec<models::Track>> {
         self.track_repo.search(query).await
@@ -630,6 +640,10 @@ impl LibraryService {
         offset: usize,
     ) -> Result<Vec<models::PlayHistoryEntry>> {
         self.history_repo.list_recent(limit, offset).await
+    }
+
+    pub async fn clear_play_history(&self) -> Result<()> {
+        self.history_repo.clear().await
     }
 
     pub async fn ensure_artwork_url(&self, url: &str) -> Result<i64> {

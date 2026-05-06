@@ -29,7 +29,6 @@ impl ContentType {
 pub enum StreamingService {
     SoundCloud,
     Bandcamp,
-    Vk,
 }
 
 impl std::fmt::Display for StreamingService {
@@ -37,7 +36,6 @@ impl std::fmt::Display for StreamingService {
         match self {
             Self::SoundCloud => write!(f, "soundcloud"),
             Self::Bandcamp => write!(f, "bandcamp"),
-            Self::Vk => write!(f, "vk"),
         }
     }
 }
@@ -49,7 +47,6 @@ impl std::str::FromStr for StreamingService {
         match s.to_lowercase().as_str() {
             "soundcloud" => Ok(Self::SoundCloud),
             "bandcamp" => Ok(Self::Bandcamp),
-            "vk" => Ok(Self::Vk),
             _ => Err(()),
         }
     }
@@ -60,7 +57,6 @@ impl StreamingService {
         match self {
             Self::SoundCloud => "SoundCloud",
             Self::Bandcamp => "Bandcamp",
-            Self::Vk => "VK",
         }
     }
 
@@ -68,7 +64,6 @@ impl StreamingService {
         match self {
             Self::SoundCloud => format!("scsearch{}", limit),
             Self::Bandcamp => String::new(),
-            Self::Vk => String::new(),
         }
     }
 }

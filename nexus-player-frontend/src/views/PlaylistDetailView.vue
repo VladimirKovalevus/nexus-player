@@ -3,29 +3,35 @@
     <div :class="$style.header">
       <div :class="$style.headerActions">
         <button :class="$style.backButton" @click="emit('back')" title="Назад">
-          ←
+          <AppIcon name="arrow-left" :size="18" />
         </button>
         <div :class="$style.dropdownWrapper">
-          <button ref="actionButtonRef" :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
-          
+          <button ref="actionButtonRef" :class="$style.actionButton" @click.stop="toggleDropdown">
+            <AppIcon name="more-horizontal" :size="18" />
+          </button>
+
           <Teleport to="body">
             <div v-if="dropdownOpen" ref="dropdownPortalRef" :class="$style.dropdown" :style="dropdownStyle" @click.stop @wheel.stop>
               <div v-if="!showPlaylistSubmenu">
                 <button :class="$style.dropdownItem" @click="handleShowPlaylistSubmenu">
-                  <span :class="$style.itemIcon">📋</span>
+                  <span :class="$style.itemIcon"><AppIcon name="playlist" :size="16" /></span>
                   <span :class="$style.itemLabel">Добавить в плейлист</span>
-                  <span :class="$style.itemArrow">›</span>
+                  <AppIcon name="chevron-right" :size="14" :class="$style.itemArrow" />
+                </button>
+                <button :class="$style.dropdownItem" @click="handleCachePlaylist">
+                  <span :class="$style.itemIcon"><AppIcon name="download-tray" :size="16" /></span>
+                  <span :class="$style.itemLabel">Кэшировать плейлист</span>
                 </button>
                 <div :class="$style.divider"></div>
                 <button :class="[$style.dropdownItem, $style.dangerItem]" @click="handleDeletePlaylist">
-                  <span :class="$style.itemIcon">🗑️</span>
+                  <span :class="$style.itemIcon"><AppIcon name="trash" :size="16" /></span>
                   <span :class="$style.itemLabel">Удалить плейлист</span>
                 </button>
               </div>
 
               <div v-else :class="$style.submenu">
                 <button :class="$style.dropdownItem" @click="showPlaylistSubmenu = false">
-                  <span :class="$style.itemIcon">‹</span>
+                  <span :class="$style.itemIcon"><AppIcon name="chevron-left" :size="14" /></span>
                   <span :class="$style.itemLabel">Назад</span>
                 </button>
                 <div :class="$style.divider"></div>
@@ -44,7 +50,7 @@
                   :class="$style.dropdownItem"
                   @click="handleAddToPlaylist(pl.id)"
                 >
-                  <span :class="$style.itemIcon">📋</span>
+                  <span :class="$style.itemIcon"><AppIcon name="playlist" :size="16" /></span>
                   <span :class="$style.itemLabel">{{ pl.title }}</span>
                 </button>
                 <div v-if="playlists.length === 0" :class="$style.emptyPlaylist">
@@ -134,7 +140,7 @@
               @click="subItem.itemType === 'track' ? handleTrackPlay(subItem.track) : emit('navigate', subItem.playlist.id)"
             >
               <span v-if="subItem.itemType === 'track'" :class="$style.trackNumber">{{ trackIdx + 1 }}</span>
-              <span v-else :class="$style.trackNumber">📂</span>
+              <span v-else :class="$style.trackNumber"><AppIcon name="folder" :size="14" /></span>
               
               <div :class="$style.trackInfo">
                 <div :class="$style.trackTitle">
@@ -163,13 +169,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject, reactive, nextTick, computed } from 'vue';
+import { ref, onMounted, inject, reactive, nextTick, computed, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import MediaCard from '@/components/common/MediaCard.vue';
+import AppIcon from '@/components/common/AppIcon.vue';
 import type { PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, TrackDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
+import { useNotificationStore } from '@/stores/notifications';
 
 const audioStore = useAudioStore();
+const notifications = useNotificationStore();
 const props = defineProps<{
   playlistId: number;
 }>();
@@ -184,6 +193,18 @@ const refreshQueue = inject<() => void>('refreshQueue', () => {});
 const playlist = ref<PlaylistDto | null>(null);
 const items = ref<PlaylistItemDto[]>([]);
 const loading = ref(true);
+
+watch(
+  () => audioStore.lastCachedTrack,
+  (info) => {
+    if (!info || !info.success) return;
+    for (const item of items.value) {
+      if (item.itemType === 'track' && item.track.id === info.trackId) {
+        item.track.state = { type: 'cached' };
+      }
+    }
+  },
+);
 
 const expanded = reactive<Record<number, boolean>>({});
 const subPlaylistItems = reactive<Record<number, PlaylistItemDto[]>>({});
@@ -278,6 +299,46 @@ const handleDocumentClick = (e: MouseEvent) => {
   if (dropdownPortalRef.value?.contains(target)) return;
   if (actionButtonRef.value?.contains(target)) return;
   closeDropdown();
+};
+
+const handleCachePlaylist = async () => {
+  if (!playlist.value) return;
+  closeDropdown();
+
+  const title = playlist.value.title;
+  notifications.addNotification(`Начинаю кэширование плейлиста "${title}"`, 'info');
+
+  try {
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const item of items.value) {
+      if (item.itemType === 'track') {
+        try {
+          await invoke('save_track_to_file', { track: item.track });
+          successCount++;
+        } catch (e) {
+          console.error(`Failed to cache track ${item.track.title}:`, e);
+          failCount++;
+        }
+      }
+    }
+
+    if (failCount === 0) {
+      notifications.addNotification(
+        `Плейлист "${title}" поставлен на загрузку (${successCount} треков)`,
+        'success',
+      );
+    } else {
+      notifications.addNotification(
+        `Загрузка "${title}": ${successCount} ок, ${failCount} ошибок`,
+        'info',
+      );
+    }
+  } catch (e) {
+    console.error('Failed to cache playlist:', e);
+    notifications.addNotification(`Ошибка при кэшировании плейлиста: ${e}`, 'error');
+  }
 };
 
 const handleDeletePlaylist = async () => {
@@ -514,6 +575,7 @@ onMounted(() => {
   color: var(--color-text-secondary);
   padding: $spacing-xs $spacing-md;
   border-radius: $radius-sm;
+  clip-path: none !important;
   cursor: pointer;
   font-size: $font-size-sm;
   transition: all $transition-fast;
@@ -533,6 +595,7 @@ onMounted(() => {
   height: 32px;
   padding: 0 !important;
   border-radius: 50%;
+  clip-path: none !important;
   background: transparent;
   border: none;
   color: var(--color-text-secondary);

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+import AppIcon from '@/components/common/AppIcon.vue';
 
 interface PlaylistInitialData {
   title?: string;
@@ -71,7 +72,7 @@ const handleClose = () => {
       <div :class="$style.modal" @click.stop>
         <div :class="$style.header">
           <h2 :class="$style.title">Сформировать плейлист</h2>
-          <button :class="$style.closeButton" @click="handleClose">✕</button>
+          <button :class="$style.closeButton" @click="handleClose"><AppIcon name="close" :size="16" /></button>
         </div>
 
         <div :class="$style.content">

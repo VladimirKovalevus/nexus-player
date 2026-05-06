@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useAudioStore } from '../stores/audio';
 import { invoke } from '@tauri-apps/api/core';
 import WaveformBar from './common/WaveformBar.vue';
+import AppIcon from './common/AppIcon.vue';
 
 // @ts-ignore
 import butterchurn from 'butterchurn/dist/butterchurn.min.js';
@@ -357,18 +358,17 @@ emit("close");
     <div v-if="isOpen" class="player-overlay" :class="{ 'is-fullscreen': isFullscreen }">
       <div class="top-controls">
         <button class="fullscreen-btn" @click="toggleFullscreen" title="Полноэкранный режим">
-          <span v-if="isFullscreen">⛶</span>
-          <span v-else>❐</span>
+          <AppIcon :name="isFullscreen ? 'fullscreen-exit' : 'fullscreen-enter'" :size="18" />
         </button>
 
         <div v-if="isCanvasActive" class="visualizer-tools">
           <button class="tool-btn" @click="isCanvasActive = false" title="Вернуться к обложке">
-            🖼️
+            <AppIcon name="image" :size="16" />
           </button>
-          
+
           <div class="preset-selector">
             <button class="tool-btn preset-btn" @click="togglePresetList" :title="selectedPresetName">
-              🎨 {{ isRandomMode ? `Random (${selectedPresetName})` : selectedPresetName }}
+              <AppIcon name="palette" :size="14" /> {{ isRandomMode ? `Random (${selectedPresetName})` : selectedPresetName }}
             </button>
             
             <div v-if="showPresetList" class="preset-dropdown">
@@ -385,7 +385,7 @@ emit("close");
           </div>
         </div>
 
-        <button class="close-btn" @click="handleClose">↓</button>
+        <button class="close-btn" @click="handleClose"><AppIcon name="close" :size="18" /></button>
       </div>
       
       <div class="main-content">
@@ -397,7 +397,7 @@ emit("close");
                 :src="audioStore.currentTrack.artworkUrl" 
                 class="big-cover"
               />
-              <div v-else class="big-cover-placeholder">🎵</div>
+              <div v-else class="big-cover-placeholder"><AppIcon name="music-note" :size="128" /></div>
             </div>
             <div v-else key="canvas" class="canvas-wrapper">
               <div v-if="butterchurnError" class="error-msg">
@@ -416,14 +416,14 @@ emit("close");
 
         <div class="playback-controls">
           <button class="control-btn" @click="playPrevious">
-            <img src="/icon/prev.svg">
+            <AppIcon name="prev" :size="24" />
           </button>
           <button class="control-btn play-btn" @click="togglePlayPause">
-            <img v-if="!audioStore.isPlaying" src="/icon/play.svg">
-            <img v-else src="/icon/pause.svg">
+            <AppIcon v-if="!audioStore.isPlaying" name="play" :size="32" />
+            <AppIcon v-else name="pause" :size="32" />
           </button>
           <button class="control-btn" @click="playNext">
-            <img src="/icon/next.svg">
+            <AppIcon name="next" :size="24" />
           </button>
         </div>
 
@@ -436,7 +436,7 @@ emit("close");
         </div>
 
         <div class="volume-section">
-          <img src="/icon/volume.svg" class="volume-icon">
+          <AppIcon name="volume-high" :size="20" class="volume-icon" />
           <input
             type="range"
             class="volume-slider"

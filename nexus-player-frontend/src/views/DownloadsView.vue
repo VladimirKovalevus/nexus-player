@@ -41,7 +41,7 @@
         </div>
 
         <button :class="$style.removeBtn" @click="removeTask(task)" title="Удалить">
-          ✕
+          <AppIcon name="close" :size="16" />
         </button>
       </div>
     </div>
@@ -53,6 +53,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { TaskInfoDto } from '@/types/types';
+import AppIcon from '@/components/common/AppIcon.vue';
 
 const tasks = ref<TaskInfoDto[]>([]);
 

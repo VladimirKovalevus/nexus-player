@@ -14,6 +14,10 @@ export interface TrackSourceDto {
   system: string;
 }
 
+export interface TrackStateDto {
+  type: 'saved' | 'streaming' | 'cached';
+}
+
 export interface TrackDto {
   id: number;
   title: string;
@@ -23,9 +27,16 @@ export interface TrackDto {
   artworkUrl: string | null;
   playCount: number;
   liked: boolean;
-  state: string;
+  state: TrackStateDto;
   source?: TrackSourceDto | null;
   unavailable?: boolean;
+}
+
+export interface CachedAlbumDto {
+  title: string;
+  artist: string | null;
+  artworkUrl: string | null;
+  cachedTrackCount: number;
 }
 
 export interface MusicSourceDto {
@@ -197,7 +208,6 @@ export interface ProviderSettings {
 export interface ProviderConfig {
   soundcloud: ProviderSettings;
   bandcamp: ProviderSettings;
-  vk: ProviderSettings;
 }
 
 export interface AudioConfig {

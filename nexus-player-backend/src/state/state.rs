@@ -1530,6 +1530,16 @@ impl AppState {
         self.library.get_all_tracks(order).await
     }
 
+    pub async fn get_cached_library_tracks(&self, order: TrackOrder) -> Result<Vec<LibraryTrack>> {
+        self.library.get_cached_tracks(order).await
+    }
+
+    pub async fn get_cached_library_albums(
+        &self,
+    ) -> Result<Vec<crate::library::models::CachedAlbumSummary>> {
+        self.library.get_cached_albums().await
+    }
+
     pub async fn search_library_tracks(&self, query: &str) -> Result<Vec<LibraryTrack>> {
         self.library.search_tracks(query).await
     }
@@ -1707,6 +1717,10 @@ impl AppState {
         offset: usize,
     ) -> anyhow::Result<Vec<PlayHistoryEntry>> {
         self.library.get_play_history(limit, offset).await
+    }
+
+    pub async fn clear_play_history(&self) -> anyhow::Result<()> {
+        self.library.clear_play_history().await
     }
 
     // --- Legacy / Missing Methods Stub ---

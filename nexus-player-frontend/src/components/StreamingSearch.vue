@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { SearchResult } from '@/types/types';
 import MediaCard from '@/components/common/MediaCard.vue';
+import AppIcon from '@/components/common/AppIcon.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import { storeToRefs } from 'pinia';
 import { useStreamingStore } from '@/stores/streaming';
@@ -33,7 +34,6 @@ const expandedContainers = ref<Set<number>>(new Set());
 const providers = [
   { value: 'bandcamp', label: 'Bandcamp' },
   { value: 'soundcloud', label: 'SoundCloud' },
-  { value: 'vk', label: 'VK' },
 ];
 
 const contentTypes = [
@@ -369,11 +369,11 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
     <div v-if="searchResults.length > 0" :class="$style.results">
       <div :class="$style.resultsHeader">
         <button v-if="offset > 0" @click="prevPage" :class="$style.paginationBtn" title="Previous page">
-          ←
+          <AppIcon name="arrow-left" :size="16" />
         </button>
         <h3 :class="$style.resultsTitle">Results ({{ searchResults.length }}) - Page {{ currentPage }}</h3>
         <button v-if="searchResults.length >= limit" @click="nextPage" :class="$style.paginationBtn" title="Next page">
-          →
+          <AppIcon name="arrow-right" :size="16" />
         </button>
       </div>
       <div :class="$style.resultsList">

@@ -16,12 +16,12 @@
           :class="$style.showAll"
           @click.prevent="showAllPlaylists"
         >
-          Показать всё →
+          Показать всё <AppIcon name="arrow-right" :size="14" />
         </a>
       </div>
 
       <div v-if="playlists.length === 0" :class="$style.emptyState">
-        <div :class="$style.emptyIcon">📂</div>
+        <div :class="$style.emptyIcon"><AppIcon name="folder" :size="64" /></div>
         <div :class="$style.emptyTitle">Данных нет</div>
         <div :class="$style.emptyHint">Добавьте новый плейлист</div>
         <button :class="$style.addButton" @click="handleAddPlaylist">
@@ -89,13 +89,14 @@
             @click="toggleSort"
           >
             <span>{{ currentSortLabel }}</span>
-            <span
+            <AppIcon
+              name="chevron-up"
+              :size="10"
               :class="[
                 $style.arrow,
                 sortDirection === 'desc' && $style.arrowDown,
               ]"
-              >▲</span
-            >
+            />
           </div>
         </div>
       </div>
@@ -106,7 +107,7 @@
           :disabled="pageCursor.currentPage === 0"
           @click="goToPage(pageCursor.currentPage - 1)"
         >
-          ‹
+          <AppIcon name="chevron-left" :size="14" />
         </button>
         <span :class="$style.pageInfo">
           {{ pageCursor.currentPage + 1 }} / {{ pageCursor.totalPages }}
@@ -116,12 +117,12 @@
           :disabled="pageCursor.currentPage >= pageCursor.totalPages - 1"
           @click="goToPage(pageCursor.currentPage + 1)"
         >
-          ›
+          <AppIcon name="chevron-right" :size="14" />
         </button>
       </div>
 
       <div v-if="tracks.length === 0" :class="$style.emptyState">
-        <div :class="$style.emptyIcon">🎵</div>
+        <div :class="$style.emptyIcon"><AppIcon name="music-note" :size="64" /></div>
         <div :class="$style.emptyTitle">Данных нет</div>
         <div :class="$style.emptyHint">Добавьте новый трек</div>
         <button :class="$style.addButton" @click="handleAddTrack">
@@ -165,6 +166,7 @@ import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
 import PlaylistCreateModal from '@/components/PlaylistCreateModal.vue';
 import VirtualList from '@/components/common/VirtualList.vue';
 import VirtualHorizontalList from '@/components/common/VirtualHorizontalList.vue';
+import AppIcon from '@/components/common/AppIcon.vue';
 import type {
   PlaylistDto,
   TrackDto,
@@ -192,6 +194,15 @@ watch(
     if (trackId === null) return;
     const track = tracks.value.find((t) => t.id === trackId);
     if (track) track.unavailable = true;
+  },
+);
+
+watch(
+  () => audioStore.lastCachedTrack,
+  (info) => {
+    if (!info || !info.success) return;
+    const track = tracks.value.find((t) => t.id === info.trackId);
+    if (track) track.state = { type: 'cached' };
   },
 );
 const error = ref<string | null>(null);

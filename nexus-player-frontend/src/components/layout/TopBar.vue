@@ -2,7 +2,7 @@
   <header :class="$style.topbar">
     <div ref="searchContainerRef" :class="$style.searchContainer">
       <div :class="$style.search">
-        <span :class="$style.searchIcon">🔍</span>
+        <AppIcon name="search" :size="18" :class="$style.searchIcon" />
         <input
           type="text"
           :class="$style.searchInput"
@@ -16,7 +16,7 @@
           :class="$style.clearButton"
           @click="clearSearch"
         >
-          ✕
+          <AppIcon name="close" :size="16" />
         </button>
       </div>
 
@@ -26,7 +26,6 @@
           <select v-model="selectedProvider" :class="$style.filterSelect">
             <option value="bandcamp">Bandcamp</option>
             <option value="soundcloud">SoundCloud</option>
-            <option value="vk">VK</option>
           </select>
         </div>
 
@@ -57,7 +56,9 @@
       >
         <div :class="$style.resultsHeader">
           <span>{{ searchResults.length }} results</span>
-          <button @click="closeResults" :class="$style.closeButton">✕</button>
+          <button @click="closeResults" :class="$style.closeButton">
+            <AppIcon name="close" :size="16" />
+          </button>
         </div>
         <div :class="$style.resultsList">
           <div
@@ -73,15 +74,15 @@
                 :alt="result.type === 'channel' ? result.name : result.title"
               />
               <div v-else :class="$style.thumbnailPlaceholder">
-                {{ result.type === 'channel' ? '👤' : '🎵' }}
+                <AppIcon :name="result.type === 'channel' ? 'user' : 'music-note'" :size="20" />
               </div>
             </div>
 
             <div :class="$style.resultContent">
               <div :class="$style.resultTitle">
-                <template v-if="result.type === 'playlist'">📂</template>
-                <template v-else-if="result.type === 'album'">💿</template>
-                <template v-else-if="result.type === 'channel'">📺</template>
+                <AppIcon v-if="result.type === 'playlist'" name="playlist" :size="14" />
+                <AppIcon v-else-if="result.type === 'album'" name="album" :size="14" />
+                <AppIcon v-else-if="result.type === 'channel'" name="channel" :size="14" />
                 {{ result.type === 'channel' ? result.name : result.title }}
               </div>
               <div :class="$style.resultMeta">
@@ -110,7 +111,7 @@
 
     <div :class="$style.user">
       <button :class="$style.userButton">
-        <span :class="$style.userAvatar">👤</span>
+        <span :class="$style.userAvatar"><AppIcon name="user" :size="18" /></span>
       </button>
     </div>
   </header>
@@ -121,6 +122,7 @@ import { computed, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { onClickOutside } from '@vueuse/core';
 import type { SearchResult } from '@/types/types';
+import AppIcon from '@/components/common/AppIcon.vue';
 
 const text = computed(()=>(window.innerWidth+"-"+window.innerHeight)||'none')
 const searchQuery = ref('');
@@ -285,6 +287,7 @@ const formatNumber = (num?: number): string => {
   cursor: pointer;
   padding: $spacing-xs;
   border-radius: 50%;
+  clip-path: none !important;
   font-size: $font-size-base;
   transition: all $transition-fast;
 
@@ -376,6 +379,7 @@ const formatNumber = (num?: number): string => {
   padding: $spacing-xs;
   font-size: $font-size-base;
   border-radius: 50%;
+  clip-path: none !important;
   transition: all $transition-fast;
 
   &:hover {

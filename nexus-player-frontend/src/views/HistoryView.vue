@@ -2,9 +2,14 @@
   <div :class="$style.historyView" class="history-scroll-container">
     <header :class="$style.header">
       <h1 :class="$style.title">История</h1>
-      <button :class="$style.refreshButton" @click="fetchHistory" :disabled="loading">
-        {{ loading ? 'Загрузка...' : 'Обновить' }}
-      </button>
+      <div :class="$style.actions">
+        <button :class="$style.clearButton" @click="handleClearHistory" :disabled="loading || historyEntries.length === 0">
+          Очистить
+        </button>
+        <button :class="$style.refreshButton" @click="() => fetchHistory(page)" :disabled="loading">
+          {{ loading ? 'Загрузка...' : 'Обновить' }}
+        </button>
+      </div>
     </header>
 
     <div v-if="error" :class="$style.error">{{ error }}</div>
@@ -29,7 +34,7 @@
                 decoding="async"
                 loading="lazy"
               />
-              <div v-else :class="$style.artworkPlaceholder">🎵</div>
+              <div v-else :class="$style.artworkPlaceholder"><AppIcon name="music-note" :size="24" /></div>
 
               <div :class="$style.info">
                 <div :class="$style.trackTitle">{{ entry.title }}</div>
@@ -50,6 +55,24 @@
     <div v-if="!loading && historyEntries.length === 0" :class="$style.empty">
       История воспроизведения пуста.
     </div>
+
+    <div v-if="historyEntries.length > 0 || page > 0" :class="$style.pagination">
+      <button
+        :class="$style.pageButton"
+        :disabled="loading || page === 0"
+        @click="goToPage(page - 1)"
+      >
+        Назад
+      </button>
+      <span :class="$style.pageIndicator">Страница {{ page + 1 }}</span>
+      <button
+        :class="$style.pageButton"
+        :disabled="loading || historyEntries.length < pageSize"
+        @click="goToPage(page + 1)"
+      >
+        Вперёд
+      </button>
+    </div>
   </div>
 </template>
 
@@ -57,6 +80,7 @@
 import { ref, onMounted, inject } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import VirtualList from '@/components/common/VirtualList.vue';
+import AppIcon from '@/components/common/AppIcon.vue';
 import type { PlayHistoryEntryDto } from '@/types/types';
 import { useNotificationStore } from '@/stores/notifications';
 
@@ -66,16 +90,44 @@ const notifications = useNotificationStore();
 const historyEntries = ref<PlayHistoryEntryDto[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
+const page = ref(0);
+const pageSize = 50;
 
-const fetchHistory = async () => {
+const fetchHistory = async (targetPage: number) => {
   loading.value = true;
   error.value = null;
   try {
-    const result = await invoke<PlayHistoryEntryDto[]>('get_play_history', { limit: 50 });
+    const result = await invoke<PlayHistoryEntryDto[]>('get_play_history', {
+      limit: pageSize,
+      offset: targetPage * pageSize,
+    });
     historyEntries.value = result;
+    page.value = targetPage;
   } catch (e) {
     console.error('Failed to fetch history:', e);
     error.value = `Ошибка: ${e}`;
+  } finally {
+    loading.value = false;
+  }
+};
+
+const goToPage = (targetPage: number) => {
+  if (targetPage < 0) return;
+  fetchHistory(targetPage);
+};
+
+const handleClearHistory = async () => {
+  loading.value = true;
+  error.value = null;
+  try {
+    await invoke('clear_play_history');
+    historyEntries.value = [];
+    page.value = 0;
+    notifications.addNotification('История очищена', 'success');
+  } catch (e) {
+    console.error('Failed to clear history:', e);
+    error.value = `Ошибка: ${e}`;
+    notifications.addNotification('Не удалось очистить историю', 'error');
   } finally {
     loading.value = false;
   }
@@ -108,7 +160,7 @@ const formatTime = (timestamp: number) => {
   return date.toLocaleString();
 };
 
-onMounted(fetchHistory);
+onMounted(() => fetchHistory(0));
 </script>
 
 <style module lang="scss">
@@ -132,6 +184,11 @@ onMounted(fetchHistory);
   color: var(--color-text-primary);
 }
 
+.actions {
+  @include flex-start;
+  gap: $spacing-md;
+}
+
 .refreshButton {
   padding: $spacing-sm $spacing-lg;
   background-color: var(--color-bg-secondary);
@@ -139,10 +196,63 @@ onMounted(fetchHistory);
   border-radius: $radius-md;
   color: var(--color-text-primary);
   cursor: pointer;
-  
+
   &:hover {
     background-color: var(--color-bg-hover);
   }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.clearButton {
+  padding: $spacing-sm $spacing-lg;
+  background-color: transparent;
+  border: 1px solid #ef4444;
+  border-radius: $radius-md;
+  color: #ef4444;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background-color: rgba(239, 68, 68, 0.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.pagination {
+  @include flex-center;
+  gap: $spacing-lg;
+  margin-top: $spacing-xl;
+  padding-bottom: $spacing-lg;
+}
+
+.pageButton {
+  padding: $spacing-sm $spacing-lg;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: $radius-md;
+  color: var(--color-text-primary);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background-color: var(--color-bg-hover);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.pageIndicator {
+  color: var(--color-text-secondary);
+  font-size: $font-size-sm;
 }
 
 .list {

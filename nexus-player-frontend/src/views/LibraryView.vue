@@ -13,9 +13,9 @@
 
     <div :class="$style.searchRow">
       <label :class="$style.search">
-        <span>🔍</span>
+        <AppIcon name="search" :size="18" />
         <input v-model="query" type="search" placeholder="Поиск по названию, исполнителю или альбому" />
-        <button v-if="query" title="Очистить поиск" @click="query = ''">×</button>
+        <button v-if="query" title="Очистить поиск" @click="query = ''"><AppIcon name="close" :size="16" /></button>
       </label>
       <div :class="$style.sortControls">
         <select v-model="sortField" aria-label="Сортировка локальной музыки">
@@ -27,20 +27,20 @@
           :disabled="sortField === 'catalog'"
           :title="sortDirection === 'asc' ? 'По возрастанию' : 'По убыванию'"
           @click="sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'"
-        >{{ sortDirection === 'asc' ? '↑' : '↓' }}</button>
+        ><AppIcon :name="sortDirection === 'asc' ? 'arrow-up' : 'arrow-down'" :size="16" /></button>
       </div>
     </div>
 
     <section v-if="!isAndroid && sources.length" :class="$style.sources">
       <div v-for="source in sources" :key="source.id" :class="$style.source">
         <span>{{ source.path }}</span>
-        <button v-if="!source.isDefault" title="Удалить источник" @click="removeSource(source.id)">×</button>
+        <button v-if="!source.isDefault" title="Удалить источник" @click="removeSource(source.id)"><AppIcon name="close" :size="14" /></button>
       </div>
     </section>
 
     <div v-if="error" :class="$style.error">{{ error }}</div>
     <div v-else-if="!loading && visibleTracks.length === 0" :class="$style.empty">
-      <span>🎵</span>
+      <AppIcon name="music-note" :size="48" />
       <strong>{{ tracks.length ? 'Ничего не найдено' : 'Аудиофайлы не найдены' }}</strong>
       <p>{{ tracks.length ? 'Попробуйте изменить поисковый запрос.' : 'Нажмите «Обновить», чтобы выполнить поиск.' }}</p>
     </div>
@@ -66,6 +66,7 @@ import { computed, inject, onMounted, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import MediaCard from '@/components/common/MediaCard.vue';
 import VirtualList from '@/components/common/VirtualList.vue';
+import AppIcon from '@/components/common/AppIcon.vue';
 import { useAudioStore } from '@/stores/audio';
 import type { AndroidMediaEntry, LocalScanResult, MusicSourceDto, TrackDto } from '@/types/types';
 

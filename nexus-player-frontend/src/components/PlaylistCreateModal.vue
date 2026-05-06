@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import AppIcon from '@/components/common/AppIcon.vue';
 
 import type { TrackDto } from '@/types/types';
 
@@ -94,7 +95,7 @@ const formatDuration = (seconds: number | null): string => {
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h2>Создать плейлист</h2>
-          <button class="close-btn" @click="handleClose">✕</button>
+          <button class="close-btn" @click="handleClose"><AppIcon name="close" :size="16" /></button>
         </div>
 
         <div class="modal-body">

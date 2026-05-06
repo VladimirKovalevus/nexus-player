@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import AppIcon from '@/components/common/AppIcon.vue';
 
 const emit = defineEmits<{
   'playlist-loaded-to-queue': []
@@ -108,7 +109,7 @@ defineExpose({ reloadPlaylists });
         </div>
         <div class="playlist-actions">
           <button class="menu-button" @click="toggleMenu(playlist.id, $event)">
-            <span class="dots">⋮</span>
+            <AppIcon name="more-horizontal" :size="16" class="dots" style="transform: rotate(90deg)" />
           </button>
           <div v-if="openMenuId === playlist.id" class="dropdown-menu">
             <button class="menu-item delete" @click="deletePlaylist(playlist.id, $event)">
@@ -205,6 +206,7 @@ h2 {
   cursor: pointer;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
+  clip-path: none !important;
   color: #666;
   font-size: 1.25rem;
   line-height: 1;

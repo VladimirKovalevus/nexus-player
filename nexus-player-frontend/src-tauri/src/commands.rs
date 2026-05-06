@@ -3,11 +3,11 @@ use nexus_player_backend::sync::{
 };
 
 use crate::dto::{
-    AudioStateDto, ContainerMetaDto, CreatePlaylistRequest, CreatePlaylistWithTracksRequest,
-    CurrentPositionDto, EqPresetDto, EqSettingsDto, LibraryPageDto, PlayHistoryEntryDto,
-    PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, PlaylistWithTracksDto, QueueEntryDto,
-    QueueStateDto, SearchContextDto, SearchResultDto, TaskInfoDto, TrackDto, TrackSourceDto,
-    hash_str_to_i64,
+    AudioStateDto, CachedAlbumDto, ContainerMetaDto, CreatePlaylistRequest,
+    CreatePlaylistWithTracksRequest, CurrentPositionDto, EqPresetDto, EqSettingsDto,
+    LibraryPageDto, PlayHistoryEntryDto, PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto,
+    PlaylistWithTracksDto, QueueEntryDto, QueueStateDto, SearchContextDto, SearchResultDto,
+    TaskInfoDto, TrackDto, TrackSourceDto, hash_str_to_i64,
 };
 use crate::events::FrontendEvent;
 use nexus_player_backend::library::local_library::{AndroidMediaEntry, MusicSource, ScanResult};
@@ -25,34 +25,6 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 type Result<T> = std::result::Result<T, String>;
 
-pub struct VkAuthState(pub tokio::sync::Mutex<Option<PendingVkAuth>>);
-
-pub struct PendingVkAuth {
-    auth: vk_api::AndroidAuth,
-    login: String,
-    password: String,
-    challenge: PendingVkChallenge,
-}
-
-enum PendingVkChallenge {
-    Captcha(vk_api::CaptchaRequired),
-    Verification(vk_api::VerificationRequired),
-}
-
-#[derive(Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase", tag = "status")]
-pub enum VkAuthStepDto {
-    Authorized,
-    CaptchaRequired {
-        url: String,
-        interactive: bool,
-    },
-    VerificationRequired {
-        method: String,
-        phone_mask: Option<String>,
-    },
-}
-
 #[tauri::command]
 pub async fn get_all_tracks(
     state: State<'_, Arc<AppState>>,
@@ -64,6 +36,29 @@ pub async fn get_all_tracks(
         .map_err(|e| e.to_string())?;
 
     Ok(tracks.into_iter().map(|t| t.into()).collect())
+}
+
+#[tauri::command]
+pub async fn get_cached_tracks(
+    state: State<'_, Arc<AppState>>,
+    order: Option<TrackOrder>,
+) -> Result<Vec<TrackDto>> {
+    let tracks = state
+        .get_cached_library_tracks(order.unwrap_or_default())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(tracks.into_iter().map(|t| t.into()).collect())
+}
+
+#[tauri::command]
+pub async fn get_cached_albums(state: State<'_, Arc<AppState>>) -> Result<Vec<CachedAlbumDto>> {
+    let albums = state
+        .get_cached_library_albums()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(albums.into_iter().map(|a| a.into()).collect())
 }
 
 #[tauri::command]
@@ -1075,301 +1070,6 @@ pub async fn handle_streaming_track(
 
 use nexus_player_backend::config::AppConfig;
 
-async fn persist_vk_session(state: &Arc<AppState>, tokens: vk_api::TokenSet) -> Result<()> {
-    tracing::info!(target: "vk_auth", user_id = tokens.user_id, expires_at = tokens.expires_at, "persisting VK session");
-    let credentials = serde_json::to_string(&tokens).map_err(|error| error.to_string())?;
-    state
-        .streaming()
-        .update_provider_auth("vk", credentials.clone())
-        .await;
-    let mut config = state.config();
-    config.providers.vk.credentials = Some(credentials);
-    let result = state
-        .update_config(config)
-        .await
-        .map_err(|error| error.to_string());
-    tracing::info!(target: "vk_auth", success = result.is_ok(), "VK session persistence finished");
-    result
-}
-
-async fn finish_vk_auth_step(
-    result: vk_api::LoginResult,
-    auth: vk_api::AndroidAuth,
-    login: String,
-    password: String,
-    auth_state: &VkAuthState,
-    app_state: &Arc<AppState>,
-) -> Result<VkAuthStepDto> {
-    match result {
-        vk_api::LoginResult::Authorized(tokens) => {
-            tracing::info!(target: "vk_auth", "Tauri received authorized step");
-            *auth_state.0.lock().await = None;
-            persist_vk_session(app_state, tokens).await?;
-            Ok(VkAuthStepDto::Authorized)
-        }
-        vk_api::LoginResult::CaptchaRequired(challenge) => {
-            let interactive = challenge.redirect_uri.is_some();
-            tracing::warn!(target: "vk_auth", interactive, context = ?challenge.context, sid_length = challenge.sid.len(), "Tauri received captcha-required step");
-            let url = challenge
-                .redirect_uri
-                .clone()
-                .or_else(|| challenge.image_url.clone())
-                .ok_or_else(|| "VK captcha response does not contain a URL".to_string())?;
-            *auth_state.0.lock().await = Some(PendingVkAuth {
-                auth,
-                login,
-                password,
-                challenge: PendingVkChallenge::Captcha(challenge),
-            });
-            Ok(VkAuthStepDto::CaptchaRequired { url, interactive })
-        }
-        vk_api::LoginResult::VerificationRequired(verification) => {
-            tracing::warn!(target: "vk_auth", method = %verification.method, has_phone_mask = verification.phone_mask.is_some(), "Tauri received verification-required step");
-            let step = VkAuthStepDto::VerificationRequired {
-                method: verification.method.clone(),
-                phone_mask: verification.phone_mask.clone(),
-            };
-            *auth_state.0.lock().await = Some(PendingVkAuth {
-                auth,
-                login,
-                password,
-                challenge: PendingVkChallenge::Verification(verification),
-            });
-            Ok(step)
-        }
-    }
-}
-
-#[tauri::command]
-pub async fn start_vk_auth(
-    login: String,
-    password: String,
-    auth_state: State<'_, VkAuthState>,
-    app_state: State<'_, Arc<AppState>>,
-) -> Result<VkAuthStepDto> {
-    tracing::info!(target: "vk_auth", "start_vk_auth command received");
-    if login.trim().is_empty() || password.is_empty() {
-        tracing::warn!(target: "vk_auth", "start_vk_auth rejected empty credentials");
-        return Err("Введите логин и пароль VK".into());
-    }
-    *auth_state.0.lock().await = None;
-    let auth = vk_api::AndroidAuth::for_session(None)
-        .await
-        .map_err(|error| {
-            tracing::error!(target: "vk_auth", error = %error, "failed to initialize VK auth");
-            error.to_string()
-        })?;
-    let result = auth
-        .login_password(login.trim(), &password)
-        .await
-        .map_err(|error| {
-            tracing::error!(target: "vk_auth", error = %error, "VK password authorization failed");
-            error.to_string()
-        })?;
-    finish_vk_auth_step(
-        result,
-        auth,
-        login.trim().to_string(),
-        password,
-        &auth_state,
-        &app_state,
-    )
-    .await
-}
-
-#[tauri::command]
-pub async fn submit_vk_captcha_result(
-    app: AppHandle,
-    success_token: String,
-    auth_state: State<'_, VkAuthState>,
-    app_state: State<'_, Arc<AppState>>,
-) -> Result<VkAuthStepDto> {
-    tracing::info!(target: "vk_auth", token_length = success_token.len(), "submit_vk_captcha_result command received");
-    let pending = auth_state.0.lock().await.take().ok_or_else(|| {
-        tracing::error!(target: "vk_auth", "captcha result received without pending auth session");
-        "VK authorization session expired".to_string()
-    })?;
-    let PendingVkChallenge::Captcha(challenge) = pending.challenge else {
-        return Err("VK authorization is not waiting for captcha".into());
-    };
-    let result = pending
-        .auth
-        .login_password_after_captcha(
-            &pending.login,
-            &pending.password,
-            &challenge,
-            &success_token,
-        )
-        .await
-        .map_err(|error| {
-            tracing::error!(target: "vk_auth", error = %error, "VK authorization after captcha failed");
-            error.to_string()
-        })?;
-    let step = finish_vk_auth_step(
-        result,
-        pending.auth,
-        pending.login,
-        pending.password,
-        &auth_state,
-        &app_state,
-    )
-    .await?;
-    // Hide the WebView that produced this token before publishing the next
-    // auth step. Otherwise a repeated captcha can open a new window which is
-    // then accidentally closed here instead of the old one.
-    if let Some(window) = app.get_webview_window("vk-captcha") {
-        tracing::info!(target: "vk_auth", "hiding desktop VK captcha window");
-        let _ = window.hide();
-    }
-    tracing::info!(target: "vk_auth", "emitting vk-auth-step after captcha");
-    let _ = app.emit("vk-auth-step", step.clone());
-    Ok(step)
-}
-
-#[tauri::command]
-pub async fn continue_vk_verification(
-    code: String,
-    auth_state: State<'_, VkAuthState>,
-    app_state: State<'_, Arc<AppState>>,
-) -> Result<VkAuthStepDto> {
-    tracing::info!(target: "vk_auth", code_length = code.trim().len(), "continue_vk_verification command received");
-    let pending = auth_state
-        .0
-        .lock()
-        .await
-        .take()
-        .ok_or_else(|| "VK authorization session expired".to_string())?;
-    let PendingVkChallenge::Verification(verification) = pending.challenge else {
-        return Err("VK authorization is not waiting for a verification code".into());
-    };
-    let result = pending
-        .auth
-        .continue_with_code(
-            &pending.login,
-            &pending.password,
-            &verification,
-            code.trim(),
-        )
-        .await
-        .map_err(|error| error.to_string())?;
-    finish_vk_auth_step(
-        result,
-        pending.auth,
-        pending.login,
-        pending.password,
-        &auth_state,
-        &app_state,
-    )
-    .await
-}
-
-#[tauri::command]
-pub async fn cancel_vk_auth(auth_state: State<'_, VkAuthState>, app: AppHandle) -> Result<()> {
-    tracing::info!(target: "vk_auth", "cancelling VK authorization");
-    *auth_state.0.lock().await = None;
-    if let Some(window) = app.get_webview_window("vk-captcha") {
-        let _ = window.hide();
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn set_vk_manual_token(token: String, app_state: State<'_, Arc<AppState>>) -> Result<()> {
-    tracing::info!(target: "vk_auth", token_length = token.trim().len(), "manual VK token command received");
-    let token = token.trim();
-    if token.is_empty() {
-        return Err("VK token is empty".into());
-    }
-    app_state
-        .streaming()
-        .update_provider_auth("vk", token.to_string())
-        .await;
-    let mut config = app_state.config();
-    config.providers.vk.credentials = Some(token.to_string());
-    app_state
-        .update_config(config)
-        .await
-        .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-pub async fn open_vk_captcha_window(app: AppHandle, url: String) -> Result<()> {
-    #[cfg(desktop)]
-    {
-        tracing::info!(target: "vk_auth", "opening desktop VK captcha WebView");
-        let url = url
-            .parse::<tauri::Url>()
-            .map_err(|error| error.to_string())?;
-        if let Some(window) = app.get_webview_window("vk-captcha") {
-            tracing::info!(target: "vk_auth", "reusing existing desktop VK captcha WebView");
-            window.navigate(url).map_err(|error| error.to_string())?;
-            window.show().map_err(|error| error.to_string())?;
-            window.set_focus().map_err(|error| error.to_string())?;
-            return Ok(());
-        }
-        tracing::info!(target: "vk_auth", "creating desktop VK captcha WebView");
-        let script = r#"
-          (function () {
-            if (window.__nexusVkCaptchaInstalled) return;
-            window.__nexusVkCaptchaInstalled = true;
-            console.info('[VK Auth][Captcha WebView] interception installed');
-            let sent = false;
-            function submit(value) {
-              if (sent || !value) return;
-              sent = true;
-              console.info('[VK Auth][Captcha WebView] success token detected, submitting');
-              window.__TAURI__.core.invoke('submit_vk_captcha_result', { successToken: value })
-                .then(function (step) { console.info('[VK Auth][Captcha WebView] result accepted', step?.status); })
-                .catch(function (error) {
-                  sent = false;
-                  console.error('[VK Auth][Captcha WebView] result rejected', error);
-                });
-            }
-            function inspect(data) {
-              try {
-                const value = typeof data === 'string' ? JSON.parse(data) : data;
-                submit(value?.response?.success_token || value?.success_token || value?.token);
-              } catch (_) {}
-            }
-            const originalFetch = window.fetch;
-            window.fetch = async function () {
-              const response = await originalFetch.apply(this, arguments);
-              try { inspect(await response.clone().json()); } catch (_) {}
-              return response;
-            };
-            const originalOpen = XMLHttpRequest.prototype.open;
-            XMLHttpRequest.prototype.open = function () {
-              this.addEventListener('load', function () { inspect(this.responseText); });
-              return originalOpen.apply(this, arguments);
-            };
-            const timer = setInterval(function () {
-              if (window.VKCaptcha) {
-                console.info('[VK Auth][Captcha WebView] VKCaptcha callback found');
-                window.VKCaptcha.onResult = function (result) {
-                  inspect(result);
-                  if (typeof result === 'string') submit(result);
-                };
-                clearInterval(timer);
-              }
-            }, 250);
-          })();
-        "#;
-        tauri::WebviewWindowBuilder::new(&app, "vk-captcha", tauri::WebviewUrl::External(url))
-            .title("VK Captcha")
-            .inner_size(520.0, 720.0)
-            .always_on_top(true)
-            .initialization_script(script)
-            .build()
-            .map_err(|error| error.to_string())?;
-        Ok(())
-    }
-    #[cfg(not(desktop))]
-    {
-        let _ = (app, url);
-        Err("VK captcha WebView is provided by the Android plugin".into())
-    }
-}
-
 #[tauri::command]
 pub fn get_app_config(state: State<'_, Arc<AppState>>) -> Result<AppConfig> {
     Ok(state.config())
@@ -1403,9 +1103,6 @@ pub async fn update_provider_auth(
     match provider.as_str() {
         "soundcloud" => {
             config.providers.soundcloud.credentials = Some(auth_data);
-        }
-        "vk" => {
-            config.providers.vk.credentials = Some(auth_data);
         }
         "bandcamp" => {
             config.providers.bandcamp.credentials = Some(auth_data);
@@ -1481,42 +1178,6 @@ pub async fn retry_playback(state: State<'_, Arc<AppState>>) -> Result<()> {
 }
 
 #[tauri::command]
-pub async fn get_vk_profile(
-    state: State<'_, Arc<AppState>>,
-) -> Result<(Vec<TrackDto>, Vec<PlaylistDto>)> {
-    tracing::info!("get_vk_profile command called");
-    let vk_provider = state.streaming().get_provider("vk").ok_or_else(|| {
-        tracing::error!("VK provider not found in streaming service");
-        "VK provider not found".to_string()
-    })?;
-
-    let (tracks, playlists) = vk_provider.get_profile_content().await.map_err(|e| {
-        tracing::error!("Failed to get VK profile content from provider: {}", e);
-        e.to_string()
-    })?;
-
-    tracing::info!(
-        "Successfully retrieved VK profile data. Converting {} tracks and {} playlists to DTOs...",
-        tracks.len(),
-        playlists.len()
-    );
-
-    let audio_tracks: Vec<nexus_player_backend::audio::types::Track> =
-        tracks.into_iter().map(Into::into).collect();
-    let enriched_tracks = state
-        .enrich_tracks(audio_tracks)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let tracks_dto = enriched_tracks.into_iter().map(TrackDto::from).collect();
-    let playlists_dto = playlists.into_iter().map(PlaylistDto::from).collect();
-
-    tracing::info!("Conversion complete.");
-
-    Ok((tracks_dto, playlists_dto))
-}
-
-#[tauri::command]
 pub async fn save_track_to_file(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
@@ -1535,6 +1196,15 @@ pub async fn save_track_to_file(
     } else {
         track.id
     };
+
+    if let Ok(Some(lib_track)) = state.library().get_track(TrackId(track_id)).await {
+        if let CacheStatus::Cached { path, .. } = &lib_track.cache {
+            if path.exists() {
+                tracing::info!("Track {} already cached, skipping download", track_id);
+                return Ok(());
+            }
+        }
+    }
 
     let src = track.source.as_ref().ok_or("Track has no source")?;
     let track_title = track.title.clone();
@@ -1662,6 +1332,34 @@ pub async fn save_track_to_file(
 }
 
 #[tauri::command]
+pub async fn delete_cached_track(state: State<'_, Arc<AppState>>, track_id: i64) -> Result<()> {
+    let mut lib_track = state
+        .library()
+        .get_track(TrackId(track_id))
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Track not found in library".to_string())?;
+
+    if let CacheStatus::Cached { path, .. } = &lib_track.cache {
+        if let Err(e) = std::fs::remove_file(path) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                return Err(e.to_string());
+            }
+        }
+    }
+
+    lib_track.cache = CacheStatus::None;
+    state
+        .library()
+        .update_track(lib_track)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    tracing::info!("Deleted cached file for track {}", track_id);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn get_play_history(
     state: State<'_, Arc<AppState>>,
     limit: Option<usize>,
@@ -1672,6 +1370,15 @@ pub async fn get_play_history(
         .await
         .map_err(|e| e.to_string())?;
     Ok(entries.into_iter().map(Into::into).collect())
+}
+
+#[tauri::command]
+pub async fn clear_play_history(state: State<'_, Arc<AppState>>) -> Result<()> {
+    state
+        .clear_play_history()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]

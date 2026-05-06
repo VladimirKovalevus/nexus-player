@@ -1,7 +1,7 @@
 use nexus_player_backend::audio::types::TrackState;
 use serde::{Deserialize, Serialize};
 
-pub use nexus_player_backend::library::types::{ArtworkId, PlaylistId, TrackId};
+pub use nexus_player_backend::library::types::{ArtworkId, CacheStatus, PlaylistId, TrackId};
 use nexus_player_backend::streaming::types as streaming;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +25,31 @@ pub struct TrackDto {
     pub source: Option<TrackSourceDto>,
     #[serde(default)]
     pub unavailable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedAlbumDto {
+    pub title: String,
+    pub artist: Option<String>,
+    pub artwork_url: Option<String>,
+    pub cached_track_count: u64,
+}
+
+impl From<models::CachedAlbumSummary> for CachedAlbumDto {
+    fn from(summary: models::CachedAlbumSummary) -> Self {
+        let artwork_url = summary.artwork.as_ref().and_then(|art| match &art.source {
+            nexus_player_backend::library::types::ArtworkSource::Url { url } => Some(url.clone()),
+            _ => None,
+        });
+
+        Self {
+            title: summary.title,
+            artist: summary.artist,
+            artwork_url,
+            cached_track_count: summary.cached_track_count,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -297,6 +322,11 @@ impl From<models::Track> for TrackDto {
                 _ => None,
             });
 
+        let state = match track.cache {
+            CacheStatus::Cached { .. } => TrackStateDto::Cached,
+            _ => TrackStateDto::Saved,
+        };
+
         Self {
             id: track.id.0,
             title: track.metadata.title,
@@ -309,7 +339,7 @@ impl From<models::Track> for TrackDto {
             artwork_url,
             play_count: track.play_count,
             liked: track.liked,
-            state: TrackStateDto::Saved,
+            state,
             source: Some(track.source.into()),
             unavailable: track.unavailable,
         }

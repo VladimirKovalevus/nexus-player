@@ -34,7 +34,6 @@ impl Default for ProviderSettings {
 pub struct ProviderConfig {
     pub soundcloud: ProviderSettings,
     pub bandcamp: ProviderSettings,
-    pub vk: ProviderSettings,
 }
 
 impl Default for ProviderConfig {
@@ -42,10 +41,6 @@ impl Default for ProviderConfig {
         Self {
             soundcloud: ProviderSettings::default(),
             bandcamp: ProviderSettings::default(),
-            vk: ProviderSettings {
-                enabled: false,
-                credentials: None,
-            },
         }
     }
 }

@@ -133,10 +133,15 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                         // Gapless switch: the audio engine already switched to the next track
                         // seamlessly. We only need to advance the queue cursor to stay in sync,
                         // without triggering playback (the track is already playing).
-                        let cl = state.clone();
-                        tokio::spawn(async move {
+                        //
+                        // This must be awaited in-place (not spawned) because the queue
+                        // snapshot for the `AudioStateUpdated` event below is captured right
+                        // after this loop iteration — a detached spawn would race it and the
+                        // emitted snapshot would still show the pre-advance cursor position,
+                        // making the queue UI lag one track behind on every gapless switch.
+                        {
                             use nexus_player_backend::playlist::playback_queue::ActiveQueue;
-                            let mut queue = cl.lock_queue().await;
+                            let mut queue = state.lock_queue().await;
                             match &mut *queue {
                                 ActiveQueue::Cursor(cq) => {
                                     let _ = cq.next().await;
@@ -145,7 +150,7 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                                     sq.next();
                                 }
                             }
-                        });
+                        }
                         emit_state_update = true;
                         FrontendEvent::PlaybackStarted { track_id: track.id }
                     }

@@ -7,6 +7,7 @@ import { useEqStore } from '../stores/eq';
 import WaveformBar from './common/WaveformBar.vue';
 import MarqueeText from './common/MarqueeText.vue';
 import EqPanel from './EqPanel.vue';
+import AppIcon from './common/AppIcon.vue';
 
 const audioStore = useAudioStore();
 const eqStore = useEqStore();
@@ -35,10 +36,10 @@ let unlistenFn: (() => void) | null = null;
 
 const volumeIcon = computed(() => {
   const v = audioStore.volume;
-  if (v === 0) return '🔇';
-  if (v < 0.35) return '🔈';
-  if (v < 0.7) return '🔉';
-  return '🔊';
+  if (v === 0) return 'volume-mute';
+  if (v < 0.35) return 'volume-low';
+  if (v < 0.7) return 'volume-medium';
+  return 'volume-high';
 });
 
 const toggleVolumePopup = () => {
@@ -252,14 +253,14 @@ onUnmounted(() => {
           @click="toggleShuffleMode"
           :title="audioStore.shuffleEnabled ? 'Выключить перемешивание' : 'Включить перемешивание'"
         >
-          <span :style="{ fontSize: '1.2rem', filter: audioStore.shuffleEnabled ? 'none' : 'grayscale(1) opacity(0.5)' }">🔀</span>
+          <AppIcon name="shuffle" :size="19" :style="{ filter: audioStore.shuffleEnabled ? 'none' : 'grayscale(1) opacity(0.5)' }" />
         </button>
         <button
           class="control-btn medium-btn"
           @click="playPrevious"
           title="Previous"
         >
-          <img src="/icon/prev.svg" />
+          <AppIcon name="prev" :size="18" />
         </button>
         <button
           class="control-btn play-btn"
@@ -269,14 +270,14 @@ onUnmounted(() => {
         >
           <span v-if="audioStore.isLoading" class="loader">●●●</span>
           <span v-else>
-            <img v-if="!audioStore.isPlaying" src="/icon/play.svg" alt="Play" />
+            <AppIcon v-if="!audioStore.isPlaying" name="play" :size="18" />
             <span v-else>
-              <img src="/icon/pause.svg" />
+              <AppIcon name="pause" :size="18" />
             </span>
           </span>
         </button>
         <button class="control-btn medium-btn" @click="playNext" title="Next">
-          <img src="/icon/next.svg" />
+          <AppIcon name="next" :size="18" />
         </button>
         <button
           class="control-btn small-btn repeat-btn"
@@ -284,9 +285,11 @@ onUnmounted(() => {
           @click="cycleRepeatMode"
           :title="'Повтор: ' + (audioStore.repeatMode === 'all' ? 'все' : audioStore.repeatMode === 'one' ? 'один' : 'выкл')"
         >
-          <span :style="{ fontSize: '1.2rem', filter: audioStore.repeatMode !== 'off' ? 'none' : 'grayscale(1) opacity(0.5)' }">
-            {{ audioStore.repeatIcon }}
-          </span>
+          <AppIcon
+            :name="audioStore.repeatIcon"
+            :size="18"
+            :style="{ opacity: audioStore.repeatMode !== 'off' ? 1 : 0.5 }"
+          />
         </button>
       </div>
       <div class="waveform-section">
@@ -305,7 +308,7 @@ onUnmounted(() => {
         @click="emit('toggleVisualizer')"
         title="Открыть визуализатор"
       >
-        <span style="filter: grayscale(1)">📊</span>
+        <AppIcon name="visualizer" :size="18" style="filter: grayscale(1)" />
       </button>
 
       <button
@@ -330,7 +333,7 @@ onUnmounted(() => {
           @click.stop="toggleVolumePopup"
           :title="'Громкость: ' + Math.round(audioStore.volume * 100) + '%'"
         >
-          <img src="/icon/volume.svg" />
+          <AppIcon :name="volumeIcon" :size="18" />
         </button>
         <Transition name="volume-popup">
           <div v-if="volumePopupOpen" class="volume-popup" @click.stop>
@@ -359,7 +362,7 @@ onUnmounted(() => {
         @click="emit('toggleQueue')"
         :title="queueVisible ? 'Скрыть очередь' : 'Показать очередь'"
       >
-        <img src="/icon/queue.svg" />
+        <AppIcon name="queue" :size="18" />
       </button>
     </div>
   </div>

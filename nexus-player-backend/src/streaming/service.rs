@@ -12,7 +12,7 @@ use streaming::multi_downloader::source::Source;
 
 use super::error::{StreamError, StreamResult};
 use super::provider::StreamProvider;
-use super::providers::{BandcampProvider, SoundCloudProvider, VkProvider};
+use super::providers::{BandcampProvider, SoundCloudProvider};
 use super::types::{
     ContentType, PlaylistInfo, SearchResult, StreamingService as StreamingServiceEnum,
 };
@@ -38,13 +38,11 @@ impl StreamingService {
         let bandcamp = Arc::new(BandcampProvider::new()) as Arc<dyn StreamProvider>;
         let soundcloud = Arc::new(SoundCloudProvider::new(config.soundcloud.credentials.clone()))
             as Arc<dyn StreamProvider>;
-        let vk = Arc::new(VkProvider::new(config.vk.credentials.clone())) as Arc<dyn StreamProvider>;
 
         let mut providers = HashMap::new();
 
         providers.insert("bandcamp".to_string(), bandcamp);
         providers.insert("soundcloud".to_string(), soundcloud);
-        providers.insert("vk".to_string(), vk);
 
         let manager = DownloadManager::new(ManagerConfig {
             waveform_enabled: config_audio.waveform_enabled,
@@ -81,7 +79,6 @@ impl StreamingService {
         for (name, provider) in &self.providers {
             let credentials = match name.as_str() {
                 "soundcloud" => config.soundcloud.credentials.clone(),
-                "vk" => config.vk.credentials.clone(),
                 "bandcamp" => config.bandcamp.credentials.clone(),
                 _ => None,
             };
@@ -124,9 +121,6 @@ impl StreamingService {
                 on_finish: None,
             });
 
-            if source.system() == "vk" && effective_options.user_agent.is_none() {
-                effective_options.user_agent = Some(vk_api::auth::VK_USER_AGENT.to_string());
-            }
             return match provider
                 .resolve(
                     &source,
@@ -167,7 +161,6 @@ impl StreamingService {
             let enabled = match provider_name {
                 "soundcloud" => config.soundcloud.enabled,
                 "bandcamp" => config.bandcamp.enabled,
-                "vk" => config.vk.enabled,
                 _ => true,
             };
             if !enabled {
@@ -290,11 +283,6 @@ impl StreamingService {
                         on_progress: None,
                         on_finish: None,
                     });
-
-                    if system == "vk" && effective_options.user_agent.is_none() {
-                        effective_options.user_agent =
-                            Some(vk_api::auth::VK_USER_AGENT.to_string());
-                    }
 
                     let source = TrackSource::External { system, id };
                     if let Some(stream) = self.download_manager.get_track(track_id).await {

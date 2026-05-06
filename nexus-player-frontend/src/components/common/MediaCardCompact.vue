@@ -13,12 +13,12 @@
         loading="lazy"
       />
       <div v-else :class="$style.placeholder">
-        <span :class="$style.placeholderIcon">{{ placeholderIcon }}</span>
+        <AppIcon :name="placeholderIcon" :size="32" />
       </div>
 
       <div :class="$style.playOverlay">
         <button :class="$style.playButton" @click.stop="handlePlay">
-          <img src="/icon/play.svg" alt="Play">
+          <AppIcon name="play" :size="20" />
         </button>
       </div>
 
@@ -30,7 +30,7 @@
         :class="$style.menuButton"
         @click.stop="toggleMenu"
       >
-        <span :class="$style.dots">⋮</span>
+        <AppIcon name="more-horizontal" :size="16" :class="$style.dots" style="transform: rotate(90deg)" />
       </button>
     </div>
 
@@ -39,7 +39,7 @@
         <slot name="menu" :close="() => menuOpen = false">
           <template v-if="!showPlaylistSubmenu">
             <button :class="$style.menuItem" @click.stop="handleShowPlaylistSubmenu">
-              Добавить в плейлист ›
+              Добавить в плейлист <AppIcon name="chevron-right" :size="14" />
             </button>
             <button :class="[$style.menuItem, $style.danger]" @click.stop="handleDelete">
               Удалить
@@ -47,7 +47,7 @@
           </template>
           <template v-else>
             <button :class="$style.menuItem" @click.stop="showPlaylistSubmenu = false">
-              ‹ Назад
+              <AppIcon name="chevron-left" :size="14" /> Назад
             </button>
             <div :class="$style.divider"></div>
             <button
@@ -81,6 +81,7 @@
 import { computed, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import MarqueeText from './MarqueeText.vue';
+import AppIcon from './AppIcon.vue';
 
 interface Props {
   type: 'track' | 'playlist' | 'album';
@@ -189,13 +190,13 @@ const handleDelete = () => {
 const placeholderIcon = computed(() => {
   switch (props.type) {
     case 'track':
-      return '🎵';
+      return 'music-note';
     case 'playlist':
-      return '📂';
+      return 'folder';
     case 'album':
-      return '💿';
+      return 'album';
     default:
-      return '🎵';
+      return 'music-note';
   }
 });
 
@@ -300,6 +301,7 @@ const handlePlay = () => {
   height: 48px;
   padding: 0px !important;
   border-radius: 50%;
+  clip-path: none !important;
   background-color: transparent !important;
   position: relative;
   isolation: isolate;
@@ -356,6 +358,7 @@ const handlePlay = () => {
   width: 28px;
   height: 28px;
   border-radius: 50%;
+  clip-path: none !important;
   background-color: rgba(0, 0, 0, 0.7);
   color: white;
   border: none;

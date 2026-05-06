@@ -10,8 +10,8 @@ import Sidebar from './components/layout/Sidebar.vue';
 import MobileNav from './components/layout/MobileNav.vue';
 import HomeView from './views/HomeView.vue';
 import PlaylistDetailView from './views/PlaylistDetailView.vue';
-import VkView from './views/VkView.vue';
 import HistoryView from './views/HistoryView.vue';
+import CacheView from './views/CacheView.vue';
 import DownloadsView from './views/DownloadsView.vue';
 import LibraryView from './views/LibraryView.vue';
 import StreamingSearch from './components/StreamingSearch.vue';
@@ -127,8 +127,8 @@ provide('clearQueue', () => playbackQueueRef.value?.clearQueue());
       @navigate-playlist="navigateToPlaylist"
     />
     <StreamingSearch v-else-if="currentView === 'search'" @refetch="handleSearchRefetch" />
-    <VkView v-else-if="currentView === 'vk'" />
     <HistoryView v-else-if="currentView === 'history'" />
+    <CacheView v-else-if="currentView === 'cache'" />
     <DownloadsView v-else-if="currentView === 'downloads'" />
     <LibraryView v-else-if="currentView === 'library'" />
     <div v-else :style="{ padding: '40px', textAlign: 'center' }">

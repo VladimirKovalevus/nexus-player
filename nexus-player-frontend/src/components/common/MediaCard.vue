@@ -9,13 +9,14 @@
         :class="$style.image"
       />
       <div v-else :class="$style.placeholder">
+        <AppIcon :name="placeholderIcon" :size="24" />
       </div>
 
       <div v-if="type === 'track'" :class="$style.playOverlay">
         <button :class="$style.playButton" @click.stop="handlePlay" :disabled="(store.isLoading && props.active) || props.track?.unavailable">
-          <span v-if="store.isLoading && props.active" class="mini-loader">●</span>
-          <span v-else-if="props.track?.unavailable" :class="$style.unavailableIcon">✕</span>
-          <img v-else src="/icon/play.svg" alt="Play">
+          <AppIcon v-if="store.isLoading && props.active" name="loader-dot" :size="16" class="mini-loader" />
+          <AppIcon v-else-if="props.track?.unavailable" name="x-circle" :size="16" />
+          <AppIcon v-else name="play" :size="18" />
         </button>
       </div>
     </div>
@@ -62,9 +63,11 @@
         <div v-if="props.track?.liked" :class="$style.heartFilled"></div>
         <div v-else :class="$style.heartOutline"></div>
       </button>
-      <button v-if="showAction " ref="actionButtonRef" :class="$style.actionButton" @click.stop="toggleDropdown">⋯</button>
+      <button v-if="showAction " ref="actionButtonRef" :class="$style.actionButton" @click.stop="toggleDropdown">
+        <AppIcon name="more-horizontal" :size="18" />
+      </button>
       <button v-if="props.containerMode" :class="$style.expandBtn" @click.stop="emit('toggleExpand')">
-        {{ props.isExpanded ? '▲' : '▼' }}
+        <AppIcon :name="props.isExpanded ? 'chevron-up' : 'chevron-down'" :size="16" />
       </button>
     </div>
   </div>
@@ -78,15 +81,15 @@
           :class="[$style.dropdownItem, { [$style.dangerItem]: option.isDanger }]"
           @click="option.action"
         >
-          <span :class="$style.itemIcon">{{ option.icon }}</span>
+          <span :class="$style.itemIcon"><AppIcon :name="option.icon" :size="16" /></span>
           <span :class="$style.itemLabel">{{ option.label }}</span>
-          <span v-if="option.hasSubmenu" :class="$style.itemArrow">›</span>
+          <AppIcon v-if="option.hasSubmenu" name="chevron-right" :size="14" :class="$style.itemArrow" />
         </button>
       </div>
 
       <div v-else :class="$style.submenu">
         <button :class="$style.dropdownItem" @click="showPlaylistSubmenu = false">
-          <span :class="$style.itemIcon">‹</span>
+          <span :class="$style.itemIcon"><AppIcon name="chevron-left" :size="14" /></span>
           <span :class="$style.itemLabel">Назад</span>
         </button>
         <div :class="$style.divider"></div>
@@ -96,7 +99,7 @@
           :class="$style.dropdownItem"
           @click="handleAddToPlaylist(pl.id)"
         >
-          <span :class="$style.itemIcon">📋</span>
+          <span :class="$style.itemIcon"><AppIcon name="playlist" :size="16" /></span>
           <span :class="$style.itemLabel">{{ pl.title }}</span>
         </button>
         <div v-if="playlists.length === 0" :class="$style.emptyPlaylist">
@@ -113,6 +116,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { TrackDto, PlaylistDto, ContainerMetaDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
 import MarqueeText from './MarqueeText.vue';
+import AppIcon from './AppIcon.vue';
 const store = useAudioStore()
 
 interface Props {
@@ -219,13 +223,13 @@ const menuOptions = computed<MenuOption[]>(() => {
     return [
       {
         label: 'Сохранить в плейлист',
-        icon: '📋',
+        icon: 'playlist',
         action: handleShowPlaylistSubmenu,
         hasSubmenu: true,
       },
       {
         label: 'Сформировать плейлист',
-        icon: '🎵',
+        icon: 'music-note',
         action: () => {
           closeDropdown();
           emit('containerCreatePlaylist');
@@ -233,7 +237,7 @@ const menuOptions = computed<MenuOption[]>(() => {
       },
       {
         label: 'Удалить из очереди',
-        icon: '🗑️',
+        icon: 'trash',
         isDanger: true,
         action: () => {
           closeDropdown();
@@ -246,7 +250,7 @@ const menuOptions = computed<MenuOption[]>(() => {
   if (props.type === 'track') {
     options.push({
       label: 'Добавить в плейлист',
-      icon: '📋',
+      icon: 'playlist',
       action: handleShowPlaylistSubmenu,
       hasSubmenu: true,
     });
@@ -254,7 +258,7 @@ const menuOptions = computed<MenuOption[]>(() => {
     if (props.context === 'playlist') {
       options.push({
         label: 'Удалить из плейлиста',
-        icon: '🗑️',
+        icon: 'trash',
         isDanger: true,
         action: handleRemoveFromPlaylist,
       });
@@ -262,7 +266,7 @@ const menuOptions = computed<MenuOption[]>(() => {
   } else if (props.type === 'playlist') {
     options.push({
       label: 'Добавить в плейлист',
-      icon: '📋',
+      icon: 'playlist',
       action: handleShowPlaylistSubmenu,
       hasSubmenu: true,
     });
@@ -274,23 +278,32 @@ const menuOptions = computed<MenuOption[]>(() => {
   if (props.context === 'queue') {
     options.push({
       label: 'Удалить из очереди',
-      icon: '🗑️',
+      icon: 'trash',
       action: handleRemoveFromQueue,
     });
   } else {
     options.push({
       label: 'Добавить в очередь',
-      icon: '➕',
+      icon: 'plus',
       action: handleAddToQueue,
     });
   }
 
   if (!props.isLocal) {
-    options.push({
-      label: 'Скачать',
-      icon: '⬇️',
-      action: handleDownload,
-    });
+    if (isCached.value) {
+      options.push({
+        label: 'Удалить',
+        icon: 'trash',
+        isDanger: true,
+        action: handleDeleteCache,
+      });
+    } else {
+      options.push({
+        label: 'Скачать',
+        icon: 'download-tray',
+        action: handleDownload,
+      });
+    }
   }
 
   // options.push({
@@ -302,13 +315,15 @@ const menuOptions = computed<MenuOption[]>(() => {
   if (props.context === 'queue' && !props.isInLibrary) {
     options.push({
       label: 'Добавить в библиотеку',
-      icon: '➕',
+      icon: 'plus',
       action: handleAddToLibrary,
     });
   }
 
   return options;
 });
+
+const isCached = computed(() => props.track?.state?.type === 'cached');
 
 const filteredPlaylists = computed(() => {
   if (props.type === 'playlist' && props.playlist) {
@@ -320,13 +335,13 @@ const filteredPlaylists = computed(() => {
 const placeholderIcon = computed(() => {
   switch (props.type) {
     case 'track':
-      return '🎵';
+      return 'music-note';
     case 'playlist':
-      return '📂';
+      return 'folder';
     case 'album':
-      return '💿';
+      return 'album';
     default:
-      return '🎵';
+      return 'music-note';
   }
 });
 
@@ -496,6 +511,19 @@ const handleDownload = async () => {
   closeDropdown();
 };
 
+const handleDeleteCache = async () => {
+  if (!props.track) return;
+
+  try {
+    await invoke('delete_cached_track', { trackId: entity.value.id });
+    props.track.state = { type: 'streaming' };
+    emit('refresh');
+  } catch (e) {
+    console.error('Failed to delete cached track:', e);
+  }
+  closeDropdown();
+};
+
 const handleSaveToFile = async () => {
   try {
     await invoke('save_track_to_file', { track: entity.value });
@@ -644,6 +672,7 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
   height: 40px;
   padding: 0 !important;
   border-radius: 50%;
+  clip-path: none !important;
   background-color: transparent !important;
   position: relative;
   isolation: isolate;
@@ -760,6 +789,7 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
   height: 32px !important;
   padding: 0 !important;
   border-radius: 50%;
+  clip-path: none !important;
   background: transparent;
   border: none;
   color: var(--color-text-secondary);
@@ -782,6 +812,7 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
   height: 32px;
   padding:0 !important;
   border-radius: 50%;
+  clip-path: none !important;
   background: transparent;
   border: none;
   border-style:none !important;
@@ -822,13 +853,13 @@ artworkUrl: props.track.thumbnail || props.track?.artworkUrl,
 }
 
 .heartFilled {
-  -webkit-mask-image: url('/icon/heart-filled.svg');
-  mask-image: url('/icon/heart-filled.svg');
+  -webkit-mask-image: url('/icons/heart-filled.svg');
+  mask-image: url('/icons/heart-filled.svg');
 }
 
 .heartOutline {
-  -webkit-mask-image: url('/icon/heart-outline.svg');
-  mask-image: url('/icon/heart-outline.svg');
+  -webkit-mask-image: url('/icons/heart-outline.svg');
+  mask-image: url('/icons/heart-outline.svg');
 }
 
 

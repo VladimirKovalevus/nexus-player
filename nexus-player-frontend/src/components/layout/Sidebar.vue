@@ -11,37 +11,37 @@
     <nav :class="$style.nav">
       <div :class="$style.card">
         <button :class="[$style.navItem, { [$style.active]: activeView === 'home' }]" @click.prevent="$emit('changeView', 'home')">
-          <span :class="$style.icon">🏠</span>
+          <AppIcon name="home" :class="$style.icon" />
           <span>Главная</span>
         </button>
-        <button :class="[$style.navItem, { [$style.active]: activeView === 'vk' }]" @click.prevent="$emit('changeView', 'vk')">
-          <span :class="$style.icon">VK</span>
-          <span>VK Музыка</span>
-        </button>
         <button :class="[$style.navItem, { [$style.active]: activeView === 'search' }]" @click.prevent="$emit('changeView', 'search')">
-          <span :class="$style.icon">🔍</span>
+          <AppIcon name="search" :class="$style.icon" />
           <span>Поиск</span>
         </button>
         <button :class="[$style.navItem, { [$style.active]: activeView === 'library' }]" @click.prevent="$emit('changeView', 'library')">
-          <span :class="$style.icon">🎵</span>
+          <AppIcon name="music-note" :class="$style.icon" />
           <span>Музыка</span>
         </button>
       </div>
       <div :class="$style.card">
         <button :class="[$style.navItem, { [$style.active]: activeView === 'playlists' }]" @click.prevent="$emit('changeView', 'playlists')">
-          <span :class="$style.icon">📋</span>
+          <AppIcon name="playlist" :class="$style.icon" />
           <span>Плейлисты</span>
         </button>
         <button :class="[$style.navItem, { [$style.active]: activeView === 'history' }]" @click.prevent="$emit('changeView', 'history')">
-          <span :class="$style.icon">🕒</span>
+          <AppIcon name="history" :class="$style.icon" />
           <span>История</span>
         </button>
+        <button :class="[$style.navItem, { [$style.active]: activeView === 'cache' }]" @click.prevent="$emit('changeView', 'cache')">
+          <AppIcon name="album" :class="$style.icon" />
+          <span>Кэш</span>
+        </button>
         <button :class="[$style.navItem, { [$style.active]: activeView === 'downloads' }]" @click.prevent="$emit('changeView', 'downloads')">
-          <span :class="$style.icon">📥</span>
+          <AppIcon name="download-tray" :class="$style.icon" />
           <span>Загрузки</span>
         </button>
         <button :class="$style.navItem" @click="isSettingsOpen = true">
-          <span :class="$style.icon">⚙️</span>
+          <AppIcon name="settings" :class="$style.icon" />
           <span>Настройки</span>
         </button>
       </div>
@@ -56,6 +56,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import SettingsModal from '@/components/SettingsModal.vue';
+import AppIcon from '@/components/common/AppIcon.vue';
 
 defineProps<{
   activeView: string;

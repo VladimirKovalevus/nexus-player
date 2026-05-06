@@ -25,7 +25,6 @@ anyhow = "1.0"
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 streaming = { path = "vendor/streaming" }
-vk-api = { path = "vendor/vk-down" }
 rsoundcloud = { path = "vendor/rsoundcloud" }
 
 [patch.crates-io]

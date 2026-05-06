@@ -8,6 +8,7 @@ export const useAudioStore = defineStore('audio', () => {
   const notificationStore = useNotificationStore();
 
   const lastUnavailableTrackId = ref<number | null>(null);
+  const lastCachedTrack = ref<{ trackId: number; success: boolean } | null>(null);
   const activeChallenge = ref<{ provider: string; url: string } | null>(null);
 
   // High-frequency state isolated to prevent unnecessary re-renders of the whole app
@@ -149,13 +150,13 @@ export const useAudioStore = defineStore('audio', () => {
   const repeatIcon = computed((): string => {
     switch (queueState.value.repeatMode) {
       case 'off':
-        return '🔁';
+        return 'repeat';
       case 'all':
-        return '🔁';
+        return 'repeat';
       case 'one':
-        return '🔂';
+        return 'repeat-one';
       default:
-        return '🔁';
+        return 'repeat';
     }
   });
 
@@ -260,6 +261,12 @@ export const useAudioStore = defineStore('audio', () => {
         }
         break;
       case 'DownloadFinished':
+        if (event.payload?.trackId !== undefined) {
+          lastCachedTrack.value = {
+            trackId: event.payload.trackId,
+            success: !!event.payload.success,
+          };
+        }
         if (event.payload?.success) {
           notificationStore.addNotification(
             `Download finished: ${event.payload.title}`,
@@ -364,6 +371,7 @@ export const useAudioStore = defineStore('audio', () => {
     currentIndex,
     repeatIcon,
     lastUnavailableTrackId,
+    lastCachedTrack,
     activeChallenge,
     handleAudioEvent,
     startLoading,

@@ -6,8 +6,8 @@ use sea_orm::{
     QueryFilter, QueryOrder, QuerySelect, QueryTrait, TransactionTrait, sea_query,
 };
 
-use crate::library::entities_v2::{playlist_item, track};
-use crate::library::models::Track;
+use crate::library::entities_v2::{artwork, playlist_item, track};
+use crate::library::models::{CachedAlbumSummary, Track};
 use crate::library::repository_v2::TrackRepositoryV2;
 use crate::library::types::{SortDirection, TrackId, TrackOrder};
 
@@ -339,6 +339,81 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
             domain_tracks.push(domain_track);
         }
         Ok(domain_tracks)
+    }
+
+    async fn list_cached(&self, order: TrackOrder) -> Result<Vec<Track>> {
+        let mut query = track::Entity::find()
+            .filter(track::Column::CacheType.eq("cached"))
+            .find_also_related(artwork::Entity);
+
+        let (col, direction) = match order {
+            TrackOrder::Default(d) => (track::Column::AddedAt, d),
+            TrackOrder::Title(d) => (track::Column::Title, d),
+            TrackOrder::Artist(d) => (track::Column::Artist, d),
+            TrackOrder::AddedAt(d) => (track::Column::AddedAt, d),
+        };
+
+        query = match direction {
+            SortDirection::Asc => query.order_by_asc(col),
+            SortDirection::Desc => query.order_by_desc(col),
+        };
+
+        let results = query
+            .all(&self.db)
+            .await
+            .context("Failed to list cached tracks with artwork and sorting")?;
+
+        let mut domain_tracks = Vec::new();
+        for (entity, artwork_entity) in results {
+            let mut domain_track: Track = entity.try_into()?;
+            if let Some(art_entity) = artwork_entity {
+                domain_track.metadata.artwork = Some(art_entity.try_into()?);
+            }
+            domain_tracks.push(domain_track);
+        }
+        Ok(domain_tracks)
+    }
+
+    async fn list_cached_albums(&self) -> Result<Vec<CachedAlbumSummary>> {
+        let rows = track::Entity::find()
+            .filter(track::Column::CacheType.eq("cached"))
+            .select_only()
+            .column(track::Column::Album)
+            .column_as(sea_query::Expr::col(track::Column::Artist).min(), "artist")
+            .column_as(
+                sea_query::Expr::col(track::Column::ArtworkId).min(),
+                "artwork_id",
+            )
+            .column_as(sea_query::Expr::col(track::Column::Id).count(), "cached_track_count")
+            .group_by(track::Column::Album)
+            .into_tuple::<(Option<String>, Option<String>, Option<i64>, i64)>()
+            .all(&self.db)
+            .await
+            .context("Failed to list cached albums")?;
+
+        let mut summaries = Vec::with_capacity(rows.len());
+        for (album, artist, artwork_id, cached_track_count) in rows {
+            let Some(title) = album else { continue };
+
+            let artwork = match artwork_id {
+                Some(id) => artwork::Entity::find_by_id(id)
+                    .one(&self.db)
+                    .await
+                    .context("Failed to fetch album artwork")?
+                    .map(TryInto::try_into)
+                    .transpose()?,
+                None => None,
+            };
+
+            summaries.push(CachedAlbumSummary {
+                title,
+                artist,
+                artwork,
+                cached_track_count: cached_track_count as u64,
+            });
+        }
+
+        Ok(summaries)
     }
 
     async fn set_liked(&self, id: TrackId, liked: bool) -> Result<()> {

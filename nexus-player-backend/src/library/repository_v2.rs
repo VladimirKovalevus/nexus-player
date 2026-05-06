@@ -1,7 +1,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::library::models::{PlayHistoryEntry, Playlist, PlaylistItemKind, PlaylistWithItems, Track};
+use crate::library::models::{
+    CachedAlbumSummary, PlayHistoryEntry, Playlist, PlaylistItemKind, PlaylistWithItems, Track,
+};
 use crate::library::types::{PlaylistId, TrackId, TrackOrder, TrackSource};
 
 #[async_trait]
@@ -30,6 +32,12 @@ pub trait TrackRepositoryV2: Send + Sync {
     async fn increment_play_count(&self, id: TrackId) -> Result<()>;
 
     async fn list_liked(&self, order: TrackOrder) -> Result<Vec<Track>>;
+
+    /// Returns tracks whose cache_type is 'cached', in the given order.
+    async fn list_cached(&self, order: TrackOrder) -> Result<Vec<Track>>;
+
+    /// Returns one summary per album that has at least one cached track.
+    async fn list_cached_albums(&self) -> Result<Vec<CachedAlbumSummary>>;
 
     async fn set_liked(&self, id: TrackId, liked: bool) -> Result<()>;
 

@@ -3,26 +3,25 @@
     <div :class="$style.trackInfo">
       <div :class="$style.trackCover">
         <img v-if="currentTrack?.artworkUrl" :src="currentTrack.artworkUrl" :alt="currentTrack.title" />
-        <span v-else>🎵</span>
+        <AppIcon v-else name="music-note" :size="24" />
       </div>
       <div :class="$style.trackDetails">
         <div :class="$style.trackName">{{ currentTrack?.title || 'Нет воспроизведения' }}</div>
         <div :class="$style.trackArtist">{{ currentTrack?.artist || '—' }}</div>
       </div>
-      <button :class="$style.likeButton">♡</button>
+      <button :class="$style.likeButton"><AppIcon name="heart-outline" :size="18" /></button>
     </div>
 
     <div :class="$style.playerControls">
       <div :class="$style.controls">
-        <button :class="$style.controlButton" @click="playPrevious">⏮</button>
+        <button :class="$style.controlButton" @click="playPrevious"><AppIcon name="prev" :size="18" /></button>
         <button :class="[$style.controlButton, $style.playButton]" @click="togglePlay" :disabled="isLoading">
           <div v-if="isLoading" :class="$style.spinner"></div>
           <template v-else>
-            <img v-if="!isPlaying" src="/icon/play.svg" alt="Play">
-            <span v-else>⏸</span>
+            <AppIcon :name="isPlaying ? 'pause' : 'play'" :size="20" />
           </template>
         </button>
-        <button :class="$style.controlButton" @click="playNext">⏭</button>
+        <button :class="$style.controlButton" @click="playNext"><AppIcon name="next" :size="18" /></button>
       </div>
       <div :class="$style.progress">
         <span :class="$style.time">{{ formatTime(position) }}</span>
@@ -32,11 +31,11 @@
     </div>
 
     <div :class="$style.rightControls">
-      <button :class="$style.controlButton">🔊</button>
+      <button :class="$style.controlButton"><AppIcon name="volume-high" :size="18" /></button>
       <div :class="$style.volumeBar">
         <div :class="$style.volumeFilled" :style="{ width: '70%' }"></div>
       </div>
-      <button :class="$style.controlButton">⚙️</button>
+      <button :class="$style.controlButton"><AppIcon name="settings" :size="18" /></button>
     </div>
   </footer>
 </template>
@@ -44,6 +43,7 @@
 <script setup lang="ts">
 import { useAudioStore } from '@/stores/audio';
 import WaveformBar from '@/components/common/WaveformBar.vue';
+import AppIcon from '@/components/common/AppIcon.vue';
 import { invoke } from '@tauri-apps/api/core';
 import { computed } from 'vue';
 
@@ -144,6 +144,8 @@ const playPrevious = () => {
 .likeButton {
   background: transparent;
   border: none;
+  border-radius: 50%;
+  clip-path: none !important;
   color: $color-text-secondary;
   font-size: $font-size-xl;
   cursor: pointer;
@@ -178,6 +180,7 @@ const playPrevious = () => {
   height: 32px;
   @include flex-center;
   border-radius: 50%;
+  clip-path: none !important;
 
   &:hover {
     background-color: rgba(255, 255, 255, 0.1);
