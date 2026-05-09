@@ -22,12 +22,12 @@
           <AppIcon name="music-note" :class="$style.icon" />
           <span>Музыка</span>
         </button>
-      </div>
-      <div :class="$style.card">
         <button :class="[$style.navItem, { [$style.active]: activeView === 'playlists' }]" @click.prevent="$emit('changeView', 'playlists')">
           <AppIcon name="playlist" :class="$style.icon" />
           <span>Плейлисты</span>
         </button>
+      </div>
+      <div :class="$style.card">
         <button :class="[$style.navItem, { [$style.active]: activeView === 'history' }]" @click.prevent="$emit('changeView', 'history')">
           <AppIcon name="history" :class="$style.icon" />
           <span>История</span>

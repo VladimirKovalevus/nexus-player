@@ -30,6 +30,7 @@ pub struct TrackDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CachedAlbumDto {
+    pub id: i64,
     pub title: String,
     pub artist: Option<String>,
     pub artwork_url: Option<String>,
@@ -44,6 +45,7 @@ impl From<models::CachedAlbumSummary> for CachedAlbumDto {
         });
 
         Self {
+            id: summary.id.0,
             title: summary.title,
             artist: summary.artist,
             artwork_url,

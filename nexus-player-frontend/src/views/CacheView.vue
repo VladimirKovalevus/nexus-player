@@ -1,100 +1,54 @@
 <template>
   <div :class="$style.cache">
-    <section :class="$style.albumSection">
-      <div :class="$style.sectionHeader">
-        <h2 :class="$style.sectionTitle">Альбомы</h2>
-        <a
-          v-if="selectedAlbum"
-          href="#"
-          :class="$style.showAll"
-          @click.prevent="selectedAlbum = null"
-        >
-          Сбросить фильтр
-        </a>
-      </div>
+    <MediaCardSection
+      title="Альбомы"
+      :items="albumItems"
+      card-type="album"
+      empty-icon="album"
+      empty-title="Нет закэшированных альбомов"
+      @item-click="handleAlbumClick"
+      @item-play="handleAlbumPlay"
+    />
 
-      <div v-if="albums.length === 0" :class="$style.emptyState">
-        <div :class="$style.emptyIcon"><AppIcon name="album" :size="64" /></div>
-        <div :class="$style.emptyTitle">Нет закэшированных альбомов</div>
-      </div>
-
-      <div v-else :class="$style.albumList">
-        <VirtualHorizontalList :items="albums" :item-width="180" :height="220">
-          <template #default="{ item: album }">
-            <MediaCardCompact
-              type="album"
-              :title="album.title"
-              :artist="album.artist || 'Неизвестный исполнитель'"
-              :thumbnail="album.artworkUrl || undefined"
-              :track-count="album.cachedTrackCount"
-              :active="selectedAlbum === album.title"
-              @click="toggleAlbum(album.title)"
-              @play="handleAlbumPlay(album)"
-            />
-          </template>
-        </VirtualHorizontalList>
-      </div>
-    </section>
-
-    <section :class="$style.trackSection">
-      <div :class="$style.sectionHeader">
-        <h2 :class="$style.sectionTitle">
-          Треки{{ selectedAlbum ? `: ${selectedAlbum}` : '' }}
-        </h2>
-      </div>
-
-      <div v-if="displayedTracks.length === 0" :class="$style.emptyState">
-        <div :class="$style.emptyIcon"><AppIcon name="music-note" :size="64" /></div>
-        <div :class="$style.emptyTitle">Нет закэшированных треков</div>
-      </div>
-
-      <VirtualList
-        v-else
-        :class="$style.scroller"
-        :items="displayedTracks"
-        :item-height="96"
-        :overscan="8"
-      >
-        <template #default="{ item: track }">
-          <MediaCard
-            type="track"
-            :track="track"
-            :active="audioStore.currentTrack?.id === track.id"
-            @click="handleTrackClick(track)"
-            @play="handleTrackPlay(track)"
-          />
-        </template>
-      </VirtualList>
-    </section>
+    <TrackListSection
+      title="Треки"
+      :tracks="cachedTracks"
+      :active-track-id="audioStore.currentTrack?.id ?? null"
+      empty-title="Нет закэшированных треков"
+      @track-click="handleTrackClick"
+      @track-play="handleTrackPlay"
+      @track-refresh="fetchData"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import MediaCard from '@/components/common/MediaCard.vue';
-import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
-import VirtualList from '@/components/common/VirtualList.vue';
-import VirtualHorizontalList from '@/components/common/VirtualHorizontalList.vue';
-import AppIcon from '@/components/common/AppIcon.vue';
+import MediaCardSection, { type MediaCardItem } from '@/components/common/MediaCardSection.vue';
+import TrackListSection from '@/components/common/TrackListSection.vue';
 import type { TrackDto, CachedAlbumDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
+
+const emit = defineEmits<{
+  'navigate-playlist': [playlistId: number];
+}>();
 
 const audioStore = useAudioStore();
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
 
 const cachedTracks = ref<TrackDto[]>([]);
 const albums = ref<CachedAlbumDto[]>([]);
-const selectedAlbum = ref<string | null>(null);
 
-const displayedTracks = computed(() => {
-  if (!selectedAlbum.value) return cachedTracks.value;
-  return cachedTracks.value.filter((t) => t.album === selectedAlbum.value);
-});
-
-const toggleAlbum = (title: string) => {
-  selectedAlbum.value = selectedAlbum.value === title ? null : title;
-};
+const albumItems = computed<MediaCardItem[]>(() =>
+  albums.value.map((album) => ({
+    id: album.id,
+    title: album.title,
+    subtitle: album.artist || 'Неизвестный исполнитель',
+    thumbnail: album.artworkUrl,
+    trackCount: album.cachedTrackCount,
+  })),
+);
 
 const fetchData = async () => {
   try {
@@ -109,10 +63,11 @@ const fetchData = async () => {
   }
 };
 
-const playTrack = async (track: TrackDto) => {
+const playVisibleTracks = async (track: TrackDto, visibleTracks: TrackDto[]) => {
   audioStore.startLoading();
   try {
-    await invoke('play_library_track', { trackId: track.id });
+    const trackIds = visibleTracks.map((t) => t.id);
+    await invoke('load_and_play_library_tracks', { trackIds, selectedId: track.id });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play track:', e);
@@ -120,96 +75,34 @@ const playTrack = async (track: TrackDto) => {
   }
 };
 
-const handleTrackClick = (track: TrackDto) => playTrack(track);
-const handleTrackPlay = (track: TrackDto) => playTrack(track);
+const handleTrackClick = (track: TrackDto, visibleTracks: TrackDto[]) =>
+  playVisibleTracks(track, visibleTracks);
+const handleTrackPlay = (track: TrackDto, visibleTracks: TrackDto[]) =>
+  playVisibleTracks(track, visibleTracks);
 
-const handleAlbumPlay = async (album: CachedAlbumDto) => {
-  const first = cachedTracks.value.find((t) => t.album === album.title);
-  if (!first) return;
-  await playTrack(first);
+const handleAlbumClick = (item: MediaCardItem) => {
+  emit('navigate-playlist', item.id);
+};
+
+const handleAlbumPlay = async (item: MediaCardItem) => {
+  audioStore.startLoading();
+  try {
+    await invoke('load_playlist_and_play', { playlistId: item.id, startIndex: 0 });
+    refreshQueue();
+  } catch (e) {
+    console.error('Failed to play album:', e);
+    audioStore.stopLoading();
+  }
 };
 
 onMounted(() => fetchData());
 </script>
 
 <style module lang="scss">
-@import '@/styles/variables.scss';
-@import '@/styles/mixins.scss';
-
 .cache {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-}
-
-.albumSection {
-  flex-shrink: 0;
-  padding: $spacing-xl $spacing-xl 0;
-  margin-bottom: $spacing-2xl;
-}
-
-.trackSection {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0 $spacing-xl;
-}
-
-.scroller {
-  flex: 1;
-  min-height: 0;
-}
-
-.sectionHeader {
-  @include flex-between;
-  margin-bottom: $spacing-lg;
-}
-
-.sectionTitle {
-  font-size: $font-size-2xl;
-  font-weight: $font-weight-bold;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.showAll {
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  font-size: $font-size-sm;
-  transition: color $transition-fast;
-
-  &:hover {
-    color: var(--color-text-primary);
-  }
-}
-
-.albumList {
-  margin: 0 (-$spacing-xl);
-  padding: 0 $spacing-xl;
-}
-
-.emptyState {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: $spacing-2xl * 2;
-  background-color: var(--color-bg-secondary);
-  border-radius: $radius-lg;
-  border: 2px dashed var(--color-border);
-  gap: $spacing-lg;
-}
-
-.emptyIcon {
-  opacity: 0.4;
-  filter: grayscale(1);
-}
-
-.emptyTitle {
-  font-size: $font-size-xl;
-  font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
 }
 </style>

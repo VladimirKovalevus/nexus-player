@@ -6,10 +6,15 @@
       @created="handlePlaylistCreated"
     />
 
-    <!-- Плейлисты: фиксированная верхняя зона -->
-    <section :class="$style.playlistSection">
-      <div :class="$style.sectionHeader">
-        <h2 :class="$style.sectionTitle">Плейлисты</h2>
+    <MediaCardSection
+      title="Плейлисты"
+      :items="playlistItems"
+      card-type="playlist"
+      show-action
+      @item-click="handlePlaylistClick"
+      @item-play="handlePlaylistPlay"
+    >
+      <template #header-extra>
         <a
           v-if="playlists.length > 0"
           href="#"
@@ -18,154 +23,106 @@
         >
           Показать всё <AppIcon name="arrow-right" :size="14" />
         </a>
-      </div>
+      </template>
 
-      <div v-if="playlists.length === 0" :class="$style.emptyState">
-        <div :class="$style.emptyIcon"><AppIcon name="folder" :size="64" /></div>
-        <div :class="$style.emptyTitle">Данных нет</div>
+      <template #empty-extra>
         <div :class="$style.emptyHint">Добавьте новый плейлист</div>
         <button :class="$style.addButton" @click="handleAddPlaylist">
           + Добавить плейлист
         </button>
-      </div>
+      </template>
 
-      <div v-else :class="$style.playlistList">
-        <VirtualHorizontalList
-          :items="playlists"
-          :item-width="180"
-          :height="220"
+      <template #menu="{ close, item }">
+        <button
+          :class="$style.menuItem"
+          @click.stop="
+            () => {
+              handlePlaylistCache(item);
+              close();
+            }
+          "
         >
-          <template #default="{ item: playlist }">
-            <MediaCardCompact
-              type="playlist"
-              :title="playlist.title"
-              :artist="playlist.description || 'Unknown'"
-              :thumbnail="playlist.thumbnail || undefined"
-              :track-count="playlist.trackCount"
-              :playlist-id="playlist.id"
-              show-action
-              @click="handlePlaylistClick(playlist)"
-              @play="handlePlaylistPlay(playlist)"
-              @delete="handlePlaylistDelete(playlist)"
-            >
-              <template #menu="{ close }">
-                <button
-                  :class="$style.menuItem"
-                  @click.stop="
-                    () => {
-                      handlePlaylistCache(playlist);
-                      close();
-                    }
-                  "
-                >
-                  Кэшировать плейлист
-                </button>
-                <button
-                  :class="[$style.menuItem, $style.danger]"
-                  @click.stop="
-                    () => {
-                      handlePlaylistDelete(playlist);
-                      close();
-                    }
-                  "
-                >
-                  Удалить
-                </button>
-              </template>
-            </MediaCardCompact>
-          </template>
-        </VirtualHorizontalList>
-      </div>
-    </section>
+          Кэшировать плейлист
+        </button>
+        <button
+          :class="[$style.menuItem, $style.danger]"
+          @click.stop="
+            () => {
+              handlePlaylistDelete(item);
+              close();
+            }
+          "
+        >
+          Удалить
+        </button>
+      </template>
+    </MediaCardSection>
 
-    <!-- Треки: занимает всё оставшееся место, прокручивается отдельно -->
-    <section :class="$style.trackSection">
-      <div :class="$style.sectionHeader">
-        <h2 :class="$style.sectionTitle">Треки</h2>
-        <div :class="$style.headerControls">
-          <div
-            v-if="tracks.length > 0"
-            :class="$style.filter"
-            @click="toggleSort"
-          >
-            <span>{{ currentSortLabel }}</span>
-            <AppIcon
-              name="chevron-up"
-              :size="10"
-              :class="[
-                $style.arrow,
-                sortDirection === 'desc' && $style.arrowDown,
-              ]"
-            />
-          </div>
+    <TrackListSection
+      title="Треки"
+      :tracks="tracks"
+      :active-track-id="audioStore.currentTrack?.id ?? null"
+      show-action
+      @track-click="handleTrackClick"
+      @track-play="handleTrackPlay"
+      @track-refresh="fetchTracks"
+    >
+      <template #header-extra>
+        <div
+          v-if="tracks.length > 0"
+          :class="$style.filter"
+          @click="toggleSort"
+        >
+          <span>{{ currentSortLabel }}</span>
+          <AppIcon
+            name="chevron-up"
+            :size="10"
+            :class="[
+              $style.arrow,
+              sortDirection === 'desc' && $style.arrowDown,
+            ]"
+          />
         </div>
-      </div>
+      </template>
 
-      <div v-if="pageCursor.totalPages > 1" :class="$style.pagination">
-        <button
-          :class="$style.pageBtn"
-          :disabled="pageCursor.currentPage === 0"
-          @click="goToPage(pageCursor.currentPage - 1)"
-        >
-          <AppIcon name="chevron-left" :size="14" />
-        </button>
-        <span :class="$style.pageInfo">
-          {{ pageCursor.currentPage + 1 }} / {{ pageCursor.totalPages }}
-        </span>
-        <button
-          :class="$style.pageBtn"
-          :disabled="pageCursor.currentPage >= pageCursor.totalPages - 1"
-          @click="goToPage(pageCursor.currentPage + 1)"
-        >
-          <AppIcon name="chevron-right" :size="14" />
-        </button>
-      </div>
+      <template #above-list>
+        <div v-if="pageCursor.totalPages > 1" :class="$style.pagination">
+          <button
+            :class="$style.pageBtn"
+            :disabled="pageCursor.currentPage === 0"
+            @click="goToPage(pageCursor.currentPage - 1)"
+          >
+            <AppIcon name="chevron-left" :size="14" />
+          </button>
+          <span :class="$style.pageInfo">
+            {{ pageCursor.currentPage + 1 }} / {{ pageCursor.totalPages }}
+          </span>
+          <button
+            :class="$style.pageBtn"
+            :disabled="pageCursor.currentPage >= pageCursor.totalPages - 1"
+            @click="goToPage(pageCursor.currentPage + 1)"
+          >
+            <AppIcon name="chevron-right" :size="14" />
+          </button>
+        </div>
+      </template>
 
-      <div v-if="tracks.length === 0" :class="$style.emptyState">
-        <div :class="$style.emptyIcon"><AppIcon name="music-note" :size="64" /></div>
-        <div :class="$style.emptyTitle">Данных нет</div>
+      <template #empty-extra>
         <div :class="$style.emptyHint">Добавьте новый трек</div>
         <button :class="$style.addButton" @click="handleAddTrack">
           + Добавить трек
         </button>
-      </div>
-
-      <VirtualList
-        v-else
-        :class="$style.scroller"
-        :items="tracks"
-        :item-height="96"
-        :overscan="8"
-      >
-        <template #default="{ item: track }">
-          <MediaCard
-            v-memo="[
-              track.id,
-              track.liked,
-              audioStore.currentTrack?.id === track.id,
-            ]"
-            type="track"
-            show-action
-            :track="track"
-            :active="audioStore.currentTrack?.id === track.id"
-            @click="handleTrackClick(track)"
-            @play="handleTrackPlay(track)"
-            @refresh="fetchTracks"
-          />
-        </template>
-      </VirtualList>
-    </section>
+      </template>
+    </TrackListSection>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, inject, computed, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import MediaCard from '@/components/common/MediaCard.vue';
-import MediaCardCompact from '@/components/common/MediaCardCompact.vue';
+import MediaCardSection, { type MediaCardItem } from '@/components/common/MediaCardSection.vue';
+import TrackListSection from '@/components/common/TrackListSection.vue';
 import PlaylistCreateModal from '@/components/PlaylistCreateModal.vue';
-import VirtualList from '@/components/common/VirtualList.vue';
-import VirtualHorizontalList from '@/components/common/VirtualHorizontalList.vue';
 import AppIcon from '@/components/common/AppIcon.vue';
 import type {
   PlaylistDto,
@@ -187,6 +144,16 @@ const notifications = useNotificationStore();
 const playlists = ref<PlaylistDto[]>([]);
 const tracks = ref<TrackDto[]>([]);
 const loading = ref(false);
+
+const playlistItems = computed<MediaCardItem[]>(() =>
+  playlists.value.map((playlist) => ({
+    id: playlist.id,
+    title: playlist.title,
+    subtitle: playlist.description || 'Unknown',
+    thumbnail: playlist.thumbnail,
+    trackCount: playlist.trackCount,
+  })),
+);
 
 watch(
   () => audioStore.lastUnavailableTrackId,
@@ -244,7 +211,6 @@ const toggleSort = () => {
 const fetchPlaylists = async () => {
   try {
     const playlistDtos = await invoke<PlaylistDto[]>('get_all_playlists');
-    console.log(playlistDtos, 'PLAYLISTS');
     playlists.value = playlistDtos;
   } catch (e) {
     console.error('Failed to fetch playlists:', e);
@@ -256,7 +222,6 @@ const fetchTracks = async () => {
   try {
     const order = { [sortField.value]: sortDirection.value };
     const trackDtos = await invoke<TrackDto[]>('get_all_tracks', { order });
-    console.log(trackDtos, 'DTOS');
     tracks.value = trackDtos;
   } catch (e) {
     console.error('Failed to fetch tracks:', e);
@@ -293,16 +258,15 @@ const showAllPlaylists = () => {
   console.log('Show all playlists clicked');
 };
 
-const handlePlaylistClick = (playlist: PlaylistDto) => {
-  emit('navigate-playlist', playlist.id);
+const handlePlaylistClick = (item: MediaCardItem) => {
+  emit('navigate-playlist', item.id);
 };
 
-const handlePlaylistPlay = async (playlist: PlaylistDto) => {
-  console.log('Play playlist clicked:', playlist);
+const handlePlaylistPlay = async (item: MediaCardItem) => {
   audioStore.startLoading();
   try {
     await invoke('load_playlist_and_play', {
-      playlistId: playlist.id,
+      playlistId: item.id,
       startIndex: 0,
     });
     refreshQueue();
@@ -312,28 +276,27 @@ const handlePlaylistPlay = async (playlist: PlaylistDto) => {
   }
 };
 
-const handlePlaylistCache = async (playlist: PlaylistDto) => {
-  console.log('Caching playlist:', playlist.title);
+const handlePlaylistCache = async (item: MediaCardItem) => {
   notifications.addNotification(
-    `Начинаю кэширование плейлиста "${playlist.title}"`,
+    `Начинаю кэширование плейлиста "${item.title}"`,
     'info',
   );
   try {
     const pwi = await invoke<PlaylistWithItemsDto | null>(
       'get_playlist_with_tracks',
-      { playlistId: playlist.id },
+      { playlistId: item.id },
     );
     if (pwi && pwi.items) {
       let successCount = 0;
       let failCount = 0;
 
-      for (const item of pwi.items) {
-        if (item.itemType === 'track') {
+      for (const pwiItem of pwi.items) {
+        if (pwiItem.itemType === 'track') {
           try {
-            await invoke('save_track_to_file', { track: item.track });
+            await invoke('save_track_to_file', { track: pwiItem.track });
             successCount++;
           } catch (e) {
-            console.error(`Failed to cache track ${item.track.title}:`, e);
+            console.error(`Failed to cache track ${pwiItem.track.title}:`, e);
             failCount++;
           }
         }
@@ -341,12 +304,12 @@ const handlePlaylistCache = async (playlist: PlaylistDto) => {
 
       if (failCount === 0) {
         notifications.addNotification(
-          `Плейлист "${playlist.title}" поставлен на загрузку (${successCount} треков)`,
+          `Плейлист "${item.title}" поставлен на загрузку (${successCount} треков)`,
           'success',
         );
       } else {
         notifications.addNotification(
-          `Загрузка "${playlist.title}": ${successCount} ок, ${failCount} ошибок`,
+          `Загрузка "${item.title}": ${successCount} ок, ${failCount} ошибок`,
           'warning',
         );
       }
@@ -360,9 +323,9 @@ const handlePlaylistCache = async (playlist: PlaylistDto) => {
   }
 };
 
-const handlePlaylistDelete = async (playlist: PlaylistDto) => {
+const handlePlaylistDelete = async (item: MediaCardItem) => {
   try {
-    await invoke('delete_playlist', { playlistId: playlist.id });
+    await invoke('delete_playlist', { playlistId: item.id });
     await fetchPlaylists();
   } catch (e) {
     console.error('Failed to delete playlist:', e);
@@ -381,7 +344,28 @@ const handleAddTrack = async () => {
   }
 };
 
-const handleTrackClick = async (track: TrackDto) => {
+const playVisibleTracks = async (track: TrackDto, visibleTracks: TrackDto[]) => {
+  audioStore.startLoading();
+  try {
+    const trackIds = visibleTracks.map((t) => t.id);
+    await invoke('load_and_play_library_tracks', { trackIds, selectedId: track.id });
+    refreshQueue();
+  } catch (e) {
+    console.error('Failed to play filtered tracks:', e);
+    audioStore.stopLoading();
+  }
+};
+
+const handleTrackClick = async (
+  track: TrackDto,
+  visibleTracks: TrackDto[],
+  isFiltered: boolean,
+) => {
+  if (isFiltered) {
+    await playVisibleTracks(track, visibleTracks);
+    return;
+  }
+
   isPageLoading.value = true;
   audioStore.startLoading();
   try {
@@ -428,8 +412,16 @@ const goToPage = async (page: number) => {
   }
 };
 
-const handleTrackPlay = async (track: TrackDto) => {
-  console.log('Play track clicked:', track);
+const handleTrackPlay = async (
+  track: TrackDto,
+  visibleTracks: TrackDto[],
+  isFiltered: boolean,
+) => {
+  if (isFiltered) {
+    await playVisibleTracks(track, visibleTracks);
+    return;
+  }
+
   audioStore.startLoading();
   try {
     await invoke('play_library_track', { trackId: track.id });
@@ -438,10 +430,6 @@ const handleTrackPlay = async (track: TrackDto) => {
     console.error('Failed to play track:', e);
     audioStore.stopLoading();
   }
-};
-
-const handleTrackMore = (track: TrackDto) => {
-  console.log('Track more clicked:', track);
 };
 </script>
 
@@ -456,37 +444,6 @@ const handleTrackMore = (track: TrackDto) => {
   overflow: hidden;
 }
 
-.playlistSection {
-  flex-shrink: 0;
-  padding: $spacing-xl $spacing-xl 0;
-  margin-bottom: $spacing-2xl;
-}
-
-.trackSection {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0 $spacing-xl;
-}
-
-.scroller {
-  flex: 1;
-  min-height: 0;
-}
-
-.sectionHeader {
-  @include flex-between;
-  margin-bottom: $spacing-lg;
-}
-
-.sectionTitle {
-  font-size: $font-size-2xl;
-  font-weight: $font-weight-bold;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
 .showAll {
   color: var(--color-text-secondary);
   text-decoration: none;
@@ -496,11 +453,6 @@ const handleTrackMore = (track: TrackDto) => {
   &:hover {
     color: var(--color-text-primary);
   }
-}
-
-.headerControls {
-  @include flex-center;
-  gap: $spacing-sm;
 }
 
 .filter {
@@ -563,41 +515,6 @@ const handleTrackMore = (track: TrackDto) => {
 
 .arrowDown {
   transform: rotate(180deg);
-}
-
-.playlistList {
-  margin: 0 (-$spacing-xl);
-  padding: 0 $spacing-xl;
-}
-
-.trackGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: $spacing-lg;
-}
-
-.emptyState {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: $spacing-2xl * 2;
-  background-color: var(--color-bg-secondary);
-  border-radius: $radius-lg;
-  border: 2px dashed var(--color-border);
-  gap: $spacing-lg;
-}
-
-.emptyIcon {
-  font-size: 64px;
-  opacity: 0.4;
-  filter: grayscale(1);
-}
-
-.emptyTitle {
-  font-size: $font-size-xl;
-  font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
 }
 
 .emptyHint {

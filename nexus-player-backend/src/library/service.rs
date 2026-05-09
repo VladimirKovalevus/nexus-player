@@ -208,9 +208,9 @@ impl LibraryService {
         self.track_repo.list_cached(order).await
     }
 
-    /// Get one summary per album that has at least one cached track
+    /// Get one summary per playlist (album) that has at least one cached track
     pub async fn get_cached_albums(&self) -> Result<Vec<models::CachedAlbumSummary>> {
-        self.track_repo.list_cached_albums().await
+        self.playlist_repo.list_cached_albums().await
     }
 
     /// Search tracks by query

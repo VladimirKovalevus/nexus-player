@@ -561,6 +561,21 @@ pub async fn play_library_track(state: State<'_, Arc<AppState>>, track_id: i64) 
 }
 
 #[tauri::command]
+pub async fn load_and_play_library_tracks(
+    state: State<'_, Arc<AppState>>,
+    track_ids: Vec<i64>,
+    selected_id: i64,
+) -> Result<()> {
+    state
+        .load_and_play_library_tracks(
+            track_ids.into_iter().map(TrackId).collect(),
+            TrackId(selected_id),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn load_and_play_local_tracks(
     state: State<'_, Arc<AppState>>,
     track_ids: Vec<i64>,

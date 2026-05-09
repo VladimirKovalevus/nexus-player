@@ -36,9 +36,6 @@ pub trait TrackRepositoryV2: Send + Sync {
     /// Returns tracks whose cache_type is 'cached', in the given order.
     async fn list_cached(&self, order: TrackOrder) -> Result<Vec<Track>>;
 
-    /// Returns one summary per album that has at least one cached track.
-    async fn list_cached_albums(&self) -> Result<Vec<CachedAlbumSummary>>;
-
     async fn set_liked(&self, id: TrackId, liked: bool) -> Result<()>;
 
     async fn set_unavailable(&self, id: TrackId, unavailable: bool) -> Result<()>;
@@ -82,6 +79,9 @@ pub trait PlaylistRepositoryV2: Send + Sync {
     async fn reorder_items(&self, playlist_id: PlaylistId, item_ids: Vec<i64>) -> Result<()>;
 
     async fn is_track_in_any_playlist(&self, track_id: TrackId) -> Result<bool>;
+
+    /// Returns one summary per playlist that has at least one cached track among its items.
+    async fn list_cached_albums(&self) -> Result<Vec<CachedAlbumSummary>>;
 }
 
 #[async_trait]

@@ -33,6 +33,7 @@ export interface TrackDto {
 }
 
 export interface CachedAlbumDto {
+  id: number;
   title: string;
   artist: string | null;
   artworkUrl: string | null;

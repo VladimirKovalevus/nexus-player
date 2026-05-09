@@ -51,6 +51,7 @@ pub struct Track {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedAlbumSummary {
+    pub id: PlaylistId,
     pub title: String,
     pub artist: Option<String>,
     pub artwork: Option<Artwork>,

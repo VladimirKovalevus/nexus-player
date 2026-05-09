@@ -3,12 +3,14 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, TransactionTrait,
+    QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
 };
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::library::entities_v2::{playlist, playlist_item};
-use crate::library::models::{Playlist, PlaylistItem, PlaylistItemKind, PlaylistWithItems};
+use crate::library::entities_v2::{artwork, playlist, playlist_item, track};
+use crate::library::models::{
+    CachedAlbumSummary, Playlist, PlaylistItem, PlaylistItemKind, PlaylistWithItems,
+};
 use crate::library::repository_v2::PlaylistRepositoryV2;
 use crate::library::types::PlaylistId;
 
@@ -343,5 +345,71 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
             .context("Failed to count track occurrences in playlists")?;
 
         Ok(count > 0)
+    }
+
+    async fn list_cached_albums(&self) -> Result<Vec<CachedAlbumSummary>> {
+        let cached_track_ids: HashSet<i64> = track::Entity::find()
+            .filter(track::Column::CacheType.eq("cached"))
+            .select_only()
+            .column(track::Column::Id)
+            .into_tuple::<i64>()
+            .all(&self.db)
+            .await
+            .context("Failed to list cached track ids")?
+            .into_iter()
+            .collect();
+
+        if cached_track_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let items: Vec<(i64, i64)> = playlist_item::Entity::find()
+            .filter(playlist_item::Column::ItemType.eq("track"))
+            .select_only()
+            .column(playlist_item::Column::PlaylistId)
+            .column(playlist_item::Column::ItemId)
+            .into_tuple()
+            .all(&self.db)
+            .await
+            .context("Failed to list playlist track items")?;
+
+        let mut cached_counts: HashMap<i64, u64> = HashMap::new();
+        for (playlist_id, item_id) in items {
+            if cached_track_ids.contains(&item_id) {
+                *cached_counts.entry(playlist_id).or_insert(0) += 1;
+            }
+        }
+
+        if cached_counts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let playlist_ids: Vec<i64> = cached_counts.keys().copied().collect();
+        let playlists = playlist::Entity::find()
+            .filter(playlist::Column::Id.is_in(playlist_ids))
+            .find_also_related(artwork::Entity)
+            .all(&self.db)
+            .await
+            .context("Failed to fetch playlists with cached tracks")?;
+
+        let mut summaries = Vec::with_capacity(playlists.len());
+        for (playlist_entity, artwork_entity) in playlists {
+            let cached_track_count = cached_counts.get(&playlist_entity.id).copied().unwrap_or(0);
+            let artwork = artwork_entity.map(TryInto::try_into).transpose()?;
+
+            // Playlists created from a streaming album store the artist name in
+            // `description`; `creator` is reserved for user-authored playlists.
+            let artist = playlist_entity.creator.or(playlist_entity.description);
+
+            summaries.push(CachedAlbumSummary {
+                id: crate::library::types::PlaylistId(playlist_entity.id),
+                title: playlist_entity.title,
+                artist,
+                artwork,
+                cached_track_count,
+            });
+        }
+
+        Ok(summaries)
     }
 }

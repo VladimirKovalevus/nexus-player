@@ -3,32 +3,7 @@ import { ref, inject, nextTick, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { useAudioStore } from '../stores/audio';
 import { useStreamingStore } from '../stores/streaming';
-
-// ════════════════════════════════════════════════════════════════════
-// Fuzzy Search
-// ════════════════════════════════════════════════════════════════════
-
-function fuzzyScore(needle: string, haystack: string): number | null {
-  const n = needle.toLowerCase(), h = haystack.toLowerCase();
-  let ni = 0, score = 0, run = 0, last = -1;
-  for (let hi = 0; hi < h.length && ni < n.length; hi++) {
-    if (h[hi] === n[ni]) {
-      score += hi === 0 ? 10 : 1;
-      score += last === hi - 1 ? ++run * 3 : (run = 0, 0);
-      last = hi; ni++;
-    }
-  }
-  return ni === n.length ? score : null;
-}
-
-function fuzzyFilter(q: string, list: string[]): string[] {
-  if (!q) return [...list];
-  return list
-    .map(s => ({ s, sc: fuzzyScore(q, s) }))
-    .filter(x => x.sc !== null)
-    .sort((a, b) => b.sc! - a.sc!)
-    .map(x => x.s);
-}
+import { fuzzyScore, fuzzyFilter } from '@/utils/fuzzy';
 
 // ════════════════════════════════════════════════════════════════════
 // Trie

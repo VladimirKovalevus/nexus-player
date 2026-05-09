@@ -72,7 +72,6 @@ const navigateToPlaylist = (playlistId: number) => {
     playlistHistory.value.push(selectedPlaylistId.value);
   }
   selectedPlaylistId.value = playlistId;
-  currentView.value = 'home';
 };
 
 const navigateBackFromPlaylist = () => {
@@ -116,7 +115,7 @@ provide('clearQueue', () => playbackQueueRef.value?.clearQueue());
     </template>
 
     <PlaylistDetailView
-      v-if="currentView === 'home' && selectedPlaylistId !== null"
+      v-if="(currentView === 'home' || currentView === 'cache') && selectedPlaylistId !== null"
       :key="selectedPlaylistId"
       :playlist-id="selectedPlaylistId"
       @navigate="navigateToPlaylist"
@@ -128,7 +127,7 @@ provide('clearQueue', () => playbackQueueRef.value?.clearQueue());
     />
     <StreamingSearch v-else-if="currentView === 'search'" @refetch="handleSearchRefetch" />
     <HistoryView v-else-if="currentView === 'history'" />
-    <CacheView v-else-if="currentView === 'cache'" />
+    <CacheView v-else-if="currentView === 'cache'" @navigate-playlist="navigateToPlaylist" />
     <DownloadsView v-else-if="currentView === 'downloads'" />
     <LibraryView v-else-if="currentView === 'library'" />
     <div v-else :style="{ padding: '40px', textAlign: 'center' }">
