@@ -15,8 +15,8 @@
     "android-install": "bash android-deploy.sh",
     "android-deploy": "NO_STRIP=true tauri android build --target aarch64 && bash android-deploy.sh",
     "bld": "NO_STRIP=true tauri build",
-    "install": "bash ./install.sh",
-    "start": "tauri dev"
+    "start": "tauri dev",
+    "windows":"tauri build  --runner cargo-xwin --target x86_64-pc-windows-msvc"
   },
   "dependencies": {
     "@fontsource/oxanium": "^5.2.8",
