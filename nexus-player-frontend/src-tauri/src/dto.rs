@@ -160,6 +160,15 @@ pub struct QueueStateDto {
     pub repeat_mode: String,
     pub shuffle_enabled: bool,
     pub search_context: Option<SearchContextDto>,
+    /// "tracks" | "playlists" when a radio session is loaded, otherwise None.
+    pub radio_mode: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanupResultDto {
+    pub deleted_tracks: u64,
+    pub deleted_artworks: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

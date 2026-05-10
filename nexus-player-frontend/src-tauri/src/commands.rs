@@ -3,7 +3,7 @@ use nexus_player_backend::sync::{
 };
 
 use crate::dto::{
-    AudioStateDto, CachedAlbumDto, ContainerMetaDto, CreatePlaylistRequest,
+    AudioStateDto, CachedAlbumDto, CleanupResultDto, ContainerMetaDto, CreatePlaylistRequest,
     CreatePlaylistWithTracksRequest, CurrentPositionDto, EqPresetDto, EqSettingsDto,
     LibraryPageDto, PlayHistoryEntryDto, PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto,
     PlaylistWithTracksDto, QueueEntryDto, QueueStateDto, SearchContextDto, SearchResultDto,
@@ -339,6 +339,16 @@ pub async fn delete_playlist(state: State<'_, Arc<AppState>>, playlist_id: i64) 
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn cleanup_library(state: State<'_, Arc<AppState>>) -> Result<CleanupResultDto> {
+    let (deleted_tracks, deleted_artworks) =
+        state.cleanup_library().await.map_err(|e| e.to_string())?;
+    Ok(CleanupResultDto {
+        deleted_tracks,
+        deleted_artworks,
+    })
 }
 
 #[tauri::command]
@@ -698,11 +708,50 @@ pub async fn toggle_shuffle(state: State<'_, Arc<AppState>>) -> Result<()> {
 }
 
 #[tauri::command]
+pub async fn start_radio(state: State<'_, Arc<AppState>>, mode: String) -> Result<()> {
+    use nexus_player_backend::playlist::cursor::RadioMode;
+
+    let radio_mode = match mode.as_str() {
+        "tracks" => RadioMode::Tracks,
+        "playlists" => RadioMode::Playlists,
+        _ => return Err("Invalid radio mode".into()),
+    };
+
+    state
+        .start_radio(radio_mode)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn stop_radio(state: State<'_, Arc<AppState>>) -> Result<()> {
+    state.stop_radio().await;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn get_queue_state(state: State<'_, Arc<AppState>>) -> Result<QueueStateDto> {
     use nexus_player_backend::playlist::playback_queue::{ActiveQueue, ContainerKind, QueueEntry};
 
     let queue = state.lock_queue().await;
     build_queue_state_dto(&queue)
+}
+
+/// Reads the active radio mode out of the queue context. Called on the 100ms event loop
+/// too, so it only borrows — never clones the context (which carries the whole order).
+pub(crate) fn radio_mode_label(
+    cq: &nexus_player_backend::playlist::playback_queue::CursorQueue,
+) -> Option<String> {
+    match &cq.context {
+        Some(ContainerContext::Radio { mode, .. }) => Some(
+            match mode {
+                nexus_player_backend::playlist::cursor::RadioMode::Tracks => "tracks",
+                nexus_player_backend::playlist::cursor::RadioMode::Playlists => "playlists",
+            }
+            .to_string(),
+        ),
+        _ => None,
+    }
 }
 
 fn build_queue_state_dto(
@@ -735,6 +784,7 @@ fn build_queue_state_dto(
                 repeat_mode: repeat_mode.to_string(),
                 shuffle_enabled: cq.shuffle_enabled,
                 search_context: None,
+                radio_mode: radio_mode_label(cq),
             })
         }
         ActiveQueue::Search(sq) => {
@@ -792,6 +842,7 @@ fn build_queue_state_dto(
                     system: sq.system.clone(),
                     query: sq.query.clone(),
                 }),
+                radio_mode: None,
             })
         }
     }

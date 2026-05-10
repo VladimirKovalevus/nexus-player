@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useAudioStore } from '../stores/audio';
+import { useRadioStore } from '../stores/radio';
+import type { RadioMode } from '../types/types';
 import { invoke } from '@tauri-apps/api/core';
 import WaveformBar from './common/WaveformBar.vue';
 import AppIcon from './common/AppIcon.vue';
@@ -19,7 +21,13 @@ const emit = defineEmits<{
 }>();
 
 const audioStore = useAudioStore();
+const radioStore = useRadioStore();
 const { playNext, playPrevious } = audioStore;
+
+const RADIO_MODES: Array<{ mode: RadioMode; label: string }> = [
+  { mode: 'tracks', label: 'Треки' },
+  { mode: 'playlists', label: 'Плейлисты' },
+];
 const isCanvasActive = ref(false);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const localVolume = ref(audioStore.volume);
@@ -385,6 +393,28 @@ emit("close");
           </div>
         </div>
 
+        <div class="radio-tools">
+          <button
+            class="tool-btn radio-btn"
+            :class="{ active: radioStore.isActive }"
+            :disabled="radioStore.isStarting"
+            :title="radioStore.isActive ? 'Выключить радио' : 'Включить радио'"
+            @click="radioStore.toggle()"
+          >
+            <AppIcon name="radio" :size="14" /> Радио
+          </button>
+          <button
+            v-for="option in RADIO_MODES"
+            :key="option.mode"
+            class="tool-btn radio-mode-btn"
+            :class="{ active: radioStore.selectedMode === option.mode }"
+            :title="option.label"
+            @click="radioStore.selectMode(option.mode)"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+
         <button class="close-btn" @click="handleClose"><AppIcon name="close" :size="18" /></button>
       </div>
       
@@ -552,6 +582,41 @@ emit("close");
   font-size: $font-size-sm;
 
   &:hover { opacity: 1; background: rgba(0, 0, 0, 0.6); }
+}
+
+// Sits to the right of the fullscreen button so it never collides with the
+// centred .visualizer-tools group.
+.radio-tools {
+  position: absolute;
+  top: calc($spacing-md + env(safe-area-inset-top));
+  left: calc($spacing-lg + 36px + $spacing-sm);
+  display: flex;
+  gap: $spacing-xs;
+}
+
+.radio-btn {
+  gap: $spacing-xs;
+
+  &.active {
+    opacity: 1;
+    color: var(--color-accent-primary);
+    box-shadow: inset 0 0 0 1px var(--color-accent-primary);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+}
+
+.radio-mode-btn {
+  height: 36px;
+  font-size: $font-size-xs;
+
+  &.active {
+    opacity: 1;
+    box-shadow: inset 0 0 0 1px var(--color-accent-primary);
+  }
 }
 
 .preset-selector {

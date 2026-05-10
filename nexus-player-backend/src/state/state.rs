@@ -8,7 +8,8 @@ use crate::library::models::{
 };
 use crate::library::types::TrackOrder;
 use crate::library::{LibraryService, PlaylistId, TrackId};
-use crate::playlist::cursor::{AppCursorResolver, ContainerContext, PlayerCursor};
+use crate::playlist::cursor::{AppCursorResolver, ContainerContext, PlayerCursor, RadioMode};
+use crate::playlist::radio;
 use crate::playlist::playback_queue::{
     ActiveQueue, ContainerKind, ContainerMeta, CursorQueue, NextResult, RepeatMode, SearchQueue,
     SearchQueueItem,
@@ -1685,7 +1686,17 @@ impl AppState {
     }
 
     pub async fn delete_playlist(&self, playlist_id: PlaylistId) -> Result<()> {
-        self.library.delete_playlist(playlist_id).await
+        self.library.delete_playlist(playlist_id).await?;
+        // The playlist's tracks are now orphaned — reclaim the ones that aren't liked.
+        // Tracks still referenced by another playlist are kept, otherwise deleting one
+        // playlist would silently gut the others.
+        self.library.cleanup_library().await?;
+        Ok(())
+    }
+
+    /// Manual library cleanup. Returns (tracks_deleted, artworks_deleted).
+    pub async fn cleanup_library(&self) -> Result<(u64, u64)> {
+        self.library.cleanup_library().await
     }
 
     pub async fn create_playlist_with_tracks(
@@ -1806,6 +1817,36 @@ impl AppState {
             ActiveQueue::Cursor(cq) => cq.shuffle_enabled,
             ActiveQueue::Search(sq) => sq.shuffle_enabled,
         }
+    }
+
+    /// Builds a radio order for `mode`, freezes it into the queue context and starts
+    /// playing from the top.
+    pub async fn start_radio(&self, mode: RadioMode) -> Result<()> {
+        let track_ids = radio::build_radio_order(&self.library, mode).await?;
+        if track_ids.is_empty() {
+            anyhow::bail!("Нет доступных треков для радио");
+        }
+        tracing::info!("Starting radio {:?} with {} tracks", mode, track_ids.len());
+
+        // Radio *is* the shuffle. Leaving `shuffle_enabled` on would make CursorQueue::next()
+        // re-randomise inside the prefetch window, destroying the frozen order — and the
+        // "up next" list, which always reports manual_queue in insertion order.
+        {
+            let mut queue = self.queue.lock().await;
+            match &mut *queue {
+                ActiveQueue::Cursor(cq) => cq.shuffle_enabled = false,
+                ActiveQueue::Search(sq) => sq.shuffle_enabled = false,
+            }
+        }
+
+        self.load_context_and_play(ContainerContext::Radio { mode, track_ids }, 0)
+            .await
+    }
+
+    pub async fn stop_radio(&self) {
+        self.stop();
+        self.clear_queue().await;
+        tracing::info!("Radio stopped");
     }
 
     pub async fn get_current_track_index(&self) -> Option<usize> {

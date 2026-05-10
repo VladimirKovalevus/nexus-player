@@ -26,6 +26,10 @@
           <AppIcon name="playlist" :class="$style.icon" />
           <span>Плейлисты</span>
         </button>
+        <button :class="[$style.navItem, { [$style.active]: activeView === 'radio' }]" @click.prevent="$emit('changeView', 'radio')">
+          <AppIcon name="radio" :class="$style.icon" />
+          <span>Радио</span>
+        </button>
       </div>
       <div :class="$style.card">
         <button :class="[$style.navItem, { [$style.active]: activeView === 'history' }]" @click.prevent="$emit('changeView', 'history')">

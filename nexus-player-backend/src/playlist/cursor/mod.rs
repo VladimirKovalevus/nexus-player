@@ -6,7 +6,7 @@ pub mod engine;
 pub mod sources;
 pub mod resolver;
 
-pub use types::{ContainerContext, CursorItem};
+pub use types::{ContainerContext, CursorItem, RadioMode};
 pub use engine::{PlayerCursor, CursorResolver};
 pub use sources::{StaticTrackCursor, DbTrackCursor, ProviderCursor, StreamingSearchCursor};
 pub use resolver::AppCursorResolver;

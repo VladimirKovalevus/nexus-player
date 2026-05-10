@@ -198,6 +198,9 @@ impl CursorQueue {
         self.current_track = None;
         self.cursor = None;
         self.manual_queue.clear();
+        // Must be reset too: a stale context would make Repeat::All resurrect the old
+        // source, and would misreport the active radio session to the UI.
+        self.context = None;
     }
 
     /// Creates a flat list view of the queue for the UI.

@@ -251,6 +251,7 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                             repeat_mode: repeat_mode.to_string(),
                             shuffle_enabled: cq.shuffle_enabled,
                             search_context: None,
+                            radio_mode: crate::commands::radio_mode_label(cq),
                         }
                     }
                     ActiveQueue::Search(sq) => {
@@ -313,6 +314,7 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                                 system: sq.system.clone(),
                                 query: sq.query.clone(),
                             }),
+                            radio_mode: None,
                         }
                     }
                 }

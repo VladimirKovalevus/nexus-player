@@ -43,6 +43,14 @@ pub trait TrackRepositoryV2: Send + Sync {
     async fn reorder_liked(&self, track_ids: Vec<TrackId>) -> Result<()>;
 
     async fn find_liked_by_sources(&self, sources: &[TrackSource]) -> Result<std::collections::HashSet<TrackSource>>;
+
+    /// Delete tracks that belong to no playlist and are not liked. `playlist_items_v2` has no
+    /// foreign key to `tracks_v2`, so removing a playlist leaves its tracks behind forever —
+    /// this is how those orphans get reclaimed. Returns the number of rows deleted.
+    async fn delete_orphan_unliked(&self) -> Result<u64>;
+
+    /// Delete artwork rows no track or playlist references any more. Returns rows deleted.
+    async fn delete_orphan_artworks(&self) -> Result<u64>;
 }
 
 #[async_trait]

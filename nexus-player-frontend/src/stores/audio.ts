@@ -36,6 +36,7 @@ export const useAudioStore = defineStore('audio', () => {
     repeatMode: 'off',
     shuffleEnabled: false,
     searchContext: null,
+    radioMode: null,
   });
 
   // Media Session Integration
@@ -127,6 +128,8 @@ export const useAudioStore = defineStore('audio', () => {
   const volume = computed(() => audioState.value.volume);
   const repeatMode = computed(() => queueState.value.repeatMode);
   const shuffleEnabled = computed(() => queueState.value.shuffleEnabled);
+  const radioMode = computed(() => queueState.value.radioMode);
+  const isRadioActive = computed(() => queueState.value.radioMode !== null);
   const entries = computed(() => queueState.value.entries);
   const currentPosition = computed(() => queueState.value.currentPosition);
   const isSearchQueue = computed(() => queueState.value.searchContext !== null);
@@ -363,6 +366,8 @@ export const useAudioStore = defineStore('audio', () => {
     volume,
     repeatMode,
     shuffleEnabled,
+    radioMode,
+    isRadioActive,
     entries,
     currentPosition,
     isSearchQueue,

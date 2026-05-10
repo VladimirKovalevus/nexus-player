@@ -214,6 +214,34 @@
             </div>
 
           </section>
+
+          <!-- Library Maintenance -->
+          <section :class="$style.section">
+            <h3 :class="$style.sectionTitle">Библиотека</h3>
+
+            <div :class="$style.provider">
+              <div :class="$style.syncRow">
+                <div :class="$style.syncInfo">
+                  <span :class="$style.syncLabel">Почистить библиотеку</span>
+                  <span :class="$style.syncHint">
+                    Удаляет треки, которые не входят ни в один плейлист и не отмечены лайком
+                  </span>
+                </div>
+                <div :class="$style.syncButtons">
+                  <button
+                    :class="[$style.smallButton, $style.syncBtn, cleanupConfirm && $style.dangerBtn]"
+                    @click="handleCleanup"
+                    :disabled="cleanupLoading"
+                  >
+                    {{ cleanupLoading ? '...' : cleanupConfirm ? 'Точно удалить?' : 'Почистить' }}
+                  </button>
+                </div>
+              </div>
+
+              <p v-if="cleanupError" :class="$style.syncError">{{ cleanupError }}</p>
+              <p v-if="cleanupResult" :class="$style.syncSuccess">{{ cleanupResult }}</p>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -230,7 +258,7 @@
 import { ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import AppIcon from '@/components/common/AppIcon.vue';
-import type { AppConfig, SyncType } from '@/types/types';
+import type { AppConfig, CleanupResult, SyncType } from '@/types/types';
 import { useThemeStore } from '@/stores/theme';
 
 const themeStore = useThemeStore();
@@ -386,12 +414,43 @@ const handleOverlayClick = () => {
   close();
 };
 
+const cleanupLoading = ref(false);
+const cleanupConfirm = ref(false);
+const cleanupError = ref('');
+const cleanupResult = ref('');
+
+// Destructive, so the first click only arms the button.
+const handleCleanup = async () => {
+  cleanupError.value = '';
+  cleanupResult.value = '';
+
+  if (!cleanupConfirm.value) {
+    cleanupConfirm.value = true;
+    return;
+  }
+
+  cleanupConfirm.value = false;
+  cleanupLoading.value = true;
+  try {
+    const res = await invoke<CleanupResult>('cleanup_library');
+    cleanupResult.value = `Удалено треков: ${res.deletedTracks}, обложек: ${res.deletedArtworks}`;
+  } catch (e) {
+    cleanupError.value = String(e);
+  } finally {
+    cleanupLoading.value = false;
+  }
+};
+
 watch(
   () => props.isOpen,
   (newVal) => {
     if (newVal) {
       fetchConfig();
       loadTelegramConfig();
+    } else {
+      cleanupConfirm.value = false;
+      cleanupError.value = '';
+      cleanupResult.value = '';
     }
   }
 );
@@ -770,6 +829,16 @@ watch(
 
 .syncBtn {
   min-width: 80px;
+}
+
+// Armed state of the cleanup button — it deletes rows on the next click.
+.dangerBtn {
+  min-width: 120px;
+  background-color: #ef4444;
+
+  &:hover {
+    background-color: #dc2626;
+  }
 }
 
 .syncError {

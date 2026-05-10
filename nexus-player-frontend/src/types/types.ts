@@ -146,6 +146,14 @@ export interface QueueState {
   repeatMode: 'off' | 'all' | 'one';
   shuffleEnabled: boolean;
   searchContext: SearchContextDto | null;
+  radioMode: RadioMode | null;
+}
+
+export type RadioMode = 'tracks' | 'playlists';
+
+export interface CleanupResult {
+  deletedTracks: number;
+  deletedArtworks: number;
 }
 
 export interface AudioEvent {

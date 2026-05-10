@@ -250,8 +250,11 @@ onUnmounted(() => {
         <button
           class="control-btn small-btn shuffle-btn"
           :class="{ active: audioStore.shuffleEnabled }"
+          :disabled="audioStore.isRadioActive"
           @click="toggleShuffleMode"
-          :title="audioStore.shuffleEnabled ? 'Выключить перемешивание' : 'Включить перемешивание'"
+          :title="audioStore.isRadioActive
+            ? 'Недоступно в режиме радио'
+            : audioStore.shuffleEnabled ? 'Выключить перемешивание' : 'Включить перемешивание'"
         >
           <AppIcon name="shuffle" :size="19" :style="{ filter: audioStore.shuffleEnabled ? 'none' : 'grayscale(1) opacity(0.5)' }" />
         </button>

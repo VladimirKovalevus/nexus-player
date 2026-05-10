@@ -38,6 +38,7 @@ const navItems = [
   { view: 'search', icon: 'search', label: 'Поиск' },
   { view: 'library', icon: 'music-note', label: 'Музыка' },
   { view: 'playlists', icon: 'playlist', label: 'Плейлисты' },
+  { view: 'radio', icon: 'radio', label: 'Радио' },
   { view: 'history', icon: 'history', label: 'История' },
   { view: 'cache', icon: 'album', label: 'Кэш' },
   { view: 'downloads', icon: 'download-tray', label: 'Загрузки' },

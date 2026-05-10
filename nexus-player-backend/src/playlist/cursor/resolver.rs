@@ -24,7 +24,7 @@ impl AppCursorResolver {
     }
 
     /// Recursively flatten playlist items into track IDs, handling nested playlists.
-    fn flatten_playlist_tracks<'a>(
+    pub(crate) fn flatten_playlist_tracks<'a>(
         library: &'a LibraryService,
         playlist_id: PlaylistId,
         visited: &'a mut HashSet<i64>,
@@ -98,6 +98,11 @@ impl CursorResolver for AppCursorResolver {
                     id, 
                     ContentType::Album
                 )))
+            }
+
+            ContainerContext::Radio { track_ids, .. } => {
+                let ids: Vec<LibTrackId> = track_ids.into_iter().map(LibTrackId).collect();
+                Ok(Box::new(DbTrackCursor::new(self.library.clone(), ids)))
             }
 
             ContainerContext::SearchQuery { system, query, content_type } => {

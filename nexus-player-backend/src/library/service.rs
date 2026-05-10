@@ -342,6 +342,20 @@ impl LibraryService {
         self.playlist_repo.delete(id).await
     }
 
+    /// Reclaims tracks that belong to no playlist and are not liked, plus any artwork left
+    /// unreferenced by them. Returns (tracks_deleted, artworks_deleted).
+    pub async fn cleanup_library(&self) -> Result<(u64, u64)> {
+        let tracks = self.track_repo.delete_orphan_unliked().await?;
+        // Artworks second: the track rows above must be gone before they count as unreferenced.
+        let artworks = self.track_repo.delete_orphan_artworks().await?;
+        tracing::info!(
+            "Library cleanup removed {} orphan tracks and {} orphan artworks",
+            tracks,
+            artworks
+        );
+        Ok((tracks, artworks))
+    }
+
     /// Add track to playlist
     pub async fn add_track_to_playlist(
         &self,

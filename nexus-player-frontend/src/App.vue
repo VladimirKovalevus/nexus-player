@@ -14,6 +14,7 @@ import HistoryView from './views/HistoryView.vue';
 import CacheView from './views/CacheView.vue';
 import DownloadsView from './views/DownloadsView.vue';
 import LibraryView from './views/LibraryView.vue';
+import RadioView from './views/RadioView.vue';
 import StreamingSearch from './components/StreamingSearch.vue';
 import GlobalNotifications from './components/common/GlobalNotifications.vue';
 import VisualizerOverlay from './components/VisualizerOverlay.vue';
@@ -130,6 +131,7 @@ provide('clearQueue', () => playbackQueueRef.value?.clearQueue());
     <CacheView v-else-if="currentView === 'cache'" @navigate-playlist="navigateToPlaylist" />
     <DownloadsView v-else-if="currentView === 'downloads'" />
     <LibraryView v-else-if="currentView === 'library'" />
+    <RadioView v-else-if="currentView === 'radio'" />
     <div v-else :style="{ padding: '40px', textAlign: 'center' }">
       <h2>Раздел в разработке</h2>
       <p>Вы перешли в раздел: {{ currentView }}</p>

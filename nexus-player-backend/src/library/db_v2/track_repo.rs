@@ -526,4 +526,46 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
 
         Ok(liked_sources)
     }
+
+    async fn delete_orphan_unliked(&self) -> Result<u64> {
+        let in_playlists = sea_query::Query::select()
+            .column(playlist_item::Column::ItemId)
+            .from(playlist_item::Entity)
+            .and_where(sea_query::Expr::col(playlist_item::Column::ItemType).eq("track"))
+            .to_owned();
+
+        let result = track::Entity::delete_many()
+            .filter(track::Column::Liked.eq(0))
+            .filter(track::Column::Id.not_in_subquery(in_playlists))
+            .exec(&self.db)
+            .await
+            .context("Failed to delete orphan unliked tracks")?;
+
+        Ok(result.rows_affected)
+    }
+
+    async fn delete_orphan_artworks(&self) -> Result<u64> {
+        use crate::library::entities_v2::playlist;
+
+        let used_by_tracks = sea_query::Query::select()
+            .column(track::Column::ArtworkId)
+            .from(track::Entity)
+            .and_where(sea_query::Expr::col(track::Column::ArtworkId).is_not_null())
+            .to_owned();
+
+        let used_by_playlists = sea_query::Query::select()
+            .column(playlist::Column::ArtworkId)
+            .from(playlist::Entity)
+            .and_where(sea_query::Expr::col(playlist::Column::ArtworkId).is_not_null())
+            .to_owned();
+
+        let result = artwork::Entity::delete_many()
+            .filter(artwork::Column::Id.not_in_subquery(used_by_tracks))
+            .filter(artwork::Column::Id.not_in_subquery(used_by_playlists))
+            .exec(&self.db)
+            .await
+            .context("Failed to delete orphan artworks")?;
+
+        Ok(result.rows_affected)
+    }
 }

@@ -159,7 +159,7 @@ const playlistTitleCompleter: Completer = async () =>
 // Static Completion Sets
 // ════════════════════════════════════════════════════════════════════
 
-const VIEWS     = ['home', 'search', 'history', 'downloads'];
+const VIEWS     = ['home', 'search', 'library', 'playlists', 'radio', 'history', 'cache', 'downloads'];
 const PROVIDERS = ['bandcamp', 'soundcloud'];
 const CTYPES    = ['all', 'track', 'playlist', 'album', 'channel'];
 

@@ -64,18 +64,21 @@ impl CursorSource for DbTrackCursor {
             return Ok(Vec::new());
         }
 
-        let end = (self.index + limit).min(self.track_ids.len());
-        let ids_to_fetch = &self.track_ids[self.index..end];
-        
+        // Keep pulling until we have `limit` tracks or run out of ids. Ids can dangle
+        // (a playlist_item pointing at a deleted track), and the engine treats an empty
+        // batch as end-of-source — so returning early on a miss would truncate the queue.
         let mut batch = Vec::new();
-        for id in ids_to_fetch {
-            if let Some(lib_track) = self.library.get_track(*id).await? {
-                // Assuming From implementation exists or mapping manually
-                batch.push(CursorItem::Track(lib_track.into()));
+        while batch.len() < limit && self.index < self.track_ids.len() {
+            let id = self.track_ids[self.index];
+            self.index += 1;
+            match self.library.get_track(id).await? {
+                Some(lib_track) => batch.push(CursorItem::Track(lib_track.into())),
+                None => {
+                    tracing::debug!("DbTrackCursor: skipping missing track id {}", id.0);
+                }
             }
         }
 
-        self.index = end;
         Ok(batch)
     }
 
