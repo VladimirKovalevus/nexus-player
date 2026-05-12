@@ -19,7 +19,6 @@ import StreamingSearch from './components/StreamingSearch.vue';
 import GlobalNotifications from './components/common/GlobalNotifications.vue';
 import VisualizerOverlay from './components/VisualizerOverlay.vue';
 import CommandLine from './components/CommandLine.vue';
-import SoundCloudChallengeHandler from './components/common/SoundCloudChallengeHandler.vue';
 
 const playbackQueueRef = ref<InstanceType<typeof PlaybackQueue> | null>(null);
 const playerControlRef = ref<InstanceType<typeof PlayerControl> | null>(null);
@@ -140,6 +139,5 @@ provide('clearQueue', () => playbackQueueRef.value?.clearQueue());
   <GlobalNotifications />
   <VisualizerOverlay :is-open="showVisualizer" @close="showVisualizer = false" />
   <CommandLine />
-  <SoundCloudChallengeHandler />
 </template>
 <style lang="scss" scoped></style>

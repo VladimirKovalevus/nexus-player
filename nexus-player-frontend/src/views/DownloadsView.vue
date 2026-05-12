@@ -50,7 +50,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import { listen } from '@tauri-apps/api/event';
 import type { TaskInfoDto } from '@/types/types';
 import AppIcon from '@/components/common/AppIcon.vue';

@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import type { SyncType } from '../types/types';
 
 export type SyncStatus = 'idle' | 'running' | 'done' | 'error';

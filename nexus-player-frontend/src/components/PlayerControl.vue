@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import { listen } from '@tauri-apps/api/event';
 import { useAudioStore } from '../stores/audio';
 import { useEqStore } from '../stores/eq';
@@ -8,6 +8,7 @@ import WaveformBar from './common/WaveformBar.vue';
 import MarqueeText from './common/MarqueeText.vue';
 import EqPanel from './EqPanel.vue';
 import AppIcon from './common/AppIcon.vue';
+import AppImage from './common/AppImage.vue';
 
 const audioStore = useAudioStore();
 const eqStore = useEqStore();
@@ -219,9 +220,10 @@ onUnmounted(() => {
     <div class="left-section">
       <div class="track-info">
         <div v-if="audioStore.currentTrack?.artworkUrl" class="track-art">
-          <img
+          <AppImage
             height="64"
             width="64"
+            variant="large"
             :src="audioStore.currentTrack?.artworkUrl"
             style="filter: none !important"
           />

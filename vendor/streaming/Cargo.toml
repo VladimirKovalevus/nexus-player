@@ -13,6 +13,11 @@ lofty = "0.22"
 async-trait = "0.1.89"
 symphonia = { path = "../Symphonia/symphonia", features = ["all", "ogg", "vorbis", "opus"] }
 tracing = "0.1"
+# Artwork cache: decode whatever providers serve, re-encode as WebP.
+# `image` 0.25 dropped the WebP encoder, so encoding comes from the `webp` crate.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif", "bmp"] }
+webp = "0.3"
+sha2 = "0.10"
 
 [patch.crates-io]
 symphonia-core = { path = "../Symphonia/symphonia-core" }

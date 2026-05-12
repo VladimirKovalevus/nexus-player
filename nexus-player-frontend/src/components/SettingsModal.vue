@@ -256,7 +256,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import AppIcon from '@/components/common/AppIcon.vue';
 import type { AppConfig, CleanupResult, SyncType } from '@/types/types';
 import { useThemeStore } from '@/stores/theme';

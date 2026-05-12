@@ -2,15 +2,13 @@
   <div :class="[$style.mediaCard, $style[`type-${type}`], { [$style.dropdownActive]: dropdownOpen, [$style.active]: props.active, [$style.unavailable]: props.track?.unavailable }]" :data-dropdown-open="dropdownOpen || undefined">
     <div :class="$style.content" @click="handleClick">
     <div :class="$style.thumbnail">
-      <img
-        v-if="entity.thumbnail"
-        :src="entity.thumbnail"
-        :alt="entity.title"
-        :class="$style.image"
-      />
-      <div v-else :class="$style.placeholder">
-        <AppIcon :name="placeholderIcon" :size="24" />
-      </div>
+      <AppImage :src="entity.thumbnail" :alt="entity.title" :class="$style.image">
+        <template #placeholder>
+          <div :class="$style.placeholder">
+            <AppIcon :name="placeholderIcon" :size="24" />
+          </div>
+        </template>
+      </AppImage>
 
       <div v-if="type === 'track'" :class="$style.playOverlay">
         <button :class="$style.playButton" @click.stop="handlePlay" :disabled="(store.isLoading && props.active) || props.track?.unavailable">
@@ -112,11 +110,12 @@
 
 <script setup lang="ts">
 import { computed, ref, nextTick } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import type { TrackDto, PlaylistDto, ContainerMetaDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
 import MarqueeText from './MarqueeText.vue';
 import AppIcon from './AppIcon.vue';
+import AppImage from './AppImage.vue';
 const store = useAudioStore()
 
 interface Props {
@@ -540,18 +539,16 @@ const handleAddToLibrary = async () => {
 };
 
 const handleToggleLike = async () => {
-console.log({
-...props.track,
-thumbnail: props?.track?.thumbnail || props.track?.artworkUrl, 
-    },"AAALO")
   if (props.type !== 'track' || !props.track) return;
-  
+
   try {
     props.track.liked =  !props.track.liked
 
     await invoke('toggle_liked', { track: {
 ...props.track,
-artworkUrl: props.track.thumbnail || props.track?.artworkUrl, 
+// Same precedence as `entity` and handleAddToPlaylist: library DTOs carry
+// artworkUrl, streaming results carry thumbnail.
+artworkUrl: props.track.artworkUrl ?? props.track.thumbnail ?? null,
     } });
     emit('refresh');
   } catch (e) {

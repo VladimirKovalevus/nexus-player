@@ -63,7 +63,7 @@
 
 <script setup lang="ts">
 import { computed, inject, onMounted, ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import MediaCard from '@/components/common/MediaCard.vue';
 import VirtualList from '@/components/common/VirtualList.vue';
 import AppIcon from '@/components/common/AppIcon.vue';

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, inject, nextTick, onMounted, onUnmounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import { useAudioStore } from '../stores/audio';
 import { useStreamingStore } from '../stores/streaming';
 import { fuzzyScore, fuzzyFilter } from '@/utils/fuzzy';

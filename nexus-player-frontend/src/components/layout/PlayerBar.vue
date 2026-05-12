@@ -2,8 +2,11 @@
   <footer :class="$style.playerBar">
     <div :class="$style.trackInfo">
       <div :class="$style.trackCover">
-        <img v-if="currentTrack?.artworkUrl" :src="currentTrack.artworkUrl" :alt="currentTrack.title" />
-        <AppIcon v-else name="music-note" :size="24" />
+        <AppImage :src="currentTrack?.artworkUrl" :alt="currentTrack?.title">
+          <template #placeholder>
+            <AppIcon name="music-note" :size="24" />
+          </template>
+        </AppImage>
       </div>
       <div :class="$style.trackDetails">
         <div :class="$style.trackName">{{ currentTrack?.title || 'Нет воспроизведения' }}</div>
@@ -44,7 +47,8 @@
 import { useAudioStore } from '@/stores/audio';
 import WaveformBar from '@/components/common/WaveformBar.vue';
 import AppIcon from '@/components/common/AppIcon.vue';
-import { invoke } from '@tauri-apps/api/core';
+import AppImage from '@/components/common/AppImage.vue';
+import { invoke } from '@/utils/providerAuth';
 import { computed } from 'vue';
 
 const audioStore = useAudioStore();

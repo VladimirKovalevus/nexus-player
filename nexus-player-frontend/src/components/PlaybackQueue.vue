@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import MediaCard from './common/MediaCard.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import VirtualList from './common/VirtualList.vue';

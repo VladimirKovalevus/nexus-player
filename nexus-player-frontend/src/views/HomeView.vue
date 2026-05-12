@@ -119,7 +119,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, inject, computed, watch } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import MediaCardSection, { type MediaCardItem } from '@/components/common/MediaCardSection.vue';
 import TrackListSection from '@/components/common/TrackListSection.vue';
 import PlaylistCreateModal from '@/components/PlaylistCreateModal.vue';

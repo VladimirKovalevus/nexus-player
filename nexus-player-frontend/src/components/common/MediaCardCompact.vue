@@ -4,17 +4,13 @@
     @click="handleClick"
   >
     <div :class="$style.thumbnail">
-      <img
-        v-if="thumbnail"
-        :src="thumbnail"
-        :alt="title"
-        :class="$style.image"
-        decoding="async"
-        loading="lazy"
-      />
-      <div v-else :class="$style.placeholder">
-        <AppIcon :name="placeholderIcon" :size="32" />
-      </div>
+      <AppImage :src="thumbnail" :alt="title" :class="$style.image">
+        <template #placeholder>
+          <div :class="$style.placeholder">
+            <AppIcon :name="placeholderIcon" :size="32" />
+          </div>
+        </template>
+      </AppImage>
 
       <div :class="$style.playOverlay">
         <button :class="$style.playButton" @click.stop="handlePlay">
@@ -79,9 +75,10 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import MarqueeText from './MarqueeText.vue';
 import AppIcon from './AppIcon.vue';
+import AppImage from './AppImage.vue';
 
 interface Props {
   type: 'track' | 'playlist' | 'album';

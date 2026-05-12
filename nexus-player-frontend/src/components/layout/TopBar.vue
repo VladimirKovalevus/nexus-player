@@ -68,14 +68,16 @@
             @click="handleResultClick(result)"
           >
             <div :class="$style.resultThumbnail">
-              <img
-                v-if="result.thumbnail"
+              <AppImage
                 :src="result.thumbnail"
                 :alt="result.type === 'channel' ? result.name : result.title"
-              />
-              <div v-else :class="$style.thumbnailPlaceholder">
-                <AppIcon :name="result.type === 'channel' ? 'user' : 'music-note'" :size="20" />
-              </div>
+              >
+                <template #placeholder>
+                  <div :class="$style.thumbnailPlaceholder">
+                    <AppIcon :name="result.type === 'channel' ? 'user' : 'music-note'" :size="20" />
+                  </div>
+                </template>
+              </AppImage>
             </div>
 
             <div :class="$style.resultContent">
@@ -119,10 +121,11 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import { onClickOutside } from '@vueuse/core';
 import type { SearchResult } from '@/types/types';
 import AppIcon from '@/components/common/AppIcon.vue';
+import AppImage from '@/components/common/AppImage.vue';
 
 const text = computed(()=>(window.innerWidth+"-"+window.innerHeight)||'none')
 const searchQuery = ref('');

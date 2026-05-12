@@ -1,3 +1,4 @@
+pub mod artwork;
 pub mod error;
 pub mod external;
 pub mod provider;

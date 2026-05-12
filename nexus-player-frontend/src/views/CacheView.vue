@@ -24,7 +24,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import MediaCardSection, { type MediaCardItem } from '@/components/common/MediaCardSection.vue';
 import TrackListSection from '@/components/common/TrackListSection.vue';
 import type { TrackDto, CachedAlbumDto } from '@/types/types';

@@ -3,9 +3,10 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useAudioStore } from '../stores/audio';
 import { useRadioStore } from '../stores/radio';
 import type { RadioMode } from '../types/types';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import WaveformBar from './common/WaveformBar.vue';
 import AppIcon from './common/AppIcon.vue';
+import AppImage from './common/AppImage.vue';
 
 // @ts-ignore
 import butterchurn from 'butterchurn/dist/butterchurn.min.js';
@@ -422,12 +423,15 @@ emit("close");
         <div class="visualizer-container" @click="handleCanvasClick">
           <Transition name="fade" mode="out-in">
             <div v-if="!isCanvasActive" key="cover" class="cover-wrapper" @click.stop="isCanvasActive = true">
-              <img 
-                v-if="audioStore.currentTrack?.artworkUrl" 
-                :src="audioStore.currentTrack.artworkUrl" 
+              <AppImage
+                :src="audioStore.currentTrack?.artworkUrl"
+                variant="large"
                 class="big-cover"
-              />
-              <div v-else class="big-cover-placeholder"><AppIcon name="music-note" :size="128" /></div>
+              >
+                <template #placeholder>
+                  <div class="big-cover-placeholder"><AppIcon name="music-note" :size="128" /></div>
+                </template>
+              </AppImage>
             </div>
             <div v-else key="canvas" class="canvas-wrapper">
               <div v-if="butterchurnError" class="error-msg">

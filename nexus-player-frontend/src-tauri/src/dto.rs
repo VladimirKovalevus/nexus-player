@@ -171,6 +171,17 @@ pub struct CleanupResultDto {
     pub deleted_artworks: u64,
 }
 
+/// One entry of an artwork batch resolution.
+///
+/// `path` is the local file to render, or `None` while the cover is still being
+/// fetched — the UI keeps showing the remote `url` until then.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedArtworkDto {
+    pub url: String,
+    pub path: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioStateDto {

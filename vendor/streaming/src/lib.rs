@@ -3,6 +3,7 @@ pub mod detection;
 pub mod downloader;
 pub mod error;
 pub mod hls;
+pub mod images;
 pub mod multi_downloader;
 pub mod source;
 pub mod state;

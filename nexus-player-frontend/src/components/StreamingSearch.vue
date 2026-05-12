@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import type { SearchResult } from '@/types/types';
 import MediaCard from '@/components/common/MediaCard.vue';
 import AppIcon from '@/components/common/AppIcon.vue';

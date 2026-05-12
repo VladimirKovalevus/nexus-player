@@ -15,12 +15,14 @@ use crate::playlist::playback_queue::{
     SearchQueueItem,
 };
 use crate::playlist::playlist::Playlist;
+use crate::streaming::artwork::{ArtworkCache, ArtworkLocation};
 use crate::streaming::types::ContentType;
 use crate::streaming::StreamingService;
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use streaming::images::{ImageVariant, OnReady};
 use streaming::state::types::DefaultCallbacks;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -36,6 +38,8 @@ pub struct AppState {
     library: Arc<LibraryService>,
 
     streaming: Arc<StreamingService>, // Made Arc to share with resolver
+
+    artwork: Arc<ArtworkCache>,
 
     config_manager: ConfigManager,
 
@@ -63,7 +67,9 @@ impl AppState {
             audio_engine.set_fade(fin, fout);
         }
 
-        let _cache_dir = db_path.parent().unwrap().join("cache");
+        let cache_dir = db_path.parent().unwrap().join("cache");
+        let artwork = Arc::new(ArtworkCache::new(cache_dir.join("artwork")));
+
         let streaming = StreamingService::new(
             config.providers.clone(),
             config.audio.clone(),
@@ -82,9 +88,81 @@ impl AppState {
             cursor_resolver,
             library,
             streaming,
+            artwork,
             config_manager,
             op_cancel: Mutex::new(CancellationToken::new()),
         })
+    }
+
+    // ========================================================================
+    // Artwork cache
+    // ========================================================================
+
+    /// Resolve a batch of cover URLs to local files, queueing background fetches
+    /// for the ones that aren't cached yet.
+    ///
+    /// Batched because the UI resolves a whole viewport at once: a virtualized
+    /// list re-resolves every visible row on each scroll pass, and one call per
+    /// row would trade a rendering stall for an IPC one.
+    /// Only covers belonging to something saved in the library are fetched.
+    /// Transient listings — search results above all — resolve to `None` and pull
+    /// no traffic; the UI keeps showing the remote URL for those.
+    pub async fn resolve_artwork(
+        &self,
+        urls: &[String],
+        variant: ImageVariant,
+    ) -> Vec<Option<String>> {
+        let mut out = Vec::with_capacity(urls.len());
+        let mut uncached = Vec::new();
+
+        for url in urls {
+            match self.artwork.lookup(url, variant) {
+                ArtworkLocation::Local(path) => out.push(Some(path.to_string_lossy().into_owned())),
+                ArtworkLocation::Passthrough(url) => out.push(Some(url)),
+                ArtworkLocation::Pending => {
+                    out.push(None);
+                    uncached.push(url.clone());
+                }
+            }
+        }
+
+        if uncached.is_empty() {
+            return out;
+        }
+
+        // Already-cached covers are served above without consulting the library:
+        // the file exists, and re-checking would only cost a query.
+        match self.library.known_artwork_urls(&uncached).await {
+            Ok(known) => {
+                for url in uncached.iter().filter(|url| known.contains(*url)) {
+                    self.artwork.request(url, variant);
+                }
+            }
+            Err(e) => {
+                // Fetching nothing is the safe failure here — the remote URL still renders.
+                tracing::warn!("Artwork library check failed, skipping prefetch: {}", e);
+            }
+        }
+
+        out
+    }
+
+    /// Hold artwork fetching while audio is downloading, so covers never compete
+    /// with playback for bandwidth.
+    pub fn set_artwork_paused(&self, paused: bool) {
+        self.artwork.set_paused(paused);
+    }
+
+    pub fn set_artwork_on_ready(&self, callback: Arc<OnReady>) {
+        self.artwork.set_on_ready(callback);
+    }
+
+    pub async fn prune_artwork_cache(&self) -> anyhow::Result<()> {
+        self.artwork.prune().await
+    }
+
+    pub async fn clear_artwork_cache(&self) -> anyhow::Result<()> {
+        self.artwork.clear().await
     }
 
     pub fn config(&self) -> AppConfig {

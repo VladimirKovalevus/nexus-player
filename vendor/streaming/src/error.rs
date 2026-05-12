@@ -19,6 +19,9 @@ pub enum StreamingError {
 
     #[error("File size unknown")]
     UnknownSize,
+
+    #[error("Image decode failed: {0}")]
+    ImageDecode(String),
 }
 #[derive(Error, Debug, Clone)]
 pub enum InitializationError {

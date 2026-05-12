@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { AudioState, QueueState, AudioEvent } from '@/types/types';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, requestProviderAuth } from '@/utils/providerAuth';
 import { useNotificationStore } from './notifications';
 
 export const useAudioStore = defineStore('audio', () => {
@@ -9,7 +9,6 @@ export const useAudioStore = defineStore('audio', () => {
 
   const lastUnavailableTrackId = ref<number | null>(null);
   const lastCachedTrack = ref<{ trackId: number; success: boolean } | null>(null);
-  const activeChallenge = ref<{ provider: string; url: string } | null>(null);
 
   // High-frequency state isolated to prevent unnecessary re-renders of the whole app
   const currentPositionSecs = ref(0);
@@ -298,14 +297,9 @@ export const useAudioStore = defineStore('audio', () => {
         break;
       case 'ProviderChallenge':
         if (event.payload?.provider && event.payload?.url) {
-          activeChallenge.value = {
-            provider: event.payload.provider,
-            url: event.payload.url,
-          };
-          notificationStore.addNotification(
-            `Требуется проверка для ${event.payload.provider}. Пожалуйста, подождите...`,
-            'info',
-          );
+          requestProviderAuth(event.payload.provider, event.payload.url)
+            .then(() => invoke('retry_playback'))
+            .catch((e) => console.error('Provider challenge failed:', e));
         }
         break;
     }
@@ -377,7 +371,6 @@ export const useAudioStore = defineStore('audio', () => {
     repeatIcon,
     lastUnavailableTrackId,
     lastCachedTrack,
-    activeChallenge,
     handleAudioEvent,
     startLoading,
     stopLoading,

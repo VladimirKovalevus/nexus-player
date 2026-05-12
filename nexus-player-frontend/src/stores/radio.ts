@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import type { RadioMode } from '@/types/types';
 import { useAudioStore } from './audio';
 import { useNotificationStore } from './notifications';

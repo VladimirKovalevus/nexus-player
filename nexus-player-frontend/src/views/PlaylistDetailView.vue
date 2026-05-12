@@ -64,13 +64,11 @@
 
       <div v-if="playlist" :class="$style.playlistInfo">
         <div :class="$style.thumbnail">
-          <img
-            v-if="playlist.thumbnail"
-            :src="playlist.thumbnail"
-            :alt="playlist.title"
-            :class="$style.thumbnailImage"
-          />
-          <div v-else :class="$style.thumbnailPlaceholder">&#128194;</div>
+          <AppImage :src="playlist.thumbnail" :alt="playlist.title" :class="$style.thumbnailImage">
+            <template #placeholder>
+              <div :class="$style.thumbnailPlaceholder">&#128194;</div>
+            </template>
+          </AppImage>
         </div>
         <div :class="$style.details">
           <h1 :class="$style.title">{{ playlist.title }}</h1>
@@ -170,9 +168,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, inject, reactive, nextTick, computed, watch } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import MediaCard from '@/components/common/MediaCard.vue';
 import AppIcon from '@/components/common/AppIcon.vue';
+import AppImage from '@/components/common/AppImage.vue';
 import type { PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, TrackDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
 import { useNotificationStore } from '@/stores/notifications';

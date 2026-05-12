@@ -42,7 +42,7 @@ impl SoundCloudProvider {
 
         let new_client = SoundCloudClient::default().await.map_err(|e| {
             let msg = format!("{}", e);
-            if msg.contains("403") || msg.to_lowercase().contains("forbidden") || msg.contains("client id generation failed") {
+            if Self::is_auth_error(&msg) || msg.contains("client id generation failed") {
                 StreamError::ChallengeRequired {
                     provider: "soundcloud".to_string(),
                     url: "https://soundcloud.com".to_string(),
@@ -74,11 +74,17 @@ impl SoundCloudProvider {
         url.split('/').last().map(|s| s.to_string())
     }
 
+    /// 401 = stale/invalid client_id, 403 = blocked; both are fixed by re-solving the challenge.
+    fn is_auth_error(msg: &str) -> bool {
+        let lower = msg.to_lowercase();
+        msg.contains("401") || msg.contains("403") || lower.contains("unauthorized") || lower.contains("forbidden")
+    }
+
     fn map_error(&self, e: impl std::fmt::Display, url: String) -> StreamError {
         let msg = format!("{}", e);
         if msg.contains("404") || msg.to_lowercase().contains("not found") {
             StreamError::Unavailable("Track not found (404)".to_string())
-        } else if msg.contains("403") || msg.to_lowercase().contains("forbidden") {
+        } else if Self::is_auth_error(&msg) {
             StreamError::ChallengeRequired {
                 provider: "soundcloud".to_string(),
                 url,
@@ -134,7 +140,7 @@ impl StreamProvider for SoundCloudProvider {
             let msg = format!("{}", e);
             if msg.contains("404") || msg.to_lowercase().contains("not found") {
                 StreamError::Unavailable("Stream URL not found (404)".to_string())
-            } else if msg.contains("403") || msg.to_lowercase().contains("forbidden") {
+            } else if Self::is_auth_error(&msg) {
                 StreamError::ChallengeRequired {
                     provider: "soundcloud".to_string(),
                     url,

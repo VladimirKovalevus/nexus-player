@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useAudioStore } from '@/stores/audio';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 
 const audioStore = useAudioStore();
 const containerRef = ref<HTMLElement | null>(null);

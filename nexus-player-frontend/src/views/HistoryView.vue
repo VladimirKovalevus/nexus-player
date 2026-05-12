@@ -26,15 +26,11 @@
             @click="handleEntryClick(entry)"
           >
             <div :class="$style.entryMain">
-              <img
-                v-if="entry.artworkUrl"
-                :src="entry.artworkUrl"
-                :class="$style.artwork"
-                alt="Artwork"
-                decoding="async"
-                loading="lazy"
-              />
-              <div v-else :class="$style.artworkPlaceholder"><AppIcon name="music-note" :size="24" /></div>
+              <AppImage :src="entry.artworkUrl" :class="$style.artwork" alt="Artwork">
+                <template #placeholder>
+                  <div :class="$style.artworkPlaceholder"><AppIcon name="music-note" :size="24" /></div>
+                </template>
+              </AppImage>
 
               <div :class="$style.info">
                 <div :class="$style.trackTitle">{{ entry.title }}</div>
@@ -78,9 +74,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, inject } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import VirtualList from '@/components/common/VirtualList.vue';
 import AppIcon from '@/components/common/AppIcon.vue';
+import AppImage from '@/components/common/AppImage.vue';
 import type { PlayHistoryEntryDto } from '@/types/types';
 import { useNotificationStore } from '@/stores/notifications';
 

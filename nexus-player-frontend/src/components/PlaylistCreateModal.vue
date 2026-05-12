@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/utils/providerAuth';
 import AppIcon from '@/components/common/AppIcon.vue';
 
 import type { TrackDto } from '@/types/types';
