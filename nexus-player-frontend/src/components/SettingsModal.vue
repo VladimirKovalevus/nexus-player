@@ -88,7 +88,7 @@
               <label>Тема оформления</label>
               <div :class="$style.themeGrid">
                 <button 
-                  v-for="t in ['dark', 'retro', 'cyberpunk']" 
+                  v-for="t in THEMES" 
                   :key="t"
                   :class="[$style.themeButton, themeStore.activeTheme === t && $style.active]"
                   @click="themeStore.setTheme(t)"
@@ -98,16 +98,6 @@
               </div>
             </div>
             
-            <div v-if="false" :class="$style.field">
-              <label>Пользовательский CSS</label>
-              <textarea 
-                v-model="themeStore.customCss" 
-                @input="themeStore.setCustomCss(($event.target as HTMLTextAreaElement).value)"
-                placeholder="/* Вставьте ваш CSS сюда */"
-                rows="5"
-                :class="$style.customCssInput"
-              ></textarea>
-            </div>
           </section>
 
           <!-- Sync Settings -->
@@ -259,7 +249,7 @@ import { ref, watch } from 'vue';
 import { invoke } from '@/utils/providerAuth';
 import AppIcon from '@/components/common/AppIcon.vue';
 import type { AppConfig, CleanupResult, SyncType } from '@/types/types';
-import { useThemeStore } from '@/stores/theme';
+import { THEMES, useThemeStore } from '@/stores/theme';
 
 const themeStore = useThemeStore();
 const props = defineProps<{
@@ -400,8 +390,6 @@ const formatThemeDisplayName = (theme: string) => {
   switch (theme) {
     case 'dark': return 'Темная';
     case 'light': return 'Светлая';
-    case 'retro': return 'Ретро (NES)';
-    case 'cyberpunk': return 'Cyberpunk';
     default: return theme;
   }
 };

@@ -7,11 +7,8 @@ import VirtualList from './common/VirtualList.vue';
 import MarqueeText from './common/MarqueeText.vue';
 import AppIcon from './common/AppIcon.vue';
 import { useAudioStore } from '../stores/audio';
-import { useThemeStore } from '../stores/theme';
-import type { QueueEntryDto } from '@/types/types';
 
 const audioStore = useAudioStore();
-const themeStore = useThemeStore();
 const loading = ref(true);
 const error = ref<string | null>(null);
 const isModalOpen = ref(false);
@@ -45,8 +42,7 @@ const calculateItemHeight = (index: number) => {
   if (entry.entryType === 'track') return 88;
   if (entry.entryType === 'container') {
     if (expandedContainers.value.has(index) && entry.tracks) {
-      const trackHeight = themeStore.activeTheme === 'retro' ? 32 : 42;
-      return 88 + entry.tracks.length * trackHeight; // 88 header + tracks
+      return 88 + entry.tracks.length * 42; // 88 header + tracks
     }
     return 88;
   }
@@ -110,20 +106,6 @@ const toggleContainer = (itemIndex: number) => {
 
 const isContainerExpanded = (itemIndex: number) =>
   expandedContainers.value.has(itemIndex);
-
-const playAtIndex = async (index: number) => {
-  audioStore.startLoading();
-  try {
-    await invoke('play_queue_item', {
-      itemIndex: index,
-      trackIndexInContainer: null,
-    });
-    await fetchQueue();
-  } catch (e) {
-    console.error('Failed to play at index:', e);
-    audioStore.stopLoading();
-  }
-};
 
 const clearQueue = async () => {
   try {

@@ -195,27 +195,6 @@ const handleResultPlay = async (result: SearchResult, index: number) => {
 
 // Loads a streaming container into queue and expands it to get its tracks.
 // Side effect: replaces the current playback queue.
-const getContainerTracks = async (result: SearchResult): Promise<any[] | null> => {
-  try {
-    await invoke('handle_streaming_track', {
-      searchResult: result,
-      strategy: 'cache',
-      searchType: activeContentType.value,
-    });
-    const queueState = await invoke<any>('get_queue_state');
-    const entry = queueState.entries?.[0];
-    if (!entry) return null;
-    if (entry.entryType === 'container' && !entry.tracks) {
-      const expanded = await invoke<any>('expand_queue_container', { itemIndex: 0 });
-      return expanded.entries?.[0]?.tracks ?? null;
-    }
-    return entry.tracks ?? null;
-  } catch (e) {
-    console.error('Failed to get container tracks:', e);
-    return null;
-  }
-};
-
 const handleContainerCreatePlaylist = (index: number) => {
   const result = searchResults.value[index];
   if (result) {
@@ -226,12 +205,8 @@ const handleContainerCreatePlaylist = (index: number) => {
       description = result.creator || '';
     }
 
-    if (result.description) {
-      description = description ? `${description} (${result.description})` : result.description;
-    }
-
     playlistInitialData.value = {
-      title: result.title,
+      title: result.type === 'channel' ? result.name : result.title,
       description: description,
       artworkUrl: result.thumbnail || '',
     };
@@ -249,7 +224,7 @@ const handleContainerAddToPlaylist = async (index: number, playlistId: number) =
     const description = result.type === 'album' ? result.artist : result.creator;
 
     const childId = await invoke<number>('create_playlist_from_container', {
-      provider: result.source?.system || activeProvider.value,
+      provider: result.system || activeProvider.value,
       contentType: mapContentType(result.type),
       id: result.id,
       title,
@@ -280,7 +255,7 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
   error.value = null;
   try {
     await invoke<number>('create_playlist_from_container', {
-      provider: result.source?.system || activeProvider.value,
+      provider: result.system || activeProvider.value,
       contentType: mapContentType(result.type),
       id: result.id,
       title: data.title,
@@ -381,9 +356,9 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
           v-for="(result, index) in searchResults"
           :key="index"
           :type="result.type === 'track' ? 'track' : result.type === 'playlist' ? 'playlist' : 'album'"
-          :track="result.type === 'track' ? result : undefined"
-          :playlist="result.type === 'playlist' ? result : undefined"
-          :album="result.type === 'album' || result.type === 'channel' ? result : undefined"
+          :track="result.type === 'track' ? (result as never) : undefined"
+          :playlist="result.type === 'playlist' ? (result as never) : undefined"
+          :album="result.type === 'album' || result.type === 'channel' ? (result as never) : undefined"
           show-action
           :active="audioStore.currentTrack?.id === result.id"
           :container-mode="result.type !== 'track'"

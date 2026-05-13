@@ -119,7 +119,6 @@
             show-action
             context="playlist"
             container-mode
-            :active="audioStore.currentPlaylistId === item.playlist.id"
             :is-expanded="expanded[item.playlist.id]"
             @click="toggleExpand(item.playlist.id)"
             @toggle-expand="toggleExpand(item.playlist.id)"
@@ -135,7 +134,7 @@
               v-for="(subItem, trackIdx) in subPlaylistItems[item.playlist.id]"
               :key="subItemKey(item.playlist.id, subItem)"
               :class="$style.containerTrack"
-              @click="subItem.itemType === 'track' ? handleTrackPlay(subItem.track) : emit('navigate', subItem.playlist.id)"
+              @click="subItem.itemType === 'track' ? handleSubTrackPlay(item.playlist.id, trackIdx) : emit('navigate', subItem.playlist.id)"
             >
               <span v-if="subItem.itemType === 'track'" :class="$style.trackNumber">{{ trackIdx + 1 }}</span>
               <span v-else :class="$style.trackNumber"><AppIcon name="folder" :size="14" /></span>
@@ -463,23 +462,26 @@ const handlePlayAll = async () => {
   }
 };
 
-const handlePlaySubPlaylist = async (sub: PlaylistDto) => {
-  audioStore.startLoading();
-  try {
-    await invoke('load_playlist_and_play', { playlistId: sub.id, startIndex: 0 });
-    refreshQueue();
-  } catch (e) {
-    console.error('Failed to play sub-playlist:', e);
-    audioStore.stopLoading();
-  }
-};
-
 const handleTrackClick = async (track: TrackDto) => {
   try {
     await invoke('add_to_queue', { trackId: track.id });
     refreshQueue();
   } catch (e) {
     console.error('Failed to add track to queue:', e);
+  }
+};
+
+const handleSubTrackPlay = async (subPlaylistId: number, index: number) => {
+  audioStore.startLoading();
+  try {
+    const startIndex = subPlaylistItems[subPlaylistId]
+      .slice(0, index)
+      .filter((subItem) => subItem.itemType === 'track').length;
+    await invoke('load_playlist_and_play', { playlistId: subPlaylistId, startIndex });
+    refreshQueue();
+  } catch (e) {
+    console.error('Failed to play track from sub-playlist:', e);
+    audioStore.stopLoading();
   }
 };
 
@@ -509,24 +511,6 @@ const handleRemoveTrack = async (track: TrackDto) => {
     await fetchPlaylist();
   } catch (e) {
     console.error('Failed to remove track from playlist:', e);
-  }
-};
-
-const handleRemoveTrackFromSubPlaylist = async (subPlaylistId: number, track: TrackDto) => {
-  try {
-    await invoke('remove_track_from_playlist', {
-      playlistId: subPlaylistId,
-      trackId: track.id,
-    });
-    // Refresh sub-playlist items
-    const result = await invoke<PlaylistWithItemsDto | null>('get_playlist_with_tracks', {
-      playlistId: subPlaylistId,
-    });
-    if (result) {
-      subPlaylistItems[subPlaylistId] = result.items;
-    }
-  } catch (e) {
-    console.error('Failed to remove track from sub-playlist:', e);
   }
 };
 

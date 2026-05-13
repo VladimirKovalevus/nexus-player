@@ -5,7 +5,6 @@ import { useNotificationStore } from './stores/notifications';
 import AppLayout from './components/layout/AppLayout.vue';
 import PlaybackQueue from './components/PlaybackQueue.vue';
 import PlayerControl from './components/PlayerControl.vue';
-import TopBar from './components/layout/TopBar.vue';
 import Sidebar from './components/layout/Sidebar.vue';
 import MobileNav from './components/layout/MobileNav.vue';
 import HomeView from './views/HomeView.vue';

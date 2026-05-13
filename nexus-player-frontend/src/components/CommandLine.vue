@@ -332,7 +332,7 @@ async function getCompletions(inputStr: string): Promise<{
   prefix: string; candidates: string[]; quoted: boolean;
 }> {
   const { args: argsStr } = splitQuery(inputStr);
-  const { complete, orig, partial, inQ, trailing } = tokenize(argsStr);
+  const { complete, orig, partial } = tokenize(argsStr);
 
   // ── No confirmed tokens: completing command name ──
   if (complete.length === 0) {

@@ -2,9 +2,7 @@
   <div ref="appLayoutRef" :class="[$style.appLayout, { [$style.hideQueue]: !showQueue }]">
 
     <aside :class="$style.leftSidebar">
-      <slot name="leftSidebar">
-        <Sidebar />
-      </slot>
+      <slot name="leftSidebar" />
     </aside>
 
     <main :class="$style.mainContent">
@@ -38,7 +36,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
-import Sidebar from './Sidebar.vue';
 
 interface Props {
   showQueue?: boolean;

@@ -21,7 +21,7 @@ themeStore.initTheme();
 
 const notificationStore = useNotificationStore(pinia);
 
-app.config.errorHandler = (err, instance, info) => {
+app.config.errorHandler = (err, _instance, info) => {
   console.error('Vue Error:', err, info);
   notificationStore.addNotification(`Vue Error: ${err}`, 'error');
 };

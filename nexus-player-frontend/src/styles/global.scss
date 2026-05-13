@@ -1,9 +1,6 @@
 // Global Styles - Nexus Audio Player
 @import './variables.scss';
 @import './themes.scss';
-@import './themes/cartoon.scss';
-@import './themes/retro.scss';
-@import './themes/cyberpunk.scss';
 
 @font-face {
   font-family: 'Pixelzone';
@@ -15,36 +12,6 @@
   // Поджимаем вертикальные отступы самого шрифта, чтобы уменьшить межстрочный интервал
   ascent-override: 80%;
   descent-override: 20%;
-}
-
-@font-face {
-  font-family: 'Press Start 2P';
-  src: url('../assets/fonts/PressStart2P-Regular.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: 'Oxanium';
-  src: url('../assets/fonts/Oxanium-Regular.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Oxanium';
-  src: url('../assets/fonts/Oxanium-Bold.woff2') format('woff2');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Pacifico';
-  src: url('../assets/fonts/Pacifico-Regular.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
 }
 
 // CSS Reset и базовые стили

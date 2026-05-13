@@ -131,7 +131,7 @@ onMounted(async () => {
   await nextTick();
 
   if (props.containerSelector) {
-    scrollContainer = document.querySelector(props.containerSelector) ?? window;
+    scrollContainer = document.querySelector<HTMLElement>(props.containerSelector) ?? window;
   } else {
     scrollContainer = listRef.value;
   }

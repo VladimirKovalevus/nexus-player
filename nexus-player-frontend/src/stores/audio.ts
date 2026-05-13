@@ -44,10 +44,10 @@ export const useAudioStore = defineStore('audio', () => {
       const track = audioState.value.currentTrack;
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title,
-        artist: track.artist,
+        artist: track.artist ?? '',
         album: track.album || '',
-        artwork: track.thumbnail
-          ? [{ src: track.thumbnail, sizes: '512x512', type: 'image/png' }]
+        artwork: track.artworkUrl
+          ? [{ src: track.artworkUrl, sizes: '512x512', type: 'image/png' }]
           : [],
       });
     }

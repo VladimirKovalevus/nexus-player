@@ -16,10 +16,9 @@
     "android-deploy": "NO_STRIP=true tauri android build --target aarch64 && bash android-deploy.sh",
     "bld": "NO_STRIP=true tauri build",
     "start": "tauri dev",
-    "windows":"tauri build  --runner cargo-xwin --target x86_64-pc-windows-msvc"
+    "windows": "tauri build  --runner cargo-xwin --target x86_64-pc-windows-msvc"
   },
   "dependencies": {
-    "@fontsource/oxanium": "^5.2.8",
     "@tauri-apps/api": "^2.9.1",
     "@tauri-apps/plugin-opener": "^2.4.2",
     "@vueuse/core": "^14.1.0",

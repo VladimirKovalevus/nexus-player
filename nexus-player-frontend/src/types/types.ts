@@ -181,6 +181,7 @@ export interface StreamingPlaylist {
   trackCount: number;
   thumbnail?: string;
   url: string;
+  system: string;
 }
 
 export interface StreamingAlbum {
@@ -192,6 +193,7 @@ export interface StreamingAlbum {
   year?: number;
   thumbnail?: string;
   url: string;
+  system: string;
 }
 
 export interface StreamingChannel {
@@ -201,6 +203,7 @@ export interface StreamingChannel {
   subscriberCount?: number;
   thumbnail?: string;
   url: string;
+  system: string;
 }
 
 export type SearchResult =

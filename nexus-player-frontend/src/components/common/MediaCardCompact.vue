@@ -88,6 +88,7 @@ interface Props {
   trackCount?: number;
   playlistId?: number;
   showAction?: boolean;
+  active?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -195,13 +196,6 @@ const placeholderIcon = computed(() => {
     default:
       return 'music-note';
   }
-});
-
-const typeBadgeText = computed(() => {
-  if (props.type === 'playlist' && props.trackCount) {
-    return `${props.trackCount} tracks`;
-  }
-  return props.type.toUpperCase();
 });
 
 const handleClick = () => {

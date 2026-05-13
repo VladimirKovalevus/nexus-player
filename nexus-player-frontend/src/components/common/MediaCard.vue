@@ -120,7 +120,7 @@ const store = useAudioStore()
 
 interface Props {
   type: 'track' | 'playlist' | 'album';
-  track?: TrackDto&{thumbnail:string};
+  track?: TrackDto & { thumbnail?: string };
   playlist?: PlaylistDto;
   album?: ContainerMetaDto;
   showAction?: boolean;
@@ -304,12 +304,6 @@ const menuOptions = computed<MenuOption[]>(() => {
       });
     }
   }
-
-  // options.push({
-  //   label: 'Сохранить в файл',
-  //   icon: '💾',
-  //   action: handleSaveToFile,
-  // });
 
   if (props.context === 'queue' && !props.isInLibrary) {
     options.push({
@@ -519,16 +513,6 @@ const handleDeleteCache = async () => {
     emit('refresh');
   } catch (e) {
     console.error('Failed to delete cached track:', e);
-  }
-  closeDropdown();
-};
-
-const handleSaveToFile = async () => {
-  try {
-    await invoke('save_track_to_file', { track: entity.value });
-    console.log('Track saved to file:', entity.value.id);
-  } catch (e) {
-    console.error('Failed to save track to file:', e);
   }
   closeDropdown();
 };
