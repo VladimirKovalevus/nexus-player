@@ -19,13 +19,16 @@
     "windows": "tauri build  --runner cargo-xwin --target x86_64-pc-windows-msvc"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
     "@tauri-apps/api": "^2.9.1",
     "@tauri-apps/plugin-opener": "^2.4.2",
     "@vueuse/core": "^14.1.0",
     "butterchurn": "file:../vendor/butterchurn",
     "butterchurn-presets": "^2.4.7",
     "pinia": "^3.0.4",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "vue-i18n": "^11.4.18"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

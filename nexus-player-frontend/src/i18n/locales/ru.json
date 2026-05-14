@@ -1,0 +1,10 @@
+{
+  "settings": {
+    "appearance": {
+      "theme": "Тема оформления",
+      "language": "Язык интерфейса",
+      "themes": { "dark": "Тёмная", "light": "Светлая" },
+      "languages": { "ru": "Русский", "en": "English" }
+    }
+  }
+}

@@ -16,6 +16,8 @@ export const useThemeStore = defineStore('theme', () => {
     activeTheme.value = themeName;
     document.documentElement.setAttribute('data-theme', themeName);
     localStorage.setItem('theme', themeName);
+    // Canvas components cache colors and repaint on this event.
+    window.dispatchEvent(new Event('theme-changed'));
   };
 
   const initTheme = () => setTheme(activeTheme.value);

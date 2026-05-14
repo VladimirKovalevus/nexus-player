@@ -85,7 +85,7 @@
           <section :class="$style.section">
             <h3 :class="$style.sectionTitle">Внешний вид</h3>
             <div :class="$style.field">
-              <label>Тема оформления</label>
+              <label>{{ $t('settings.appearance.theme') }}</label>
               <div :class="$style.themeGrid">
                 <button 
                   v-for="t in THEMES" 
@@ -93,7 +93,20 @@
                   :class="[$style.themeButton, themeStore.activeTheme === t && $style.active]"
                   @click="themeStore.setTheme(t)"
                 >
-                  {{ formatThemeDisplayName(t) }}
+                  {{ $t(`settings.appearance.themes.${t}`) }}
+                </button>
+              </div>
+            </div>
+            <div :class="$style.field">
+              <label>{{ $t('settings.appearance.language') }}</label>
+              <div :class="$style.themeGrid">
+                <button
+                  v-for="l in LOCALES"
+                  :key="l"
+                  :class="[$style.themeButton, locale === l && $style.active]"
+                  @click="setLocale(l)"
+                >
+                  {{ $t(`settings.appearance.languages.${l}`) }}
                 </button>
               </div>
             </div>
@@ -250,8 +263,11 @@ import { invoke } from '@/utils/providerAuth';
 import AppIcon from '@/components/common/AppIcon.vue';
 import type { AppConfig, CleanupResult, SyncType } from '@/types/types';
 import { THEMES, useThemeStore } from '@/stores/theme';
+import { useI18n } from 'vue-i18n';
+import { LOCALES, setLocale } from '@/i18n';
 
 const themeStore = useThemeStore();
+const { locale } = useI18n();
 const props = defineProps<{
   isOpen: boolean;
 }>();
@@ -383,14 +399,6 @@ const save = async () => {
     error.value = `Failed to save config: ${e}`;
   } finally {
     loading.value = false;
-  }
-};
-
-const formatThemeDisplayName = (theme: string) => {
-  switch (theme) {
-    case 'dark': return 'Темная';
-    case 'light': return 'Светлая';
-    default: return theme;
   }
 };
 

@@ -1,7 +1,9 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
+import './styles/fonts.css';
 import './styles/global.scss';
+import { i18n } from './i18n';
 import { useNotificationStore } from './stores/notifications';
 import { useThemeStore } from './stores/theme';
 
@@ -14,6 +16,7 @@ const PERF_PROFILING = true;
 if (PERF_PROFILING) app.config.performance = true;
 
 app.use(pinia);
+app.use(i18n);
 
 // Initialize stores
 const themeStore = useThemeStore(pinia);

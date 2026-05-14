@@ -1,131 +1,136 @@
-// Theme System - CSS Variables для runtime переключения тем
-@import './variables.scss';
+// Theme tokens. Dark is the default; light overrides under data-theme.
+// The deck's screens stay dark in both themes, like a real device display.
 
 :root {
   color-scheme: dark;
-  
-  // Colors - Dark theme (по умолчанию)
-  --color-bg-primary: #{$dark-bg-primary};
-  --color-bg-secondary: #{$dark-bg-secondary};
-  --color-bg-sidebar: #{$dark-bg-sidebar};
-  --color-bg-player: #{$dark-bg-player};
-  --color-bg-hover: #{$dark-bg-hover};
 
-  --color-text-primary: #{$dark-text-primary};
-  --color-text-secondary: #{$dark-text-secondary};
-  --color-text-muted: #{$dark-text-muted};
+  --bg-body: #141512;
+  --bg-panel: #1d1e1a;
+  --bg-table: #181916;
+  --bg-selected: #2b2616;
+  --line: #30322b;
+  --line-soft: #272822;
+  --text: #dcdbcc;
+  --muted: #878779;
+  --accent: #ffb000;
+  --on-accent: #17130a;
+  --key: #2a2b26;
+  --key-edge: #0c0d0b;
+  --danger: #ff5a45;
+  --success: #6fbf4a;
+  --warning: #e0a030;
+  --overlay: rgba(0, 0, 0, 0.55);
+  --key-highlight: rgba(255, 255, 255, 0.08);
 
-  --color-border: #{$dark-border};
-  --color-border-light: #{$dark-border-light};
+  --screen: #0b0c0a;
+  --screen-text: #d8d6c6;
+  --screen-muted: #8c8b7c;
+  --screen-track: #3b3c34;
+  --led: #ffb000;
+  --led-dim: #4d401c;
+  --led-hot: #ff4d2e;
+  --led-ok: #7bc950;
+  --led-glow: rgba(255, 176, 0, 0.35);
 
-  // Акценты
-  --color-accent-primary: #{$color-accent-primary-const};
-  --color-accent-hover: #{$color-accent-hover-const};
-  --color-accent-purple: #{$color-accent-purple-const};
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
-  // Typography
-  --font-family-primary: #{$font-family-primary-const};
-  --font-size-xs: #{$font-size-xs-const};
-  --font-size-sm: #{$font-size-sm-const};
-  --font-size-base: #{$font-size-base-const};
-  --font-size-lg: #{$font-size-lg-const};
-  --font-size-xl: #{$font-size-xl-const};
-  --font-size-2xl: #{$font-size-2xl-const};
-  --font-size-3xl: #{$font-size-3xl-const};
-  
-  // Radiuses
-  --radius-sm: #{$radius-sm-const};
-  --radius-md: #{$radius-md-const};
-  --radius-lg: #{$radius-lg-const};
-  --radius-xl: #{$radius-xl-const};
+  --font-size-xs: 0.6875rem;
+  --font-size-sm: 0.75rem;
+  --font-size-base: 0.84375rem;
+  --font-size-lg: 0.9375rem;
+  --font-size-xl: 1.125rem;
+  --font-size-2xl: 1.375rem;
+  --font-size-3xl: 1.75rem;
 
-  // Shadows
-  --shadow-md: #{$shadow-md-const};
-  --shadow-lg: #{$shadow-lg-const};
-  --shadow-xl: #{$shadow-xl-const};
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
 
-  // Transitions
-  --transition-fast: #{$transition-fast-const};
-  --transition-base: #{$transition-base-const};
-  --transition-slow: #{$transition-slow-const};
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --shadow-xl: 0 12px 32px rgba(0, 0, 0, 0.45);
 
-  // MediaCard Colors (Current default)
-  --media-card-bg: var(--color-bg-primary);
-  --media-card-color: var(--color-text-primary);
-  --media-card-hover-bg: var(--color-bg-hover);
-  --media-card-hover-color: var(--color-bg-primary);
-  --media-card-active-bg: var(--color-bg-secondary);
-  --media-card-active-color: var(--color-bg-hover);
-  --media-card-current-playing: #888;
+  --transition-fast: 120ms ease;
+  --transition-base: 180ms ease;
+  --transition-slow: 260ms ease;
 
+  // Waveform canvas, read by WaveformBar.
+  --waveform-bg: var(--led-dim);
+  --waveform-buffered: #7a6426;
+  --waveform-played: var(--led);
+
+  // Aliases for components not redesigned yet. Removed when the last one is.
+  --color-bg-primary: var(--bg-table);
+  --color-bg-secondary: var(--bg-panel);
+  --color-bg-sidebar: var(--bg-panel);
+  --color-bg-player: var(--bg-panel);
+  --color-bg-hover: var(--bg-selected);
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--muted);
+  --color-text-muted: var(--muted);
+  --color-border: var(--line);
+  --color-border-light: var(--line-soft);
+  --color-accent-primary: var(--accent);
+  --color-accent-secondary: var(--muted);
+  --color-accent-hover: var(--accent);
+  --color-accent-purple: var(--accent);
+  --font-family-primary: var(--font-sans);
+  --media-card-bg: var(--bg-table);
+  --media-card-color: var(--text);
+  --media-card-hover-bg: var(--bg-selected);
+  --media-card-hover-color: var(--text);
+  --media-card-active-bg: var(--bg-selected);
+  --media-card-active-color: var(--accent);
+  --media-card-current-playing: var(--accent);
+  --media-card-action-hover-bg: var(--key);
+  --media-card-action-hover-color: var(--accent);
   --ellipsis-v-align: center;
   --ellipsis-offset-bottom: 4px;
-  --player-time-color: white;
-  --playback-queue-pulse: rgba(76, 175, 80, 0.1);
-  --waveform-bg: #000000;
-  --waveform-played: #ffffff;
-  --waveform-buffered: #888888;
-  --media-card-action-hover-bg: var(--color-bg-primary);
-  --media-card-action-hover-color: var(--color-text-primary);
-
-  --search-input-bg: var(--color-bg-secondary);
-  --search-input-color: var(--color-text-primary);
-  --search-input-placeholder: var(--color-text-muted);
-
-  --modal-bg: var(--color-bg-secondary);
-  --modal-border: var(--color-bg-primary);
-  --modal-header-border: var(--color-border);
-  --modal-label-color: var(--color-text-primary);
-  --modal-input-bg: var(--color-bg-primary);
-  --modal-input-border: var(--color-border);
-  --modal-card-bg: var(--color-bg-primary);
-  --modal-hint-color: var(--color-text-muted);
-  --modal-section-title-color: var(--color-text-primary);
+  --player-time-color: var(--text);
+  --playback-queue-pulse: var(--bg-selected);
+  --search-input-bg: var(--bg-panel);
+  --search-input-color: var(--text);
+  --search-input-placeholder: var(--muted);
+  --modal-bg: var(--bg-panel);
+  --modal-border: var(--line);
+  --modal-header-border: var(--line);
+  --modal-label-color: var(--text);
+  --modal-input-bg: var(--bg-table);
+  --modal-input-color: var(--text);
+  --modal-input-border: var(--line);
+  --modal-card-bg: var(--bg-table);
+  --modal-hint-color: var(--muted);
+  --modal-section-title-color: var(--muted);
 }
 
-// Light theme
 [data-theme='light'] {
   color-scheme: light;
-  --color-bg-primary: #{$light-bg-primary};
-  --color-bg-secondary: #{$light-bg-secondary};
-  --color-bg-sidebar: #{$light-bg-sidebar};
-  --color-bg-player: #{$light-bg-player};
-  --color-bg-hover: #{$light-bg-hover};
 
-  --color-text-primary: #{$light-text-primary};
-  --color-text-secondary: #{$light-text-secondary};
-  --color-text-muted: #{$light-text-muted};
+  --bg-body: #d6d2c4;
+  --bg-panel: #e4e0d3;
+  --bg-table: #efece2;
+  --bg-selected: #f6dfca;
+  --line: #b9b4a4;
+  --line-soft: #c9c5b6;
+  --text: #23231e;
+  --muted: #6c6a5e;
+  --accent: #d9480f;
+  --on-accent: #ffffff;
+  --key: #efece2;
+  --key-edge: #a8a394;
+  --danger: #c92a20;
+  --success: #3f8a24;
+  --warning: #a86a00;
+  --overlay: rgba(40, 38, 30, 0.45);
+  --key-highlight: rgba(255, 255, 255, 0.6);
 
-  --color-border: #{$light-border};
-  --color-border-light: #{$light-border-light};
+  --screen: #1a1b17;
+  --led-dim: #6e5a22;
+  --waveform-buffered: #93782c;
 
-  // MediaCard Colors (Default-like for light theme)
-  --media-card-bg: var(--color-bg-primary);
-  --media-card-color: var(--color-text-primary);
-  --media-card-hover-bg: var(--color-text-primary);
-  --media-card-hover-color: var(--color-bg-primary);
-  --media-card-active-bg: var(--color-bg-secondary);
-  --media-card-active-color: var(--color-bg-hover);
-
-  --ellipsis-v-align: center;
-  --ellipsis-offset-bottom: 4px;
-  --player-time-color: white;
-  --playback-queue-pulse: rgba(76, 175, 80, 0.1);
-  --waveform-bg: #d1d1d1;
-  --waveform-played: #45375a;
-  --waveform-buffered: #9b8fa5;
-
-  --search-input-bg: var(--color-bg-secondary);
-  --search-input-color: var(--color-text-primary);
-  --search-input-placeholder: var(--color-text-muted);
-
-  --modal-bg: var(--color-bg-secondary);
-  --modal-border: var(--color-bg-primary);
-  --modal-header-border: var(--color-border);
-  --modal-label-color: var(--color-text-primary);
-  --modal-input-bg: var(--color-bg-primary);
-  --modal-input-border: var(--color-border);
-  --modal-card-bg: var(--color-bg-primary);
-  --modal-hint-color: var(--color-text-muted);
-  --modal-section-title-color: var(--color-text-primary);
+  --shadow-md: 0 2px 6px rgba(60, 55, 40, 0.18);
+  --shadow-lg: 0 6px 18px rgba(60, 55, 40, 0.24);
+  --shadow-xl: 0 12px 32px rgba(60, 55, 40, 0.3);
 }

@@ -1,66 +1,5 @@
-// Design Tokens - Nexus Audio Player
+// Design tokens. Values live in themes.scss; these names point at them.
 
-// Dark Theme Colors (default, from Penpot design)
-$dark-bg-primary: #bcbcbc;         // Основной фон (из дизайна)
-$dark-bg-secondary: #d9d9d9;       // Фон карточек
-$dark-bg-sidebar: #737373;         // Фон левого сайдбара (серый)
-$dark-bg-player: #474747;          // Фон плеера (самый темный)
-$dark-bg-hover: #2f2f2f;           // Hover состояние
-
-$dark-text-primary: #000000;       // Основной текст
-$dark-text-secondary: #a0a0a0;     // Вторичный текст
-$dark-text-muted: #666666;         // Приглушенный текст
-
-$dark-border: #333333;             // Границы
-$dark-border-light: #404040;       // Светлые границы
-
-// Light Theme Colors (from Penpot design variant)
-$light-bg-primary: #e8e4da;        // Бежевый фон
-$light-bg-secondary: #f5f3ed;      // Светлый фон карточек
-$light-bg-sidebar: #9b8fa5;        // Фиолетово-серый sidebar
-$light-bg-player: #45375a;         // Темно-фиолетовый плеер
-$light-bg-hover: #d4cfc4;          // Hover состояние
-
-$light-text-primary: #1a1a1a;      // Темный текст
-$light-text-secondary: #5a5a5a;    // Вторичный текст
-$light-text-muted: #888888;        // Приглушенный текст
-
-$light-border: #c4bfb3;            // Границы
-$light-border-light: #d4cfc4;      // Светлые границы
-
-// Accent Colors Constants
-$color-accent-primary-const: #000;    // Акцентный цвет
-$color-accent-hover-const: #fff;      // Hover акцента
-$color-accent-purple-const: #764ba2;     // Фиолетовый акцент
-
-// Typography Constants
-$font-family-primary-const: 'Pixelzone', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-
-$font-size-xs-const: 0.8rem;
-$font-size-sm-const: 0.9rem;
-$font-size-base-const: 1rem;
-$font-size-lg-const: 1.1rem;
-$font-size-xl-const: 1.3rem;
-$font-size-2xl-const: 1.6rem;
-$font-size-3xl-const: 2rem;
-
-// Radius Constants
-$radius-sm-const: 4px;
-$radius-md-const: 8px;
-$radius-lg-const: 12px;
-$radius-xl-const: 16px;
-
-// Transition Constants
-$transition-fast-const: 150ms ease;
-$transition-base-const: 250ms ease;
-$transition-slow-const: 350ms ease;
-
-// Shadow Constants
-$shadow-md-const: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-$shadow-lg-const: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-$shadow-xl-const: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-
-// Default theme tokens (point to CSS variables)
 $color-bg-primary: var(--color-bg-primary);
 $color-bg-secondary: var(--color-bg-secondary);
 $color-bg-sidebar: var(--color-bg-sidebar);
@@ -82,7 +21,8 @@ $color-accent-hover: var(--color-accent-hover);
 $color-accent-purple: var(--color-accent-purple);
 
 // Typography
-$font-family-primary: var(--font-family-primary);
+$font-family-primary: var(--font-sans);
+$font-family-mono: var(--font-mono);
 $font-size-xs: var(--font-size-xs);
 $font-size-sm: var(--font-size-sm);
 $font-size-base: var(--font-size-base);
@@ -98,13 +38,13 @@ $font-weight-bold: 700;
 
 // Spacing
 $spacing-xs: 0.25rem;    // 4px
-$spacing-xxs: 0.1rem;    // 4px
+$spacing-xxs: 0.1rem;
 $spacing-sm: 0.5rem;     // 8px
 $spacing-md: 1rem;       // 16px
 $spacing-lg: 1.5rem;     // 24px
 $spacing-xl: 2rem;       // 32px
 $spacing-2xl: 3rem;      // 48px
-$spacing-3xl: 4rem;      // 48px
+$spacing-3xl: 4rem;      // 64px
 
 // Layout Dimensions
 $sidebar-width: 240px;

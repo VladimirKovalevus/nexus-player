@@ -2,18 +2,6 @@
 @import './variables.scss';
 @import './themes.scss';
 
-@font-face {
-  font-family: 'Pixelzone';
-  src: url('../assets/fonts/Pixelzone.ttf') format('truetype');
-  font-weight: 600;
-  font-style: normal;
-  // Масштабируем сам шрифт, не трогая font-size в коде
-  size-adjust: 200%; 
-  // Поджимаем вертикальные отступы самого шрифта, чтобы уменьшить межстрочный интервал
-  ascent-override: 80%;
-  descent-override: 20%;
-}
-
 // CSS Reset и базовые стили
 *,
 *::before,
@@ -34,9 +22,9 @@ body {
 body {
   font-family: $font-family-primary;
   font-size: $font-size-base;
-  line-height: 1.5;
-  color: var(--color-text-primary);
-  background-color: var(--color-bg-primary);
+  line-height: 1.35;
+  color: var(--text);
+  background-color: var(--bg-body);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -67,13 +55,13 @@ button {
   -webkit-tap-highlight-color: transparent;
   transition: all $transition-fast;
 
-  &:focus,
-  &:focus-visible {
+  &:focus {
     outline: none;
   }
 
   &:focus-visible {
-    box-shadow: inset 0 0 0 2px var(--color-accent-primary);
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
 }
 
@@ -83,8 +71,8 @@ textarea {
   font-family: inherit;
   font-size: inherit;
   color: var(--color-text-primary);
-  background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
+  background-color: var(--bg-table);
+  border: 1px solid var(--line);
   border-radius: $radius-md;
   padding: $spacing-sm $spacing-md;
   transition: border-color $transition-fast;
@@ -102,15 +90,15 @@ textarea {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-bg-primary);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border-light);
-  border-radius: 4px;
+  background: var(--line);
+  border-radius: var(--radius-sm);
 
   &:hover {
-    background: var(--color-text-muted);
+    background: var(--muted);
   }
 }
 

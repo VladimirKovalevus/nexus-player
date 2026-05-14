@@ -32,9 +32,9 @@ let needsRedraw = true; // force first draw
 const refreshColors = () => {
   const styles = getComputedStyle(document.documentElement);
   cachedColors = {
-    background: styles.getPropertyValue('--waveform-bg').trim() || '#333333',
-    played: styles.getPropertyValue('--waveform-played').trim() || '#ffffff',
-    buffered: styles.getPropertyValue('--waveform-buffered').trim() || '#888888',
+    background: styles.getPropertyValue('--waveform-bg').trim(),
+    played: styles.getPropertyValue('--waveform-played').trim(),
+    buffered: styles.getPropertyValue('--waveform-buffered').trim(),
   };
   needsRedraw = true;
 };

@@ -1,0 +1,10 @@
+{
+  "settings": {
+    "appearance": {
+      "theme": "Theme",
+      "language": "Language",
+      "themes": { "dark": "Dark", "light": "Light" },
+      "languages": { "ru": "Русский", "en": "English" }
+    }
+  }
+}
