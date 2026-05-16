@@ -166,6 +166,8 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
+import { confirmAction } from '@/composables/useConfirm';
 import { ref, onMounted, inject, reactive, nextTick, computed, watch } from 'vue';
 import { invoke } from '@/utils/providerAuth';
 import MediaCard from '@/components/common/MediaCard.vue';
@@ -175,6 +177,7 @@ import type { PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, TrackDto } fro
 import { useAudioStore } from '@/stores/audio';
 import { useNotificationStore } from '@/stores/notifications';
 
+const { t } = useI18n();
 const audioStore = useAudioStore();
 const notifications = useNotificationStore();
 const props = defineProps<{
@@ -340,11 +343,16 @@ const handleCachePlaylist = async () => {
 };
 
 const handleDeletePlaylist = async () => {
-  if (!confirm(`Удалить плейлист "${playlist.value?.title}"?`)) return;
-  
+  closeDropdown();
+  const confirmed = await confirmAction({
+    title: t('playlist.deleteTitle', { title: playlist.value?.title ?? '' }),
+    message: t('playlist.deleteMessage'),
+    confirmLabel: t('common.delete'),
+  });
+  if (!confirmed) return;
+
   try {
     await invoke('delete_playlist', { playlistId: props.playlistId });
-    closeDropdown();
     emit('back');
   } catch (e) {
     console.error('Failed to delete playlist:', e);

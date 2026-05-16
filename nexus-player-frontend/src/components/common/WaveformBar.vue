@@ -20,7 +20,7 @@ const BAR_RADIUS = 1;
 let animationFrame: number | null = null;
 
 // Cached values to skip redundant redraws
-let cachedColors = { background: '#333333', played: '#ffffff', buffered: '#888888' };
+let cachedColors = { background: '', played: '', buffered: '' };
 let cachedWidth = 0;
 let cachedHeight = 0;
 let prevPosition = -1;
@@ -244,7 +244,7 @@ watch(() => [audioStore.waveforms, audioStore.bufferedRanges, audioStore.positio
 <style module lang="scss">
 .waveformContainer {
   width: 100%;
-  height: 40px;
+  height: 100%;
   cursor: pointer;
   /* position: relative so the absolutely-positioned canvas is contained here */
   position: relative;

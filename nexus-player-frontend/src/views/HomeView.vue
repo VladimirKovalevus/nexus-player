@@ -118,6 +118,8 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
+import { confirmAction } from '@/composables/useConfirm';
 import { ref, onMounted, inject, computed, watch } from 'vue';
 import { invoke } from '@/utils/providerAuth';
 import MediaCardSection, { type MediaCardItem } from '@/components/common/MediaCardSection.vue';
@@ -133,6 +135,7 @@ import type {
 import { useNotificationStore } from '@/stores/notifications';
 import { useAudioStore } from '@/stores/audio';
 
+const { t } = useI18n();
 const audioStore = useAudioStore();
 const emit = defineEmits<{
   'navigate-playlist': [playlistId: number];
@@ -324,6 +327,13 @@ const handlePlaylistCache = async (item: MediaCardItem) => {
 };
 
 const handlePlaylistDelete = async (item: MediaCardItem) => {
+  const confirmed = await confirmAction({
+    title: t('playlist.deleteTitle', { title: item.title }),
+    message: t('playlist.deleteMessage'),
+    confirmLabel: t('common.delete'),
+  });
+  if (!confirmed) return;
+
   try {
     await invoke('delete_playlist', { playlistId: item.id });
     await fetchPlaylists();

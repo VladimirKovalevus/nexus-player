@@ -19,7 +19,22 @@ export function parseChallenge(err: unknown): ProviderChallenge | null {
   return m ? { provider: m[1], url: m[2] } : null;
 }
 
-export async function invoke<T>(cmd: string, args?: InvokeArgs, options?: InvokeOptions): Promise<T> {
+export const PLAYLISTS_CHANGED_EVENT = 'playlists-changed';
+
+const PLAYLIST_COMMANDS = new Set([
+  'create_playlist',
+  'create_playlist_with_tracks',
+  'create_playlist_from_container',
+  'delete_playlist',
+  'add_track_to_playlist',
+  'remove_track_from_playlist',
+  'add_playlist_to_playlist',
+  'remove_playlist_from_playlist',
+  'cleanup_library',
+  'telegram_pull',
+]);
+
+async function invokeWithChallenge<T>(cmd: string, args?: InvokeArgs, options?: InvokeOptions): Promise<T> {
   try {
     return await rawInvoke<T>(cmd, args, options);
   } catch (e) {
@@ -28,6 +43,12 @@ export async function invoke<T>(cmd: string, args?: InvokeArgs, options?: Invoke
     await requestProviderAuth(challenge.provider, challenge.url);
     return rawInvoke<T>(cmd, args, options);
   }
+}
+
+export async function invoke<T>(cmd: string, args?: InvokeArgs, options?: InvokeOptions): Promise<T> {
+  const result = await invokeWithChallenge<T>(cmd, args, options);
+  if (PLAYLIST_COMMANDS.has(cmd)) window.dispatchEvent(new Event(PLAYLISTS_CHANGED_EVENT));
+  return result;
 }
 
 // One in-flight challenge per provider; concurrent callers share it.

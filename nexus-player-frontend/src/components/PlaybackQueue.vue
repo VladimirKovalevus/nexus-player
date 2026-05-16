@@ -6,8 +6,12 @@ import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import VirtualList from './common/VirtualList.vue';
 import MarqueeText from './common/MarqueeText.vue';
 import AppIcon from './common/AppIcon.vue';
+import { useI18n } from 'vue-i18n';
 import { useAudioStore } from '../stores/audio';
 
+defineEmits<{ close: [] }>();
+
+const { t } = useI18n();
 const audioStore = useAudioStore();
 const loading = ref(true);
 const error = ref<string | null>(null);
@@ -59,7 +63,7 @@ const fetchQueue = async () => {
     const queueState = await invoke<any>('get_queue_state');
     audioStore.updateQueueState(queueState);
   } catch (e) {
-    error.value = `Failed to load queue: ${e}`;
+    error.value = t('queue.loadFailed', { error: String(e) });
     console.error('Error loading queue:', e);
   } finally {
     loading.value = false;
@@ -119,8 +123,8 @@ const clearQueue = async () => {
 const openCreatePlaylistModal = () => {
   if (queue.value.length > 0) {
     playlistInitialData.value = {
-      title: `Очередь ${new Date().toLocaleDateString()}`,
-      description: `Сформирован из очереди ${new Date().toLocaleDateString()}`,
+      title: t('queue.playlistTitle', { date: new Date().toLocaleDateString() }),
+      description: t('queue.playlistDescription', { date: new Date().toLocaleDateString() }),
       artworkUrl: '',
     };
     modalTarget.value = 'queue';
@@ -230,7 +234,7 @@ const handleCreatePlaylist = async (data: {
     isModalOpen.value = false;
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
-    error.value = `Ошибка: ${errorMessage}`;
+    error.value = t('common.error', { error: errorMessage });
     console.error('Failed to create playlist:', e);
   } finally {
     isSavingPlaylist.value = false;
@@ -301,35 +305,23 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
   <div :class="$style.playbackQueue">
     <div :class="$style.dragHandle" aria-hidden="true" />
     <div :class="$style.queueHeader">
-      <h2 :class="$style.title">В очереди</h2>
-
-      <div :class="$style.actionsMenu" v-if="queue.length > 0">
-        <button :class="$style.menuToggle">
-          <AppIcon name="more-horizontal" :size="16" style="transform: rotate(90deg)" />
-        </button>
-        <div :class="$style.menuContent">
-          <button @click="openCreatePlaylistModal">
-            Сформировать плейлист
-          </button>
-          <button @click="clearQueue" :class="$style.clearAction">
-            Очистить
-          </button>
-        </div>
-      </div>
+      <h2 :class="$style.title">{{ $t('queue.title') }}</h2>
+      <span :class="$style.count">{{ queue.length }}</span>
+      <button :class="$style.close" :title="$t('common.close')" :aria-label="$t('common.close')" @click="$emit('close')">
+        <AppIcon name="close" :size="14" />
+      </button>
     </div>
 
     <div v-if="audioStore.searchContext" :class="$style.searchBadge">
-      Search: "{{ audioStore.searchContext.query }}" ({{
-        audioStore.searchContext.system
-      }})
+      {{ $t('queue.searchContext', { query: audioStore.searchContext.query, system: audioStore.searchContext.system }) }}
     </div>
 
-    <div v-if="loading" :class="$style.loading">Загрузка...</div>
+    <div v-if="loading" :class="$style.loading">{{ $t('common.loading') }}</div>
     <div v-else-if="error" :class="$style.error">{{ error }}</div>
     <div v-else-if="isEntryEmpty" :class="$style.empty">
-      <div :class="$style.emptyIcon"><AppIcon name="music-note" :size="64" /></div>
-      <div :class="$style.emptyText">Очередь пуста</div>
-      <div :class="$style.emptyHint">Добавьте треки для воспроизведения</div>
+      <div :class="$style.emptyIcon"><AppIcon name="music-note" :size="40" /></div>
+      <div :class="$style.emptyText">{{ $t('queue.empty') }}</div>
+      <div :class="$style.emptyHint">{{ $t('queue.emptyHint') }}</div>
     </div>
 
     <div v-else :class="[$style.queueList, 'queue-scroll-container']">
@@ -447,11 +439,20 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
               v-else-if="isContainerExpanded(item.index) && !item.entry.tracks"
               :class="$style.containerLoading"
             >
-              Loading tracks...
+              {{ $t('common.loading') }}
             </div>
           </div>
         </template>
       </VirtualList>
+    </div>
+
+    <div v-if="queue.length > 0" :class="$style.queueFooter">
+      <button :class="$style.footerButton" @click="openCreatePlaylistModal">
+        {{ $t('queue.createPlaylist') }}
+      </button>
+      <button :class="[$style.footerButton, $style.clearAction]" @click="clearQueue">
+        {{ $t('queue.clear') }}
+      </button>
     </div>
 
     <PlaylistCreateSimpleModal
@@ -473,285 +474,192 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: $spacing-lg;
   overflow: hidden;
+  position: relative;
 }
 
 .dragHandle {
   display: none;
-  width: 40px;
-  height: 4px;
-  background-color: var(--color-border-light);
-  border-radius: 2px;
-  margin: 0 auto $spacing-md;
-  flex-shrink: 0;
-
-  @media (max-width: 480px) {
-    display: block;
-  }
 }
 
 .queueHeader {
-  @include flex-between;
+  flex: none;
+  display: flex;
   align-items: center;
-  margin-bottom: $spacing-lg;
-  padding-bottom: $spacing-md;
-  border-bottom: 1px solid var(--color-border);
+  gap: 8px;
+  height: 45px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
 }
 
 .title {
-  font-size: $font-size-lg;
-  font-weight: $font-weight-semibold;
-  color: var(--color-accent-primary);
-  margin: 0;
+  font: 600 var(--font-size-lg) $font-family-mono;
 }
 
-.actionsMenu {
-  position: relative;
-
-  .menuToggle {
-    background: transparent;
-    border: 1px solid var(--color-border);
-    border-radius: $radius-md;
-    clip-path: none !important;
-    padding: 0 !important;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    font-size: $font-size-xl;
-    line-height: 1 !important;
-    padding-bottom: var(--ellipsis-offset-bottom) !important;
-    width: 36px;
-    height: 36px;
-    @include flex-center;
-    align-items: var(--ellipsis-v-align, center) !important;
-    // transition: all $transition-fast;
-
-    &:hover {
-      background-color: var(--color-bg-hover);
-      border-color: var(--color-border-light);
-    }
-  }
-
-  .menuContent {
-    display: none;
-    position: absolute;
-    right: 0;
-    top: 100%;
-    margin-top: $spacing-xs;
-    background-color: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
-    border-radius: $radius-md;
-    box-shadow: $shadow-lg;
-    z-index: 10;
-    width: 200px;
-    padding: $spacing-xs;
-
-    button {
-      display: block;
-      width: 100%;
-      padding: $spacing-sm $spacing-md;
-      background: none;
-      border: none;
-      text-align: left;
-      font-size: $font-size-sm;
-      color: var(--color-text-primary);
-      cursor: pointer;
-      border-radius: $radius-sm;
-      transition: background-color $transition-fast;
-
-      &:hover {
-        background-color: var(--color-bg-hover);
-      }
-    }
-
-    .clearAction {
-      color: #e74c3c;
-      &:hover {
-        background-color: rgba(231, 76, 60, 0.1);
-      }
-    }
-  }
-
-  &:hover .menuContent,
-  .menuToggle:focus + .menuContent,
-  .menuContent:hover {
-    display: block;
-  }
+.count {
+  flex: 1;
+  font: 500 var(--font-size-xs) $font-family-mono;
+  color: var(--muted);
 }
 
-.clearButton {
-  padding: $spacing-xs $spacing-md;
-  font-size: $font-size-sm;
-  background-color: transparent;
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: $radius-md;
-  cursor: pointer;
-  transition: all $transition-fast;
+.close {
+  @include flex-center;
+  width: 28px;
+  height: 28px;
+  background: var(--key);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 0 var(--key-edge);
+}
 
-  &:hover {
-    background-color: #e74c3c;
-    border-color: #e74c3c;
-    color: white;
-  }
+.searchBadge {
+  flex: none;
+  padding: 6px 12px;
+  font-size: var(--font-size-xs);
+  color: var(--muted);
+  border-bottom: 1px solid var(--line-soft);
+  @include text-ellipsis;
 }
 
 .loading,
 .error {
-  padding: $spacing-xl;
+  padding: 24px 12px;
   text-align: center;
-  color: var(--color-text-secondary);
-  font-size: $font-size-sm;
+  color: var(--muted);
 }
 
 .error {
-  color: #e74c3c;
-  background-color: rgba(231, 76, 60, 0.1);
-  border-radius: $radius-md;
+  color: var(--danger);
 }
 
 .empty {
   flex: 1;
   @include flex-center;
   flex-direction: column;
-  gap: $spacing-md;
-  padding: $spacing-2xl;
+  gap: 6px;
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--muted);
 }
 
 .emptyIcon {
-  font-size: 64px;
-  opacity: 0.3;
+  opacity: 0.5;
 }
 
 .emptyText {
-  font-size: $font-size-lg;
-  font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
+  font-weight: 600;
+  color: var(--text);
 }
 
 .emptyHint {
-  font-size: $font-size-sm;
-  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .queueList {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-sm;
+  min-height: 0;
   overflow-y: auto;
-  @include custom-scrollbar(
-    var(--color-border-light),
-    var(--color-bg-secondary)
-  );
-  padding-right: $spacing-xs;
+  overflow-x: hidden;
 }
 
-.trackWrapper {
-  position: relative;
-  border-radius: $radius-md;
-  transition: all $transition-fast;
-  color: var(--color-bg-primary) !important;
-}
-
-.searchBadge {
-  padding: $spacing-xs $spacing-md;
-  margin-bottom: $spacing-md;
-  background: rgba(102, 126, 234, 0.15);
-  border-radius: $radius-md;
-  font-size: $font-size-sm;
-  color: var(--color-text-secondary);
-}
-
-.currentlyPlaying {
-  border-radius: $radius-md;
-  animation: bg-pulse 2s ease-in-out infinite;
-
-  // Делаем фон MediaCard прозрачным, чтобы была видна анимация обертки
-  & > div {
-    background-color: var(--media-card-current-playing) !important;
-  }
-}
-.currentlyPlayingList {
-  border-radius: $radius-md;
-  & > div {
-    background-color: transparent !important;
-  }
-}
-
+.trackWrapper,
 .containerWrapper {
-  border-radius: $radius-md;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  position: relative;
+  width: 100%;
+  border-bottom: 1px solid var(--line-soft);
+}
 
-  &:has([data-dropdown-open]) {
-    z-index: 1000;
-  }
-
-  &.currentlyPlaying {
-    border-color: transparent;
-  }
+.currentlyPlaying,
+.currentlyPlayingList {
+  background: var(--bg-selected);
 }
 
 .containerTracks {
-  border-top: 1px solid var(--color-border);
-  padding: $spacing-xs 0;
-  border-bottom-left-radius: $radius-md;
-  border-bottom-right-radius: $radius-md;
+  background: var(--bg-table);
 }
 
 .containerTrack {
-  display: flex;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
   align-items: center;
-  gap: $spacing-sm;
-  padding: $spacing-xs $spacing-md $spacing-xs $spacing-xl;
+  gap: 6px;
+  height: 42px;
+  padding: 0 12px;
   cursor: pointer;
-  transition: background-color $transition-fast;
 
   &:hover {
-    background-color: var(--color-bg-hover);
+    background: var(--bg-selected);
   }
 }
 
 .trackNumber {
-  color: var(--color-text-secondary);
-  font-size: $font-size-sm;
-  min-width: 24px;
+  font: 500 var(--font-size-xs) $font-family-mono;
+  color: var(--muted);
   text-align: right;
 }
 
 .trackInfo {
-  flex: 1;
   min-width: 0;
+  line-height: 1.2;
 }
 
 .trackTitle {
-  color: var(--color-text-primary);
-  font-size: $font-size-sm;
+  font-weight: 600;
   @include text-ellipsis;
 }
 
 .trackArtist {
-  color: var(--color-text-secondary);
-  font-size: $font-size-xs;
+  font-size: var(--font-size-xs);
+  color: var(--muted);
   @include text-ellipsis;
 }
 
 .containerLoading {
-  padding: $spacing-md;
-  text-align: center;
-  color: var(--color-text-secondary);
-  font-size: $font-size-sm;
+  padding: 12px;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
 }
 
-@keyframes bg-pulse {
-  0%,
-  100% {
-    background-color: var(--playback-queue-pulse, rgba(76, 175, 80, 0.1));
+.queueFooter {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.footerButton {
+  height: 30px;
+  padding: 0 10px;
+  background: var(--key);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 0 var(--key-edge);
+  font: 600 0.625rem $font-family-mono;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+
+  &:first-child {
+    flex: 1;
+    min-width: 0;
+    @include text-ellipsis;
   }
-  50% {
-    background-color: transparent;
+}
+
+.clearAction {
+  color: var(--danger);
+}
+
+@media (max-width: $mobile-breakpoint) {
+  .dragHandle {
+    display: block;
+    flex: none;
+    width: 36px;
+    height: 3px;
+    margin: 8px auto 0;
+    background: var(--muted);
+  }
+
+  .footerButton {
+    height: 40px;
   }
 }
 </style>

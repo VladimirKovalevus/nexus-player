@@ -3,8 +3,88 @@
     "appearance": {
       "theme": "Theme",
       "language": "Language",
-      "themes": { "dark": "Dark", "light": "Light" },
-      "languages": { "ru": "Русский", "en": "English" }
+      "themes": {
+        "dark": "Dark",
+        "light": "Light"
+      },
+      "languages": {
+        "ru": "Русский",
+        "en": "English"
+      }
     }
+  },
+  "common": {
+    "close": "Close",
+    "loading": "Loading...",
+    "error": "Error: {error}",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "nav": {
+    "home": "Home",
+    "search": "Search",
+    "library": "Music",
+    "radio": "Radio",
+    "history": "History",
+    "cache": "Cache",
+    "downloads": "Downloads",
+    "settings": "Settings",
+    "more": "More"
+  },
+  "tree": {
+    "title": "Playlists",
+    "add": "Add",
+    "empty": "No playlists yet"
+  },
+  "track": {
+    "unknownArtist": "Unknown artist",
+    "source": {
+      "local": "Local",
+      "cached": "Cached"
+    }
+  },
+  "player": {
+    "noTrack": "Nothing playing",
+    "shuffle": "Mix",
+    "shuffleOn": "Turn shuffle on",
+    "shuffleOff": "Turn shuffle off",
+    "unavailableInRadio": "Not available in radio mode",
+    "previous": "Previous track",
+    "next": "Next track",
+    "play": "Play",
+    "pause": "Pause",
+    "repeatLabel": "Repeat",
+    "repeat": {
+      "off": "Repeat: off",
+      "all": "Repeat: all",
+      "one": "Repeat: one"
+    },
+    "visualizer": "Open visualizer",
+    "visualizerLabel": "Visual",
+    "equalizer": "Equalizer",
+    "volume": "Volume: {percent}%",
+    "queue": "Queue",
+    "showQueue": "Show queue",
+    "hideQueue": "Hide queue"
+  },
+  "queue": {
+    "title": "Queue",
+    "empty": "Queue is empty",
+    "emptyHint": "Add tracks to play them",
+    "createPlaylist": "Create playlist",
+    "clear": "Clear",
+    "searchContext": "Search: {query} ({system})",
+    "playlistTitle": "Queue {date}",
+    "playlistDescription": "Created from the queue on {date}",
+    "loadFailed": "Could not load the queue: {error}"
+  },
+  "downloads": {
+    "started": "Download started: {artist} - {title}",
+    "finished": "Download finished!",
+    "failed": "Download failed: {error}"
+  },
+  "playlist": {
+    "deleteTitle": "Delete playlist “{title}”?",
+    "deleteMessage": "The playlist will be removed from your library. This cannot be undone."
   }
 }

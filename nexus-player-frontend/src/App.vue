@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, provide, onMounted } from 'vue';
 import { listen } from '@tauri-apps/api/event';
+import { useI18n } from 'vue-i18n';
 import { useNotificationStore } from './stores/notifications';
 import AppLayout from './components/layout/AppLayout.vue';
 import PlaybackQueue from './components/PlaybackQueue.vue';
 import PlayerControl from './components/PlayerControl.vue';
-import Sidebar from './components/layout/Sidebar.vue';
+import TabBar from './components/layout/TabBar.vue';
+import PlaylistTree from './components/layout/PlaylistTree.vue';
 import MobileNav from './components/layout/MobileNav.vue';
 import HomeView from './views/HomeView.vue';
 import PlaylistDetailView from './views/PlaylistDetailView.vue';
@@ -18,31 +20,38 @@ import StreamingSearch from './components/StreamingSearch.vue';
 import GlobalNotifications from './components/common/GlobalNotifications.vue';
 import VisualizerOverlay from './components/VisualizerOverlay.vue';
 import CommandLine from './components/CommandLine.vue';
+import SettingsModal from './components/SettingsModal.vue';
+import PlaylistCreateModal from './components/PlaylistCreateModal.vue';
+import ConfirmDialog from './components/common/ConfirmDialog.vue';
 
 const playbackQueueRef = ref<InstanceType<typeof PlaybackQueue> | null>(null);
 const playerControlRef = ref<InstanceType<typeof PlayerControl> | null>(null);
-const showQueue = ref(true);
+// Docked by default only where it leaves room for the table; see AppLayout's breakpoints.
+const showQueue = ref(window.matchMedia('(min-width: 1101px)').matches);
+const isSettingsOpen = ref(false);
+const isCreatePlaylistOpen = ref(false);
 const showVisualizer = ref(false);
 const currentView = ref('home');
 const selectedPlaylistId = ref<number | null>(null);
 const playlistHistory = ref<number[]>([]);
 
 const notificationStore = useNotificationStore();
+const { t } = useI18n();
 
 onMounted(async () => {
   // Listen for download events from backend
   await listen<any>('download-started', (event) => {
     const { title, artist } = event.payload;
-    notificationStore.addNotification(`Начато скачивание: ${artist} - ${title}`, 'info');
+    notificationStore.addNotification(t('downloads.started', { artist, title }), 'info');
   });
 
   await listen<any>('download-finished', (event) => {
     const { success, error } = event.payload;
     if (success) {
-      notificationStore.addNotification(`Скачивание завершено!`, 'success');
+      notificationStore.addNotification(t('downloads.finished'), 'success');
       refreshQueue(); // Refresh to show local source
     } else {
-      notificationStore.addNotification(`Ошибка скачивания: ${error}`, 'error');
+      notificationStore.addNotification(t('downloads.failed', { error }), 'error');
     }
   });
 });
@@ -73,6 +82,13 @@ const navigateToPlaylist = (playlistId: number) => {
   selectedPlaylistId.value = playlistId;
 };
 
+// The tree is visible from every view, but playlists open inside home and cache.
+const openPlaylistFromTree = (playlistId: number) => {
+  if (currentView.value !== 'cache') currentView.value = 'home';
+  playlistHistory.value = [];
+  selectedPlaylistId.value = playlistId;
+};
+
 const navigateBackFromPlaylist = () => {
   if (playlistHistory.value.length > 0) {
     selectedPlaylistId.value = playlistHistory.value.pop()!;
@@ -87,16 +103,12 @@ provide('changeView', changeView);
 provide('toggleQueue', toggleQueue);
 provide('openCreatePlaylistModal', () => playbackQueueRef.value?.openCreatePlaylistModal());
 provide('clearQueue', () => playbackQueueRef.value?.clearQueue());
+provide('openNewPlaylist', () => { isCreatePlaylistOpen.value = true; });
 </script>
 
 <template>
   <AppLayout :show-queue="showQueue" @close-queue="toggleQueue">
-
-    <template #leftSidebar>
-      <Sidebar :active-view="currentView" @change-view="changeView" />
-    </template>
-
-    <template #bottomPlayer>
+    <template #deck>
       <PlayerControl
         ref="playerControlRef"
         :queue-visible="showQueue"
@@ -105,12 +117,24 @@ provide('clearQueue', () => playbackQueueRef.value?.clearQueue());
       />
     </template>
 
-    <template #mobileNav>
-      <MobileNav :active-view="currentView" @change-view="changeView" />
+    <template #tabs>
+      <TabBar :active-view="currentView" @change-view="changeView" @open-settings="isSettingsOpen = true" />
     </template>
 
-    <template #rightSidebar>
-      <PlaybackQueue ref="playbackQueueRef" />
+    <template #tree>
+      <PlaylistTree
+        :selected-id="selectedPlaylistId"
+        @select="openPlaylistFromTree"
+        @create="isCreatePlaylistOpen = true"
+      />
+    </template>
+
+    <template #mobileNav>
+      <MobileNav :active-view="currentView" @change-view="changeView" @open-settings="isSettingsOpen = true" />
+    </template>
+
+    <template #queue>
+      <PlaybackQueue ref="playbackQueueRef" @close="toggleQueue" />
     </template>
 
     <PlaylistDetailView
@@ -130,13 +154,11 @@ provide('clearQueue', () => playbackQueueRef.value?.clearQueue());
     <DownloadsView v-else-if="currentView === 'downloads'" />
     <LibraryView v-else-if="currentView === 'library'" />
     <RadioView v-else-if="currentView === 'radio'" />
-    <div v-else :style="{ padding: '40px', textAlign: 'center' }">
-      <h2>Раздел в разработке</h2>
-      <p>Вы перешли в раздел: {{ currentView }}</p>
-    </div>
   </AppLayout>
   <GlobalNotifications />
   <VisualizerOverlay :is-open="showVisualizer" @close="showVisualizer = false" />
   <CommandLine />
+  <SettingsModal :is-open="isSettingsOpen" @close="isSettingsOpen = false" />
+  <PlaylistCreateModal :is-open="isCreatePlaylistOpen" @close="isCreatePlaylistOpen = false" @created="isCreatePlaylistOpen = false" />
+  <ConfirmDialog />
 </template>
-<style lang="scss" scoped></style>

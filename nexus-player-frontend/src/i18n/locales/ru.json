@@ -3,8 +3,88 @@
     "appearance": {
       "theme": "Тема оформления",
       "language": "Язык интерфейса",
-      "themes": { "dark": "Тёмная", "light": "Светлая" },
-      "languages": { "ru": "Русский", "en": "English" }
+      "themes": {
+        "dark": "Тёмная",
+        "light": "Светлая"
+      },
+      "languages": {
+        "ru": "Русский",
+        "en": "English"
+      }
     }
+  },
+  "common": {
+    "close": "Закрыть",
+    "loading": "Загрузка...",
+    "error": "Ошибка: {error}",
+    "cancel": "Отмена",
+    "delete": "Удалить"
+  },
+  "nav": {
+    "home": "Главная",
+    "search": "Поиск",
+    "library": "Музыка",
+    "radio": "Радио",
+    "history": "История",
+    "cache": "Кэш",
+    "downloads": "Загрузки",
+    "settings": "Настройки",
+    "more": "Ещё"
+  },
+  "tree": {
+    "title": "Плейлисты",
+    "add": "Добавить",
+    "empty": "Плейлистов пока нет"
+  },
+  "track": {
+    "unknownArtist": "Неизвестный исполнитель",
+    "source": {
+      "local": "Локально",
+      "cached": "Кэш"
+    }
+  },
+  "player": {
+    "noTrack": "Ничего не играет",
+    "shuffle": "Микс",
+    "shuffleOn": "Включить перемешивание",
+    "shuffleOff": "Выключить перемешивание",
+    "unavailableInRadio": "Недоступно в режиме радио",
+    "previous": "Предыдущий трек",
+    "next": "Следующий трек",
+    "play": "Воспроизвести",
+    "pause": "Пауза",
+    "repeatLabel": "Повтор",
+    "repeat": {
+      "off": "Повтор: выкл",
+      "all": "Повтор: все",
+      "one": "Повтор: один"
+    },
+    "visualizer": "Открыть визуализатор",
+    "visualizerLabel": "Визуал",
+    "equalizer": "Эквалайзер",
+    "volume": "Громкость: {percent}%",
+    "queue": "Очередь",
+    "showQueue": "Показать очередь",
+    "hideQueue": "Скрыть очередь"
+  },
+  "queue": {
+    "title": "В очереди",
+    "empty": "Очередь пуста",
+    "emptyHint": "Добавьте треки для воспроизведения",
+    "createPlaylist": "Сформировать плейлист",
+    "clear": "Очистить",
+    "searchContext": "Поиск: {query} ({system})",
+    "playlistTitle": "Очередь {date}",
+    "playlistDescription": "Сформирован из очереди {date}",
+    "loadFailed": "Не удалось загрузить очередь: {error}"
+  },
+  "downloads": {
+    "started": "Начато скачивание: {artist} - {title}",
+    "finished": "Скачивание завершено!",
+    "failed": "Ошибка скачивания: {error}"
+  },
+  "playlist": {
+    "deleteTitle": "Удалить плейлист «{title}»?",
+    "deleteMessage": "Плейлист исчезнет из библиотеки. Это действие нельзя отменить."
   }
 }

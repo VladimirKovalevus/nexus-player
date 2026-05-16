@@ -5,7 +5,8 @@ import { listen } from '@tauri-apps/api/event';
 import { useAudioStore } from '../stores/audio';
 import { useEqStore } from '../stores/eq';
 import WaveformBar from './common/WaveformBar.vue';
-import MarqueeText from './common/MarqueeText.vue';
+import LevelMeter from './deck/LevelMeter.vue';
+import EqDisplay from './deck/EqDisplay.vue';
 import EqPanel from './EqPanel.vue';
 import AppIcon from './common/AppIcon.vue';
 import AppImage from './common/AppImage.vue';
@@ -32,7 +33,6 @@ withDefaults(defineProps<Props>(), {
 
 const volumePopupOpen = ref(false);
 const volumeWrapperRef = ref<HTMLElement | null>(null);
-let updateInterval: number | null = null;
 let unlistenFn: (() => void) | null = null;
 
 const volumeIcon = computed(() => {
@@ -82,7 +82,6 @@ const fetchQueueState = async () => {
 
 const togglePlayPause = async () => {
   audioStore.startLoading();
-  console.log(audioStore.isPlaying, audioStore.isStopped, 'STORE');
   try {
     if (audioStore.isPlaying) {
       await invoke('pause');
@@ -101,7 +100,6 @@ const togglePlayPause = async () => {
 const playNext = async () => {
   audioStore.startLoading();
   try {
-    console.log('tuz');
     await invoke('play_next');
   } catch (e) {
     console.error('Failed to play next:', e);
@@ -171,11 +169,23 @@ const handleVolumeWheel = async (event: WheelEvent) => {
 };
 
 const formatTime = (seconds: number): string => {
-  if (!seconds || !isFinite(seconds)) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+  if (!seconds || !isFinite(seconds)) return '00:00';
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+  const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return hours > 0 ? `${hours}:${mins}:${secs}` : `${mins}:${secs}`;
 };
+
+const progress = computed(() =>
+  audioStore.duration > 0 ? Math.min(100, (audioStore.position / audioStore.duration) * 100) : 0,
+);
+
+const repeatTitleKey = computed(() => `player.repeat.${audioStore.repeatMode}`);
+
+const sourceKey = computed(() => {
+  const state = audioStore.currentTrack?.state?.type;
+  return state === 'cached' ? 'track.source.cached' : 'track.source.local';
+});
 
 onMounted(async () => {
   fetchAudioState();
@@ -194,7 +204,6 @@ onMounted(async () => {
         fetchAudioState();
       }
     });
-    console.log('Subscribed to audio events');
   } catch (e) {
     console.error('Failed to subscribe to audio events:', e);
   }
@@ -205,540 +214,459 @@ onUnmounted(() => {
 
   if (unlistenFn) {
     unlistenFn();
-    console.log('Unsubscribed from audio events');
   }
 
-  if (updateInterval !== null) {
-    clearInterval(updateInterval);
-  }
 });
 </script>
 
 <template>
-  <div class="player-control">
-    <!-- Left: Track Info -->
-    <div class="left-section">
-      <div class="track-info">
-        <div v-if="audioStore.currentTrack?.artworkUrl" class="track-art">
-          <AppImage
-            height="64"
-            width="64"
-            variant="large"
-            :src="audioStore.currentTrack?.artworkUrl"
-            style="filter: none !important"
-          />
+  <div :class="$style.deck">
+    <div :class="[$style.screen, $style.readout]">
+      <div :class="$style.art">
+        <AppImage
+          v-if="audioStore.currentTrack?.artworkUrl"
+          :src="audioStore.currentTrack.artworkUrl"
+          :alt="audioStore.currentTrack.title"
+          variant="large"
+          :class="$style.artImage"
+        />
+        <AppIcon v-else name="music-note" :size="24" />
+      </div>
+      <div :class="$style.readoutText">
+        <div :class="$style.time">
+          {{ formatTime(audioStore.position) }}<small> / {{ formatTime(audioStore.duration) }}</small>
         </div>
-        <div
-          style="display: flex; flex-direction: column; min-width: 0; flex: 1"
-        >
-          <div v-if="audioStore.currentTrack" class="current-track">
-            <MarqueeText active>{{
-              audioStore.currentTrack.title
-            }}</MarqueeText>
-          </div>
-          <div v-else class="no-track">No track playing</div>
-          <div v-if="audioStore.currentTrack" class="track-artist">
-            <MarqueeText active>{{
-              audioStore.currentTrack.artist || 'Unknown Artist'
-            }}</MarqueeText>
-          </div>
+        <div :class="$style.trackTitle" :title="audioStore.currentTrack?.title">
+          {{ audioStore.currentTrack?.title ?? $t('player.noTrack') }}
+        </div>
+        <div v-if="audioStore.currentTrack" :class="$style.trackMeta">
+          {{ audioStore.currentTrack.artist || $t('track.unknownArtist') }} ·
+          {{ audioStore.currentTrack.source?.system ?? $t(sourceKey) }}
         </div>
       </div>
     </div>
 
-    <!-- Center: Waveform + Controls -->
-    <div class="center-section">
-      <div class="controls">
-        <button
-          class="control-btn small-btn shuffle-btn"
-          :class="{ active: audioStore.shuffleEnabled }"
-          :disabled="audioStore.isRadioActive"
-          @click="toggleShuffleMode"
-          :title="audioStore.isRadioActive
-            ? 'Недоступно в режиме радио'
-            : audioStore.shuffleEnabled ? 'Выключить перемешивание' : 'Включить перемешивание'"
-        >
-          <AppIcon name="shuffle" :size="19" :style="{ filter: audioStore.shuffleEnabled ? 'none' : 'grayscale(1) opacity(0.5)' }" />
-        </button>
-        <button
-          class="control-btn medium-btn"
-          @click="playPrevious"
-          title="Previous"
-        >
-          <AppIcon name="prev" :size="18" />
-        </button>
-        <button
-          class="control-btn play-btn"
-          @click="togglePlayPause"
-          title="Play/Pause"
-          :disabled="audioStore.isLoading"
-        >
-          <span v-if="audioStore.isLoading" class="loader">●●●</span>
-          <span v-else>
-            <AppIcon v-if="!audioStore.isPlaying" name="play" :size="18" />
-            <span v-else>
-              <AppIcon name="pause" :size="18" />
-            </span>
-          </span>
-        </button>
-        <button class="control-btn medium-btn" @click="playNext" title="Next">
-          <AppIcon name="next" :size="18" />
-        </button>
-        <button
-          class="control-btn small-btn repeat-btn"
-          :class="{ active: audioStore.repeatMode !== 'off' }"
-          @click="cycleRepeatMode"
-          :title="'Повтор: ' + (audioStore.repeatMode === 'all' ? 'все' : audioStore.repeatMode === 'one' ? 'один' : 'выкл')"
-        >
-          <AppIcon
-            :name="audioStore.repeatIcon"
-            :size="18"
-            :style="{ opacity: audioStore.repeatMode !== 'off' ? 1 : 0.5 }"
-          />
-        </button>
-      </div>
-      <div class="waveform-section">
-        <span class="time">{{ formatTime(audioStore.position) }}</span>
-        <div class="waveform-wrapper">
+    <div :class="$style.middle">
+      <div :class="[$style.screen, $style.scope]">
+        <div :class="$style.scopeInner">
           <WaveformBar />
+          <i :class="$style.playhead" :style="{ left: `${progress}%` }" />
         </div>
-        <span class="time">{{ formatTime(audioStore.duration) }}</span>
       </div>
-    </div>
 
-    <!-- Right: Volume + Queue -->
-    <div class="right-section">
-      <button
-        class="visualizer-toggle-btn"
-        @click="emit('toggleVisualizer')"
-        title="Открыть визуализатор"
-      >
-        <AppIcon name="visualizer" :size="18" style="filter: grayscale(1)" />
-      </button>
-
-      <button
-        class="eq-btn"
-        :class="{ active: eqStore.isOpen, 'eq-on': eqStore.settings.enabled }"
-        @click="eqStore.toggleOpen()"
-        title="Эквалайзер"
-      >
-        EQ
-      </button>
-
-      <EqPanel />
-
-      <div
-        class="volume-wrapper"
-        ref="volumeWrapperRef"
-        @wheel.stop.prevent="handleVolumeWheel"
-      >
+      <div :class="$style.keys">
         <button
-          class="volume-btn"
-          :class="{ active: volumePopupOpen }"
-          @click.stop="toggleVolumePopup"
-          :title="'Громкость: ' + Math.round(audioStore.volume * 100) + '%'"
+          :class="[$style.key, { [$style.on]: audioStore.shuffleEnabled }]"
+          :disabled="audioStore.isRadioActive"
+          :title="audioStore.isRadioActive
+            ? $t('player.unavailableInRadio')
+            : audioStore.shuffleEnabled ? $t('player.shuffleOff') : $t('player.shuffleOn')"
+          :aria-label="$t('player.shuffle')"
+          @click="toggleShuffleMode"
         >
-          <AppIcon :name="volumeIcon" :size="18" />
+          <AppIcon name="shuffle" :size="15" />
+          <span :class="$style.keyLabel">{{ $t('player.shuffle') }}</span>
         </button>
-        <Transition name="volume-popup">
-          <div v-if="volumePopupOpen" class="volume-popup" @click.stop>
-            <span class="volume-percent"
-              >{{ Math.round(audioStore.volume * 100) }}%</span
-            >
+        <button :class="$style.key" :title="$t('player.previous')" :aria-label="$t('player.previous')" @click="playPrevious">
+          <AppIcon name="prev" :size="16" />
+        </button>
+        <button
+          :class="[$style.key, $style.mainKey]"
+          :title="audioStore.isPlaying ? $t('player.pause') : $t('player.play')"
+          :aria-label="audioStore.isPlaying ? $t('player.pause') : $t('player.play')"
+          :disabled="audioStore.isLoading"
+          @click="togglePlayPause"
+        >
+          <AppIcon v-if="audioStore.isLoading" name="loader-dot" :size="16" :class="$style.loader" />
+          <AppIcon v-else :name="audioStore.isPlaying ? 'pause' : 'play'" :size="16" />
+        </button>
+        <button :class="$style.key" :title="$t('player.next')" :aria-label="$t('player.next')" @click="playNext">
+          <AppIcon name="next" :size="16" />
+        </button>
+        <button
+          :class="[$style.key, { [$style.on]: audioStore.repeatMode !== 'off' }]"
+          :title="$t(repeatTitleKey)"
+          :aria-label="$t(repeatTitleKey)"
+          @click="cycleRepeatMode"
+        >
+          <AppIcon :name="audioStore.repeatIcon" :size="15" />
+          <span :class="$style.keyLabel">{{ $t('player.repeatLabel') }}</span>
+        </button>
+
+        <span :class="$style.gap" />
+
+        <button :class="$style.key" :title="$t('player.visualizer')" :aria-label="$t('player.visualizer')" @click="emit('toggleVisualizer')">
+          <AppIcon name="visualizer" :size="15" />
+          <span :class="$style.keyLabel">{{ $t('player.visualizerLabel') }}</span>
+        </button>
+        <button
+          :class="['eq-btn', $style.key, { [$style.on]: eqStore.settings.enabled }]"
+          :title="$t('player.equalizer')"
+          :aria-label="$t('player.equalizer')"
+          @click="eqStore.toggleOpen()"
+        >
+          <span :class="$style.eqText">EQ</span>
+        </button>
+
+        <div ref="volumeWrapperRef" :class="$style.volume" @wheel.stop.prevent="handleVolumeWheel">
+          <button
+            :class="[$style.key, { [$style.on]: volumePopupOpen }]"
+            :title="$t('player.volume', { percent: Math.round(audioStore.volume * 100) })"
+            :aria-label="$t('player.volume', { percent: Math.round(audioStore.volume * 100) })"
+            @click.stop="toggleVolumePopup"
+          >
+            <AppIcon :name="volumeIcon" :size="15" />
+          </button>
+          <div v-if="volumePopupOpen" :class="$style.volumePopup" @click.stop>
             <input
               type="range"
-              class="volume-slider-vertical"
-              :style="{
-                background: `linear-gradient(to right, white ${localVolume * 100}%, black ${localVolume * 100}%)`,
-              }"
+              :class="$style.volumeSlider"
+              :style="{ '--volume': `${localVolume * 100}%` }"
               :value="localVolume"
               min="0"
               max="1"
               step="0.01"
+              :aria-label="$t('player.volume', { percent: Math.round(audioStore.volume * 100) })"
               @input="setVolume"
             />
+            <span :class="$style.volumePercent">{{ Math.round(audioStore.volume * 100) }}%</span>
           </div>
-        </Transition>
-      </div>
+        </div>
 
-      <button
-        class="queue-toggle-btn"
-        :class="{ active: queueVisible }"
-        @click="emit('toggleQueue')"
-        :title="queueVisible ? 'Скрыть очередь' : 'Показать очередь'"
-      >
-        <AppIcon name="queue" :size="18" />
-      </button>
+        <button
+          :class="[$style.key, { [$style.on]: queueVisible }]"
+          :title="queueVisible ? $t('player.hideQueue') : $t('player.showQueue')"
+          :aria-label="queueVisible ? $t('player.hideQueue') : $t('player.showQueue')"
+          @click="emit('toggleQueue')"
+        >
+          <AppIcon name="queue" :size="15" />
+          <span :class="$style.keyLabel">{{ $t('player.queue') }}</span>
+        </button>
+      </div>
     </div>
+
+    <div :class="$style.right">
+      <EqDisplay />
+      <LevelMeter />
+    </div>
+
+    <EqPanel />
   </div>
 </template>
 
-<style scoped lang="scss">
+<style module lang="scss">
 @import '@/styles/variables.scss';
 @import '@/styles/mixins.scss';
 
-.player-control {
-  width: 100%;
-  height: 100px;
-  background-color: var(--color-bg-player);
-  border-top: 1px solid var(--color-border);
-  padding: 0.5rem 1rem;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+.deck {
+  display: grid;
+  grid-template-columns: 292px minmax(0, 1fr) 232px;
+  gap: 10px;
+  padding: 10px;
 }
 
-@media (max-width: 480px) {
-  .player-control {
-    padding: 0.5rem 0.5rem;
-  }
-
-  .visualizer-toggle-btn {
-    display: none;
-  }
-
-  .right-section {
-    flex: 0 0 auto;
-    gap: 0.5rem;
-  }
-
-  .volume-btn,
-  .queue-toggle-btn {
-    width: 28px;
-    height: 28px;
-  }
+.screen {
+  background: var(--screen);
+  color: var(--screen-text);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px var(--key-edge);
 }
 
-.left-section {
-  flex: 1;
+.readout {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
   min-width: 0;
-  @media (max-width: 480px) {
-    display: none;
-  }
 }
 
-.track-info {
-  display: flex;
-  gap: 8px;
+.art {
+  @include flex-center;
+  width: 76px;
+  height: 76px;
+  overflow: hidden;
+  background: var(--screen-track);
+  color: var(--screen-muted);
 }
 
-.current-track {
-  font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-lg);
-  color: var(--color-accent-hover);
-  @include text-ellipsis;
-}
-
-.track-art {
-  width: 64px;
-  filter: none !important;
-}
-.track-artist {
-  font-weight: var(--font-weight-bold);
-  font-size: var(--font-size-lg);
-  color: var(--color-accent-primary);
-  @include text-ellipsis;
-}
-
-.no-track {
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
-}
-
-.center-section {
-  flex: 4;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.waveform-section {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.waveform-wrapper {
-  flex: 1;
-  min-width: 0;
-  height: 32px;
-}
-
-.controls {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.control-btn {
-  background: none;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  color: var(--color-text-primary);
-}
-
-.control-btn:hover:not(:disabled) {
-  background-color: var(--color-bg-hover);
-  border-color: var(--color-bg-hover);
-  color: white;
-  transform: scale(1.05);
-}
-
-.play-btn {
-  width: 40px;
-  height: 40px;
-  font-size: 1.1rem;
-  border-width: 2px;
-  border-color: var(--color-accent-primary);
-  color: var(--color-accent-primary);
-}
-
-.medium-btn {
-  width: 26px;
-  height: 26px;
-  font-size: 0.8rem;
-}
-
-.small-btn {
-  width: 28px;
-  height: 28px;
-  font-size: 0.8rem;
-  border: none;
-  opacity: 0.7;
-}
-
-.eq-btn {
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  color: var(--color-text-muted);
-  font-size: 0.7rem;
-  font-weight: var(--font-weight-bold);
-  padding: 2px 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-  letter-spacing: 0.05em;
-
-  &:hover {
-    background: var(--color-bg-hover);
-    color: var(--color-text-primary);
-    border-color: var(--color-text-muted);
-  }
-
-  &.active {
-    background: var(--color-bg-hover);
-    color: var(--color-text-primary);
-    border-color: var(--color-accent-primary);
-  }
-
-  &.eq-on {
-    color: var(--color-accent-primary);
-    border-color: var(--color-accent-primary);
-  }
-}
-
-.control-btn.active {
-  // color: var(--color-accent-primary);
-  opacity: 1;
-}
-
-.loader {
-  font-size: 0.6rem;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    opacity: 0.5;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.5;
-  }
-}
-
-.right-section {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-
-/* Volume popup */
-.visualizer-toggle-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s;
-  opacity: 0.7;
-
-  &:hover {
-    opacity: 1;
-    transform: scale(1.1);
-  }
-}
-
-.volume-wrapper {
-  position: relative;
-}
-
-.volume-btn {
-  background: transparent;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 1rem;
-  color: var(--color-text-secondary);
-  transition: all 0.2s;
-}
-
-.volume-btn:hover,
-.volume-btn.active {
-  color: black;
-  border-color: var(--color-bg-hover);
-}
-
-.volume-popup {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  background-color: var(--color-bg-sidebar);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 12px 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
-  z-index: 1000 !important;
-  min-width: 44px;
-}
-
-.volume-percent {
-  font-size: 1.5rem;
-  color: white;
-  background-color: none;
-  white-space: nowrap;
-}
-
-.volume-slider-vertical {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100px; /* Длина ползунка (станет высотой после поворота) */
-  height: 4px; /* Толщина линии */
-  outline: none;
-  cursor: pointer;
-  padding: 0;
-  margin: 45px -48px;
+.artImage {
   display: block;
-
-  /* Поворачиваем горизонтальный слайдер вертикально */
-  transform: rotate(-90deg);
-
-  &::-webkit-slider-runnable-track {
-    width: 100%;
-    height: 100%;
-    background: transparent;
-  }
-
-  &::-moz-range-track {
-    width: 100%;
-    height: 100%;
-    background: black;
-  }
-
-  &::-moz-range-progress {
-    background: white;
-    height: 4px;
-  }
-
-  &::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 12px;
-    background: white;
-    border: none;
-    border-radius: 0;
-    cursor: pointer;
-    box-shadow: none;
-    /* Выравнивание по центру линии 4px: (12 - 4) / 2 = 4 */
-    margin-top: -5px;
-  }
-
-  &::-moz-range-track {
-    width: 100%;
-    height: 100%;
-    background: transparent;
-  }
-
-  &::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
-    background: white;
-    border: none;
-    border-radius: 0;
-    cursor: pointer;
-  }
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-/* Popup transition */
-.volume-popup-enter-active,
-.volume-popup-leave-active {
-  transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
-}
-.volume-popup-enter-from,
-.volume-popup-leave-to {
-  opacity: 0;
-  transform: translateY(6px);
-}
-
-.queue-toggle-btn {
-  background: transparent;
-  border-radius: 6px;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  color: var(--color-text-secondary);
-}
-
-.queue-toggle-btn.active,
-.queue-toggle-btn:hover {
-  background-color: var(--color-bg-secondary);
-  color: var(--color-accent-primary);
-  border-color: var(--color-accent-primary);
+.readoutText {
+  min-width: 0;
 }
 
 .time {
+  font: 600 2.125rem/1 $font-family-mono;
+  letter-spacing: -0.02em;
+  color: var(--led);
+  text-shadow: 0 0 12px var(--led-glow);
+  white-space: nowrap;
+
+  small {
+    font-size: var(--font-size-base);
+    font-weight: 500;
+    color: var(--led-dim);
+    text-shadow: none;
+  }
+}
+
+.trackTitle {
+  margin-top: 6px;
+  font-weight: 600;
   font-size: var(--font-size-lg);
-  color: var(--player-time-color, white);
-  min-width: 35px;
+  @include text-ellipsis;
+}
+
+.trackMeta {
+  font-size: var(--font-size-sm);
+  color: var(--screen-muted);
+  @include text-ellipsis;
+}
+
+.middle {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.scope {
+  position: relative;
+  height: 62px;
+  padding: 7px 10px 12px;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 5px;
+    height: 4px;
+    background: repeating-linear-gradient(90deg, var(--screen-track) 0 1px, transparent 1px 28px);
+  }
+}
+
+.scopeInner {
+  position: relative;
+  height: 100%;
+}
+
+.playhead {
+  position: absolute;
+  top: -3px;
+  bottom: -8px;
+  width: 1px;
+  background: var(--led-hot);
+  pointer-events: none;
+}
+
+.keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.key {
+  @include flex-center;
+  flex: none;
+  gap: 6px;
+  height: 34px;
+  min-width: 40px;
+  padding: 0 9px;
+  background: var(--key);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 1px 0 var(--key-highlight), 0 2px 0 var(--key-edge);
+  font: 600 0.6563rem $font-family-mono;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.12);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 0 var(--key-highlight), 0 1px 0 var(--key-edge);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.on {
+  color: var(--accent);
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+  }
+}
+
+.mainKey {
+  min-width: 58px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.loader {
+  animation: deckPulse 1s ease-in-out infinite;
+}
+
+@keyframes deckPulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.gap {
+  flex: 1;
+}
+
+.eqText {
+  letter-spacing: 0.06em;
+}
+
+.volume {
+  position: relative;
+  flex: none;
+}
+
+.volumePopup {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 1;
+}
+
+.volumeSlider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 140px;
+  height: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(to right, var(--accent) var(--volume), var(--line) var(--volume));
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 16px;
+    background: var(--text);
+    border-radius: 1px;
+  }
+
+  &::-moz-range-thumb {
+    width: 10px;
+    height: 16px;
+    border: 0;
+    background: var(--text);
+    border-radius: 1px;
+  }
+}
+
+.volumePercent {
+  min-width: 34px;
+  text-align: right;
+  font: 500 var(--font-size-xs) $font-family-mono;
+}
+
+.right {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  gap: 8px;
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .deck {
+    grid-template-columns: 262px minmax(0, 1fr);
+  }
+
+  .right {
+    display: none;
+  }
+}
+
+@media (max-width: 1000px) {
+  .keyLabel {
+    display: none;
+  }
+}
+
+@media (max-width: $mobile-breakpoint) {
+  .deck {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+    padding: 8px;
+  }
+
+  .readout {
+    grid-template-columns: 52px minmax(0, 1fr);
+    padding: 7px 8px;
+    gap: 9px;
+  }
+
+  .art {
+    width: 52px;
+    height: 52px;
+  }
+
+  .time {
+    font-size: 1.375rem;
+
+    small {
+      font-size: var(--font-size-sm);
+    }
+  }
+
+  .trackTitle {
+    margin-top: 1px;
+    font-size: var(--font-size-base);
+  }
+
+  .scope {
+    height: 42px;
+    padding: 5px 8px 9px;
+  }
+
+  .keys {
+    gap: 3px;
+  }
+
+  .key {
+    flex: 1;
+    min-width: 0;
+    height: 44px;
+    padding: 0;
+    gap: 0;
+  }
+
+  .on::before,
+  .gap,
+  .volume {
+    display: none;
+  }
 }
 </style>
