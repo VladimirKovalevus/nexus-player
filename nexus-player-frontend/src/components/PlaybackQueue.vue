@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@/utils/providerAuth';
-import MediaCard from './common/MediaCard.vue';
+import MediaRow from './common/MediaRow.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import VirtualList from './common/VirtualList.vue';
-import MarqueeText from './common/MarqueeText.vue';
 import AppIcon from './common/AppIcon.vue';
 import { useI18n } from 'vue-i18n';
 import { useAudioStore } from '../stores/audio';
+import { useRowHeights } from '@/composables/useRowHeights';
 
 defineEmits<{ close: [] }>();
 
@@ -40,17 +40,17 @@ const queue = computed(() => {
   }));
 });
 
+const CONTAINER_TRACK_HEIGHT = 42;
+const rowHeights = useRowHeights();
+
 const calculateItemHeight = (index: number) => {
   const entry = audioStore.entries[index];
   if (!entry) return 0;
-  if (entry.entryType === 'track') return 88;
-  if (entry.entryType === 'container') {
-    if (expandedContainers.value.has(index) && entry.tracks) {
-      return 88 + entry.tracks.length * 42; // 88 header + tracks
-    }
-    return 88;
+  const rowHeight = rowHeights.compact.value;
+  if (entry.entryType === 'container' && expandedContainers.value.has(index) && entry.tracks) {
+    return rowHeight + entry.tracks.length * CONTAINER_TRACK_HEIGHT;
   }
-  return 88;
+  return rowHeight;
 };
 
 const isEntryEmpty = computed(() => audioStore.entries.length === 0);
@@ -344,8 +344,9 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
               },
             ]"
           >
-            <MediaCard
+            <MediaRow
               type="track"
+              layout="compact"
               :track="item.entry.track"
               :queue-index="item.index"
               :active="
@@ -368,8 +369,9 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
               { [$style.currentlyPlayingList]: item.isCurrentItem },
             ]"
           >
-            <MediaCard
+            <MediaRow
               type="album"
+              layout="compact"
               :album="item.entry.meta"
               :active="item.isCurrentItem"
               show-action
@@ -409,26 +411,10 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
                 <span :class="$style.trackNumber">{{ trackIdx + 1 }}</span>
                 <div :class="$style.trackInfo">
                   <div :class="$style.trackTitle">
-                    <MarqueeText
-                      :active="
-                        item.isCurrentItem &&
-                        audioStore.currentPosition?.trackWithinContainer ===
-                          trackIdx
-                      "
-                    >
-                      {{ track.title }}
-                    </MarqueeText>
+                    {{ track.title }}
                   </div>
                   <div :class="$style.trackArtist">
-                    <MarqueeText
-                      :active="
-                        item.isCurrentItem &&
-                        audioStore.currentPosition?.trackWithinContainer ===
-                          trackIdx
-                      "
-                    >
-                      {{ track.artist }}
-                    </MarqueeText>
+                    {{ track.artist }}
                   </div>
                 </div>
               </div>
@@ -564,7 +550,6 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
 .trackWrapper,
 .containerWrapper {
   width: 100%;
-  border-bottom: 1px solid var(--line-soft);
 }
 
 .currentlyPlaying,

@@ -1,31 +1,39 @@
 <template>
-  <div :class="$style.cache">
-    <MediaCardSection
-      title="Альбомы"
-      :items="albumItems"
-      card-type="album"
-      empty-icon="album"
-      empty-title="Нет закэшированных альбомов"
-      @item-click="handleAlbumClick"
-      @item-play="handleAlbumPlay"
-    />
+  <div class="cache-scroll" :class="$style.cache">
+    <div>
+      <div class="view-header">
+        <h1 class="view-title">{{ $t('nav.cache') }}</h1>
+        <span class="view-count">{{ $t('home.trackCount', { count: cachedTracks.length }) }}</span>
+      </div>
 
-    <TrackListSection
-      title="Треки"
-      :tracks="cachedTracks"
-      :active-track-id="audioStore.currentTrack?.id ?? null"
-      empty-title="Нет закэшированных треков"
-      @track-click="handleTrackClick"
-      @track-play="handleTrackPlay"
-      @track-refresh="fetchData"
-    />
+      <MediaTileSection
+        :title="$t('cacheView.albums')"
+        :items="albumItems"
+        :empty-title="$t('cacheView.noAlbums')"
+        placeholder-icon="album"
+        @item-click="handleAlbumClick"
+        @item-play="handleAlbumPlay"
+      />
+
+      <TrackListSection
+        :title="$t('cacheView.tracks')"
+        :tracks="cachedTracks"
+        :active-track-id="audioStore.currentTrack?.id ?? null"
+        :empty-title="$t('cacheView.noTracks')"
+        scroll-selector=".cache-scroll"
+        @track-click="handleTrackClick"
+        @track-play="handleTrackPlay"
+        @track-refresh="fetchData"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue';
 import { invoke } from '@/utils/providerAuth';
-import MediaCardSection, { type MediaCardItem } from '@/components/common/MediaCardSection.vue';
+import { useI18n } from 'vue-i18n';
+import MediaTileSection, { type MediaTileItem } from '@/components/common/MediaTileSection.vue';
 import TrackListSection from '@/components/common/TrackListSection.vue';
 import type { TrackDto, CachedAlbumDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
@@ -34,19 +42,19 @@ const emit = defineEmits<{
   'navigate-playlist': [playlistId: number];
 }>();
 
+const { t } = useI18n();
 const audioStore = useAudioStore();
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
 
 const cachedTracks = ref<TrackDto[]>([]);
 const albums = ref<CachedAlbumDto[]>([]);
 
-const albumItems = computed<MediaCardItem[]>(() =>
+const albumItems = computed<MediaTileItem[]>(() =>
   albums.value.map((album) => ({
     id: album.id,
     title: album.title,
-    subtitle: album.artist || 'Неизвестный исполнитель',
+    subtitle: `${album.artist || t('track.unknownArtist')} · ${album.cachedTrackCount}`,
     thumbnail: album.artworkUrl,
-    trackCount: album.cachedTrackCount,
   })),
 );
 
@@ -80,11 +88,11 @@ const handleTrackClick = (track: TrackDto, visibleTracks: TrackDto[]) =>
 const handleTrackPlay = (track: TrackDto, visibleTracks: TrackDto[]) =>
   playVisibleTracks(track, visibleTracks);
 
-const handleAlbumClick = (item: MediaCardItem) => {
+const handleAlbumClick = (item: MediaTileItem) => {
   emit('navigate-playlist', item.id);
 };
 
-const handleAlbumPlay = async (item: MediaCardItem) => {
+const handleAlbumPlay = async (item: MediaTileItem) => {
   audioStore.startLoading();
   try {
     await invoke('load_playlist_and_play', { playlistId: item.id, startIndex: 0 });
@@ -100,9 +108,7 @@ onMounted(() => fetchData());
 
 <style module lang="scss">
 .cache {
-  display: flex;
-  flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
 }
 </style>

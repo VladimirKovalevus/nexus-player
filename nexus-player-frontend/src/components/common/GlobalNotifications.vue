@@ -21,35 +21,38 @@ const store = useNotificationStore();
 <style scoped lang="scss">
 .notifications-container {
   position: fixed;
-  top: 20px;
-  right: 20px;
+  top: calc(12px + env(safe-area-inset-top));
+  right: 12px;
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 24px));
   pointer-events: none;
 }
 
 .notification {
   pointer-events: auto;
-  padding: 12px 20px;
-  border-radius: 8px;
-  color: white;
-  min-width: 200px;
-  max-width: 300px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  padding: 10px 12px;
+  background: var(--bg-panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--muted);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   cursor: pointer;
-  font-size: 28px;
-  word-break: break-word;
+  font-size: var(--font-size-base);
+  overflow-wrap: anywhere;
 
-  &.error { background-color: #f44336; }
-  &.info { background-color: #2196f3; }
-  &.success { background-color: #4caf50; }
+  &.error { border-left-color: var(--danger); }
+  &.warning { border-left-color: var(--warning); }
+  &.success { border-left-color: var(--success); }
+  &.info { border-left-color: var(--accent); }
 }
 
 .list-enter-active,
 .list-leave-active {
-  transition: all 0.5s ease;
+  transition: opacity var(--transition-base), transform var(--transition-base);
 }
 .list-enter-from {
   opacity: 0;

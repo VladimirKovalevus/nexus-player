@@ -18,7 +18,18 @@
     "loading": "Loading...",
     "error": "Error: {error}",
     "cancel": "Cancel",
-    "delete": "Delete"
+    "delete": "Delete",
+    "back": "Back",
+    "more": "More",
+    "filter": "Filter",
+    "filterTracks": "Search by title or artist",
+    "clear": "Clear",
+    "nothingFound": "Nothing found",
+    "refresh": "Refresh",
+    "sort": "Sort",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "forward": "Forward"
   },
   "nav": {
     "home": "Home",
@@ -41,7 +52,9 @@
     "source": {
       "local": "Local",
       "cached": "Cached"
-    }
+    },
+    "unknownCreator": "Unknown creator",
+    "unknown": "Unknown"
   },
   "player": {
     "noTrack": "Nothing playing",
@@ -85,6 +98,101 @@
   },
   "playlist": {
     "deleteTitle": "Delete playlist “{title}”?",
-    "deleteMessage": "The playlist will be removed from your library. This cannot be undone."
+    "deleteMessage": "The playlist will be removed from your library. This cannot be undone.",
+    "searchPlaylist": "Search playlists...",
+    "cacheStarted": "Caching playlist “{title}”",
+    "cacheQueued": "Playlist “{title}” queued for download, tracks: {count}",
+    "cachePartial": "Downloading “{title}”: {done} done, {failed} failed",
+    "cacheFailed": "Could not cache the playlist: {error}",
+    "playAll": "Play",
+    "cache": "Cache",
+    "delete": "Delete",
+    "count": "Items: {count}",
+    "nested": "Nested playlist",
+    "empty": "This playlist is empty",
+    "added": "“{item}” added to “{target}”",
+    "alreadyIn": "“{item}” is already in “{target}”",
+    "wouldCycle": "Cannot add “{item}” to “{target}”: the playlist would contain itself",
+    "addFailed": "Could not add to the playlist: {error}"
+  },
+  "table": {
+    "title": "Title",
+    "artist": "Artist",
+    "album": "Album",
+    "source": "Source",
+    "duration": "Time"
+  },
+  "media": {
+    "saveToPlaylist": "Save to playlist",
+    "addToPlaylist": "Add to playlist",
+    "removeFromPlaylist": "Remove from playlist",
+    "removeFromQueue": "Remove from queue",
+    "removeFromResults": "Remove from results",
+    "addToQueue": "Add to queue",
+    "deleteFromCache": "Delete from cache",
+    "download": "Download",
+    "open": "Open",
+    "like": "Add to favorites",
+    "unlike": "Remove from favorites",
+    "expand": "Expand",
+    "collapse": "Collapse"
+  },
+  "home": {
+    "playlists": "Playlists",
+    "tracks": "Tracks",
+    "trackCount": "Tracks: {count}",
+    "addPlaylist": "Playlist",
+    "addTrack": "Track",
+    "noPlaylists": "Add a new playlist",
+    "noTracks": "Add a new track",
+    "sort": {
+      "default": "Default",
+      "title": "Title",
+      "artist": "Artist",
+      "added_at": "Date"
+    },
+    "cachePlaylist": "Cache playlist"
+  },
+  "cacheView": {
+    "albums": "Albums",
+    "tracks": "Tracks",
+    "noAlbums": "No cached albums",
+    "noTracks": "No cached tracks"
+  },
+  "history": {
+    "clear": "Clear",
+    "empty": "Your play history is empty.",
+    "page": "Page {page}",
+    "cleared": "History cleared",
+    "clearFailed": "Could not clear history",
+    "added": "Added: {title}",
+    "addFailed": "Could not add to the queue",
+    "played": "Played"
+  },
+  "library": {
+    "title": "Local music",
+    "addFolder": "Add folder",
+    "scanning": "Scanning…",
+    "searchPlaceholder": "Search by title, artist or album",
+    "sortLabel": "Sort local music",
+    "sort": {
+      "catalog": "Catalog order",
+      "title": "Title",
+      "artist": "Artist"
+    },
+    "ascending": "Ascending",
+    "descending": "Descending",
+    "removeSource": "Remove source",
+    "notFound": "No audio files found",
+    "tryAnotherQuery": "Try a different search.",
+    "pressRefresh": "Press Refresh to scan.",
+    "scanResult": "Found: {found}, added: {added}, updated: {updated}, errors: {errors}",
+    "bridgeMissing": "Android media library is not available",
+    "grantAccess": "Allow access to music and press Refresh again.",
+    "refreshFailed": "Could not refresh the library: {error}",
+    "folderAdded": "Folder added. Press Refresh to find music in it.",
+    "folderRemoved": "Folder removed from sources. Press Refresh to check the catalog.",
+    "fileUnavailable": "This file is not available right now",
+    "playFailed": "Could not play the file: {error}"
   }
 }

@@ -1,92 +1,41 @@
 <template>
   <div :class="$style.playlistDetail">
-    <div :class="$style.header">
-      <div :class="$style.headerActions">
-        <button :class="$style.backButton" @click="emit('back')" title="Назад">
-          <AppIcon name="arrow-left" :size="18" />
-        </button>
-        <div :class="$style.dropdownWrapper">
-          <button ref="actionButtonRef" :class="$style.actionButton" @click.stop="toggleDropdown">
-            <AppIcon name="more-horizontal" :size="18" />
-          </button>
-
-          <Teleport to="body">
-            <div v-if="dropdownOpen" ref="dropdownPortalRef" :class="$style.dropdown" :style="dropdownStyle" @click.stop @wheel.stop>
-              <div v-if="!showPlaylistSubmenu">
-                <button :class="$style.dropdownItem" @click="handleShowPlaylistSubmenu">
-                  <span :class="$style.itemIcon"><AppIcon name="playlist" :size="16" /></span>
-                  <span :class="$style.itemLabel">Добавить в плейлист</span>
-                  <AppIcon name="chevron-right" :size="14" :class="$style.itemArrow" />
-                </button>
-                <button :class="$style.dropdownItem" @click="handleCachePlaylist">
-                  <span :class="$style.itemIcon"><AppIcon name="download-tray" :size="16" /></span>
-                  <span :class="$style.itemLabel">Кэшировать плейлист</span>
-                </button>
-                <div :class="$style.divider"></div>
-                <button :class="[$style.dropdownItem, $style.dangerItem]" @click="handleDeletePlaylist">
-                  <span :class="$style.itemIcon"><AppIcon name="trash" :size="16" /></span>
-                  <span :class="$style.itemLabel">Удалить плейлист</span>
-                </button>
-              </div>
-
-              <div v-else :class="$style.submenu">
-                <button :class="$style.dropdownItem" @click="showPlaylistSubmenu = false">
-                  <span :class="$style.itemIcon"><AppIcon name="chevron-left" :size="14" /></span>
-                  <span :class="$style.itemLabel">Назад</span>
-                </button>
-                <div :class="$style.divider"></div>
-                <div :class="$style.searchWrapper">
-                  <input
-                    v-model="playlistFilter"
-                    type="text"
-                    placeholder="Поиск плейлиста..."
-                    :class="$style.searchInput"
-                    @click.stop
-                  />
-                </div>
-                <button
-                  v-for="pl in filteredPlaylists"
-                  :key="pl.id"
-                  :class="$style.dropdownItem"
-                  @click="handleAddToPlaylist(pl.id)"
-                >
-                  <span :class="$style.itemIcon"><AppIcon name="playlist" :size="16" /></span>
-                  <span :class="$style.itemLabel">{{ pl.title }}</span>
-                </button>
-                <div v-if="playlists.length === 0" :class="$style.emptyPlaylist">
-                  Нет плейлистов
-                </div>
-              </div>
-            </div>
-          </Teleport>
+    <div class="view-header">
+      <button class="deck-btn" @click="emit('back')">
+        <AppIcon name="arrow-left" :size="13" /> {{ $t('common.back') }}
+      </button>
+      <template v-if="playlist">
+        <AppImage :src="playlist.thumbnail" :alt="playlist.title" :class="$style.art">
+          <template #placeholder>
+            <span :class="$style.artPlaceholder"><AppIcon name="playlist" :size="15" /></span>
+          </template>
+        </AppImage>
+        <div :class="$style.titleBlock">
+          <h1 class="view-title" :class="$style.title" :title="playlist.title">{{ playlist.title }}</h1>
+          <span class="view-count">
+            {{ $t('playlist.count', { count: items.length }) }}<template v-if="playlist.creator"> · {{ playlist.creator }}</template>
+          </span>
         </div>
-      </div>
-
-      <div v-if="playlist" :class="$style.playlistInfo">
-        <div :class="$style.thumbnail">
-          <AppImage :src="playlist.thumbnail" :alt="playlist.title" :class="$style.thumbnailImage">
-            <template #placeholder>
-              <div :class="$style.thumbnailPlaceholder">&#128194;</div>
-            </template>
-          </AppImage>
-        </div>
-        <div :class="$style.details">
-          <h1 :class="$style.title">{{ playlist.title }}</h1>
-          <p v-if="playlist.description" :class="$style.description">{{ playlist.description }}</p>
-          <div :class="$style.meta">
-            <span>{{ items.length }} items</span>
-            <span v-if="playlist.creator"> &bull; {{ playlist.creator }}</span>
-          </div>
-        </div>
-        <button :class="$style.playAllButton" @click="handlePlayAll">
-          &#9654; Play All
-        </button>
-      </div>
+      </template>
+      <span class="view-spacer" />
+      <button class="deck-btn deck-btn--primary" @click="handlePlayAll">
+        <AppIcon name="play" :size="12" /> {{ $t('playlist.playAll') }}
+      </button>
+      <button class="deck-btn" @click="handleCachePlaylist">{{ $t('playlist.cache') }}</button>
+      <ActionMenu ref="addMenuRef" :label="$t('media.addToPlaylist')" trigger-class="deck-btn">
+        <template #trigger>{{ $t('media.addToPlaylist') }}</template>
+        <PlaylistPicker :exclude-id="playlistId" @pick="handleAddToPlaylist" />
+      </ActionMenu>
+      <button class="deck-btn deck-btn--danger" @click="handleDeletePlaylist">{{ $t('playlist.delete') }}</button>
     </div>
 
-    <div v-if="loading" :class="$style.loading">Loading...</div>
+    <p v-if="playlist?.description" :class="$style.description">{{ playlist.description }}</p>
 
-    <div v-else :class="$style.itemList">
+    <div v-if="loading" :class="$style.message">{{ $t('common.loading') }}</div>
+    <div v-else-if="items.length === 0" :class="$style.message">{{ $t('playlist.empty') }}</div>
+
+    <div v-else class="track-table">
+      <TrackTableHeader />
       <div
         v-for="(item, index) in items"
         :key="itemKey(item)"
@@ -97,39 +46,34 @@
         @dragend="handleDragEnd"
         @drop="handleDrop($event, index)"
       >
-        <!-- Track item -->
-        <MediaCard
+        <MediaRow
           v-if="item.itemType === 'track'"
           type="track"
-          show-action
+          draggable
           context="playlist"
           :track="item.track"
           :active="audioStore.currentTrack?.id === item.track.id"
-          @click="handleTrackClick(item.track)"
+          @click="handleTrackPlay(index)"
           @play="handleTrackPlay(index)"
           @refresh="fetchPlaylist"
           @remove="handleRemoveTrack(item.track)"
         />
 
-        <!-- Sub-playlist item -->
-        <div v-else :class="$style.containerWrapper">
-          <MediaCard
+        <template v-else>
+          <MediaRow
             type="playlist"
-            :playlist="item.playlist"
-            show-action
+            draggable
+            expandable
             context="playlist"
-            container-mode
+            :playlist="item.playlist"
             :is-expanded="expanded[item.playlist.id]"
             @click="toggleExpand(item.playlist.id)"
             @toggle-expand="toggleExpand(item.playlist.id)"
+            @open="emit('navigate', item.playlist.id)"
             @remove="handleRemovePlaylistFromPlaylist(item.playlist.id)"
           />
 
-          <!-- Expanded tracks inside sub-playlist -->
-          <div
-            v-if="expanded[item.playlist.id] && subPlaylistItems[item.playlist.id]"
-            :class="$style.containerTracks"
-          >
+          <div v-if="expanded[item.playlist.id] && subPlaylistItems[item.playlist.id]" :class="$style.containerTracks">
             <div
               v-for="(subItem, trackIdx) in subPlaylistItems[item.playlist.id]"
               :key="subItemKey(item.playlist.id, subItem)"
@@ -137,49 +81,43 @@
               @click="subItem.itemType === 'track' ? handleSubTrackPlay(item.playlist.id, trackIdx) : emit('navigate', subItem.playlist.id)"
             >
               <span v-if="subItem.itemType === 'track'" :class="$style.trackNumber">{{ trackIdx + 1 }}</span>
-              <span v-else :class="$style.trackNumber"><AppIcon name="folder" :size="14" /></span>
-              
-              <div :class="$style.trackInfo">
-                <div :class="$style.trackTitle">
-                  {{ subItem.itemType === 'track' ? subItem.track.title : subItem.playlist.title }}
-                </div>
-                <div :class="$style.trackArtist">
-                  {{ subItem.itemType === 'track' ? subItem.track.artist : subItem.playlist.creator }}
-                </div>
+              <span v-else :class="$style.trackNumber"><AppIcon name="folder" :size="13" /></span>
+              <div :class="$style.trackTitle">
+                {{ subItem.itemType === 'track' ? subItem.track.title : subItem.playlist.title }}
               </div>
-
-              <!-- Actions for sub-items could be added here if needed -->
+              <div :class="$style.trackArtist">
+                {{ subItem.itemType === 'track' ? subItem.track.artist : subItem.playlist.creator }}
+              </div>
             </div>
           </div>
 
-          <!-- Loading state for sub-playlist -->
           <div
             v-else-if="expanded[item.playlist.id] && subPlaylistLoading[item.playlist.id]"
-            :class="$style.containerLoading"
+            :class="$style.message"
           >
-            Loading tracks...
+            {{ $t('common.loading') }}
           </div>
-        </div>
+        </template>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n';
-import { confirmAction } from '@/composables/useConfirm';
-import { ref, onMounted, inject, reactive, nextTick, computed, watch } from 'vue';
+import { ref, onMounted, inject, reactive, watch } from 'vue';
+import { usePlaylistActions } from '@/composables/usePlaylistActions';
 import { invoke } from '@/utils/providerAuth';
-import MediaCard from '@/components/common/MediaCard.vue';
+import MediaRow from '@/components/common/MediaRow.vue';
+import TrackTableHeader from '@/components/common/TrackTableHeader.vue';
+import ActionMenu from '@/components/common/ActionMenu.vue';
+import PlaylistPicker from '@/components/common/PlaylistPicker.vue';
 import AppIcon from '@/components/common/AppIcon.vue';
 import AppImage from '@/components/common/AppImage.vue';
 import type { PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto, TrackDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
-import { useNotificationStore } from '@/stores/notifications';
 
-const { t } = useI18n();
 const audioStore = useAudioStore();
-const notifications = useNotificationStore();
+const { addToPlaylist, cachePlaylist, deletePlaylist } = usePlaylistActions();
 const props = defineProps<{
   playlistId: number;
 }>();
@@ -211,152 +149,22 @@ const expanded = reactive<Record<number, boolean>>({});
 const subPlaylistItems = reactive<Record<number, PlaylistItemDto[]>>({});
 const subPlaylistLoading = reactive<Record<number, boolean>>({});
 
-const dropdownOpen = ref(false);
-const showPlaylistSubmenu = ref(false);
-const playlists = ref<Array<{ id: number; title: string }>>([]);
-const playlistFilter = ref('');
-const actionButtonRef = ref<HTMLElement | null>(null);
-const dropdownPortalRef = ref<HTMLElement | null>(null);
-const dropdownPos = ref({ top: 0, right: 0 });
-
-const dropdownStyle = computed(() => ({
-  top: `${dropdownPos.value.top}px`,
-  right: `${dropdownPos.value.right}px`,
-}));
-
-const toggleDropdown = async () => {
-  dropdownOpen.value = !dropdownOpen.value;
-  showPlaylistSubmenu.value = false;
-
-  if (dropdownOpen.value) {
-    await nextTick();
-    if (actionButtonRef.value) {
-      const rect = actionButtonRef.value.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-      
-      let top = rect.bottom + 4;
-      let right = window.innerWidth - rect.right;
-      
-      if (dropdownPortalRef.value) {
-        const dropdownHeight = dropdownPortalRef.value.offsetHeight;
-        if (top + dropdownHeight > viewportHeight) {
-          top = rect.top - dropdownHeight - 4;
-        }
-      }
-      
-      dropdownPos.value = { top, right };
-    }
-    if (playlists.value.length === 0) {
-      await fetchPlaylists();
-    }
-    document.addEventListener('mousedown', handleDocumentClick);
-  } else {
-    document.removeEventListener('mousedown', handleDocumentClick);
-  }
-};
-
-const fetchPlaylists = async () => {
-  try {
-    const allPlaylists = await invoke<Array<{ id: number; title: string }>>('get_all_playlists');
-    playlists.value = allPlaylists;
-  } catch (e) {
-    console.error('Failed to fetch playlists:', e);
-  }
-};
-
-const handleShowPlaylistSubmenu = () => {
-  showPlaylistSubmenu.value = true;
-  console.log(items.value,'ITEMS')
-};
-
-const filteredPlaylists = computed(() => {
-  const query = playlistFilter.value.toLowerCase();
-  return playlists.value
-    .filter(p => p.id !== props.playlistId)
-    .filter(p => p.title.toLowerCase().includes(query));
-});
+const addMenuRef = ref<InstanceType<typeof ActionMenu> | null>(null);
 
 const handleAddToPlaylist = async (targetPlaylistId: number) => {
-  try {
-    await invoke('add_playlist_to_playlist', {
-      parentPlaylistId: targetPlaylistId,
-      childPlaylistId: props.playlistId,
-    });
-    closeDropdown();
-  } catch (e) {
-    console.error('Failed to add playlist to playlist:', e);
-  }
+  addMenuRef.value?.close();
+  await addToPlaylist(targetPlaylistId, playlist.value?.title ?? '', 'add_playlist_to_playlist', {
+    parentPlaylistId: targetPlaylistId,
+    childPlaylistId: props.playlistId,
+  });
 };
 
-const closeDropdown = () => {
-  dropdownOpen.value = false;
-  showPlaylistSubmenu.value = false;
-  playlistFilter.value = '';
-  document.removeEventListener('mousedown', handleDocumentClick);
-};
-
-const handleDocumentClick = (e: MouseEvent) => {
-  const target = e.target as Node;
-  if (dropdownPortalRef.value?.contains(target)) return;
-  if (actionButtonRef.value?.contains(target)) return;
-  closeDropdown();
-};
-
-const handleCachePlaylist = async () => {
-  if (!playlist.value) return;
-  closeDropdown();
-
-  const title = playlist.value.title;
-  notifications.addNotification(`Начинаю кэширование плейлиста "${title}"`, 'info');
-
-  try {
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const item of items.value) {
-      if (item.itemType === 'track') {
-        try {
-          await invoke('save_track_to_file', { track: item.track });
-          successCount++;
-        } catch (e) {
-          console.error(`Failed to cache track ${item.track.title}:`, e);
-          failCount++;
-        }
-      }
-    }
-
-    if (failCount === 0) {
-      notifications.addNotification(
-        `Плейлист "${title}" поставлен на загрузку (${successCount} треков)`,
-        'success',
-      );
-    } else {
-      notifications.addNotification(
-        `Загрузка "${title}": ${successCount} ок, ${failCount} ошибок`,
-        'info',
-      );
-    }
-  } catch (e) {
-    console.error('Failed to cache playlist:', e);
-    notifications.addNotification(`Ошибка при кэшировании плейлиста: ${e}`, 'error');
-  }
+const handleCachePlaylist = () => {
+  if (playlist.value) cachePlaylist(props.playlistId, playlist.value.title);
 };
 
 const handleDeletePlaylist = async () => {
-  closeDropdown();
-  const confirmed = await confirmAction({
-    title: t('playlist.deleteTitle', { title: playlist.value?.title ?? '' }),
-    message: t('playlist.deleteMessage'),
-    confirmLabel: t('common.delete'),
-  });
-  if (!confirmed) return;
-
-  try {
-    await invoke('delete_playlist', { playlistId: props.playlistId });
-    emit('back');
-  } catch (e) {
-    console.error('Failed to delete playlist:', e);
-  }
+  if (await deletePlaylist(props.playlistId, playlist.value?.title ?? '')) emit('back');
 };
 
 const draggingIndex = ref<number | null>(null);
@@ -470,15 +278,6 @@ const handlePlayAll = async () => {
   }
 };
 
-const handleTrackClick = async (track: TrackDto) => {
-  try {
-    await invoke('add_to_queue', { trackId: track.id });
-    refreshQueue();
-  } catch (e) {
-    console.error('Failed to add track to queue:', e);
-  }
-};
-
 const handleSubTrackPlay = async (subPlaylistId: number, index: number) => {
   audioStore.startLoading();
   try {
@@ -525,8 +324,8 @@ const handleRemoveTrack = async (track: TrackDto) => {
 const handleRemovePlaylistFromPlaylist = async (childPlaylistId: number) => {
   try {
     await invoke('remove_playlist_from_playlist', {
-      parent_id: props.playlistId,
-      child_id: childPlaylistId,
+      parentPlaylistId: props.playlistId,
+      childPlaylistId,
     });
     await fetchPlaylist();
   } catch (e) {
@@ -544,320 +343,115 @@ onMounted(() => {
 @import '@/styles/mixins.scss';
 
 .playlistDetail {
-  padding: $spacing-xl;
-  overflow-y: auto;
   height: 100%;
+  overflow-y: auto;
 }
 
-.header {
-  margin-bottom: $spacing-xl;
-}
-
-.headerActions {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: $spacing-lg;
-}
-
-.backButton {
-  background: transparent;
-  border: 1px solid var(--color-border);
-  color: var(--color-text-secondary);
-  padding: $spacing-xs $spacing-md;
-  border-radius: $radius-sm;
-  clip-path: none !important;
-  cursor: pointer;
-  font-size: $font-size-sm;
-  transition: all $transition-fast;
-
-  &:hover {
-    color: var(--color-text-primary);
-    border-color: var(--color-text-secondary);
-  }
-}
-
-.dropdownWrapper {
-  position: relative;
-}
-
-.actionButton {
+.art,
+.artPlaceholder {
+  display: block;
+  flex: none;
   width: 32px;
   height: 32px;
-  padding: 0 !important;
-  border-radius: 50%;
-  clip-path: none !important;
-  background: transparent;
-  border: none;
-  color: var(--color-text-secondary);
-  font-size: $font-size-xl;
-  cursor: pointer;
-  @include flex-center;
-  transition: all $transition-fast;
-
-  &:hover {
-    background-color: var(--color-bg-secondary);
-    color: var(--color-text-primary);
-  }
-}
-
-.dropdown {
-  position: fixed;
-  background-color: var(--color-bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: $radius-md;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  width: 250px;
-  z-index: 10000;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.dropdownItem {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-  padding: $spacing-sm $spacing-md;
-  background: transparent;
-  border: none;
-  color: var(--color-text-primary);
-  font-size: $font-size-sm;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color $transition-fast;
-
-  &:hover {
-    background-color: var(--color-bg-hover);
-  }
-}
-
-.itemIcon {
-  font-size: $font-size-base;
-}
-
-.itemLabel {
-  flex: 1;
-}
-
-.itemArrow {
-  font-size: $font-size-lg;
-  color: var(--color-text-muted);
-}
-
-.divider {
-  height: 1px;
-  background-color: var(--color-border);
-  margin: $spacing-xs 0;
-}
-
-.searchWrapper {
-  padding: $spacing-xs $spacing-md;
-}
-
-.searchInput {
-  width: 100%;
-  padding: $spacing-xs $spacing-sm;
-  background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: $radius-sm;
-  color: var(--color-text-primary);
-  font-size: $font-size-sm;
-  outline: none;
-
-  &:focus {
-    border-color: var(--color-accent-primary);
-  }
-}
-
-.submenu {
-  animation: slideIn 0.15s ease-out;
-}
-
-.emptyPlaylist {
-  padding: $spacing-lg;
-  text-align: center;
-  color: var(--color-text-muted);
-  font-size: $font-size-sm;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.dangerItem {
-  color: #e74c3c;
-
-  &:hover {
-    background-color: rgba(231, 76, 60, 0.1);
-  }
-}
-
-.playlistInfo {
-  display: flex;
-  align-items: center;
-  gap: $spacing-lg;
-}
-
-.thumbnail {
-  width: 120px;
-  height: 120px;
-  border-radius: $radius-md;
-  overflow: hidden;
-  flex-shrink: 0;
-  background-color: var(--color-bg-secondary);
-}
-
-.thumbnailImage {
-  width: 100%;
-  height: 100%;
   object-fit: cover;
 }
 
-.thumbnailPlaceholder {
-  width: 100%;
-  height: 100%;
+.artPlaceholder {
   @include flex-center;
-  font-size: 48px;
-  background: black; 
+  background: var(--key);
+  color: var(--muted);
 }
 
-.details {
-  flex: 1;
+.titleBlock {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  max-width: 340px;
+  line-height: 1.2;
 }
 
 .title {
-  font-size: $font-size-2xl;
-  font-weight: $font-weight-bold;
-  color: var(--color-text-primary);
-  margin: 0 0 $spacing-xs 0;
+  @include text-ellipsis;
 }
 
 .description {
-  font-size: $font-size-sm;
-  color: var(--color-text-secondary);
-  margin: 0 0 $spacing-sm 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--font-size-sm);
+  color: var(--muted);
 }
 
-.meta {
-  font-size: $font-size-sm;
-  color: var(--color-text-muted);
-}
-
-.playAllButton {
-  padding: $spacing-md $spacing-xl;
-  font-size: $font-size-base;
-  font-weight: $font-weight-semibold;
-  background: black;
-  color: white;
-  border: none;
-  border-radius: $radius-lg;
-  cursor: pointer;
-  transition: all $transition-fast;
-  white-space: nowrap;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
-  }
-}
-
-.loading {
+.message {
+  padding: 24px 12px;
   text-align: center;
-  padding: $spacing-2xl;
-  color: var(--color-text-muted);
-}
-
-.itemList {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-sm;
+  color: var(--muted);
 }
 
 .draggableItem {
-  cursor: grab;
-  transition: transform $transition-fast;
-
-  &:active {
-    cursor: grabbing;
+  &:hover {
+    position: relative;
   }
 }
 
 .dragging {
-  opacity: 0.5;
-  transform: scale(0.98);
-}
-
-.containerWrapper {
-  border-radius: $radius-md;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  position: relative;
-  overflow: hidden;
-
-  &:has([data-dropdown-open]) {
-    z-index: 1000;
-  }
+  opacity: 0.4;
 }
 
 .containerTracks {
-  border-top: 1px solid var(--color-border);
-  padding: $spacing-xs 0;
-  border-bottom-left-radius: $radius-md;
-  border-bottom-right-radius: $radius-md;
-  background-color: var(--color-bg-primary);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--line);
 }
 
 .containerTrack {
-  display: flex;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1.6fr) minmax(0, 1fr);
   align-items: center;
-  gap: $spacing-sm;
-  padding: $spacing-sm $spacing-md $spacing-sm $spacing-xl;
+  column-gap: 8px;
+  height: var(--row-height);
+  padding-right: 12px;
   cursor: pointer;
-  transition: background-color $transition-fast;
 
   &:hover {
-    background-color: var(--color-bg-hover);
+    background: var(--bg-selected);
   }
 }
 
 .trackNumber {
-  color: var(--color-text-secondary);
-  font-size: $font-size-sm;
-  min-width: 24px;
-  text-align: right;
-}
-
-.trackInfo {
-  flex: 1;
-  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+  font: 500 var(--font-size-sm) $font-family-mono;
+  color: var(--muted);
 }
 
 .trackTitle {
-  color: var(--color-text-primary);
-  font-size: $font-size-sm;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 500;
+  @include text-ellipsis;
 }
 
 .trackArtist {
-  color: var(--color-text-secondary);
-  font-size: $font-size-xs;
+  color: var(--muted);
+  @include text-ellipsis;
 }
 
-.containerLoading {
-  padding: $spacing-md;
-  text-align: center;
-  color: var(--color-text-secondary);
-  font-size: $font-size-sm;
+@media (max-width: $mobile-breakpoint) {
+  .titleBlock {
+    flex: 1 1 calc(100% - 120px);
+    max-width: none;
+  }
+
+  .containerTrack {
+    grid-template-columns: 30px minmax(0, 1fr);
+    grid-auto-rows: min-content;
+    align-content: center;
+  }
+
+  .trackNumber {
+    grid-row: span 2;
+  }
+
+  .trackArtist {
+    grid-column: 2;
+    font-size: var(--font-size-xs);
+  }
 }
 </style>

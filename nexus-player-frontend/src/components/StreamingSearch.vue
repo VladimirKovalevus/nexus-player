@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { invoke } from '@/utils/providerAuth';
 import type { SearchResult } from '@/types/types';
-import MediaCard from '@/components/common/MediaCard.vue';
+import MediaRow from '@/components/common/MediaRow.vue';
 import AppIcon from '@/components/common/AppIcon.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
 import { storeToRefs } from 'pinia';
@@ -351,8 +351,8 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
           <AppIcon name="arrow-right" :size="16" />
         </button>
       </div>
-      <div :class="$style.resultsList">
-        <MediaCard
+      <div class="track-table" :class="$style.resultsList">
+        <MediaRow
           v-for="(result, index) in searchResults"
           :key="index"
           :type="result.type === 'track' ? 'track' : result.type === 'playlist' ? 'playlist' : 'album'"

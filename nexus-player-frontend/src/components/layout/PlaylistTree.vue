@@ -4,8 +4,15 @@
       <span>{{ $t('tree.title') }}</span>
       <button :class="$style.add" @click="$emit('create')">+ {{ $t('tree.add') }}</button>
     </div>
+    <label class="filter-box" :class="$style.filter">
+      <AppIcon name="search" :size="13" />
+      <input v-model="query" type="text" :placeholder="$t('common.filter')" autocomplete="off" spellcheck="false" />
+      <button v-if="query" type="button" :aria-label="$t('common.clear')" @click="query = ''">
+        <AppIcon name="close" :size="12" />
+      </button>
+    </label>
     <button
-      v-for="playlist in store.playlists"
+      v-for="playlist in visible"
       :key="playlist.id"
       :class="[$style.item, { [$style.active]: selectedId === playlist.id }]"
       :title="playlist.title"
@@ -19,20 +26,27 @@
       <span :class="$style.name">{{ playlist.title }}</span>
       <span :class="$style.count">{{ playlist.trackCount }}</span>
     </button>
-    <p v-if="store.playlists.length === 0" :class="$style.empty">{{ $t('tree.empty') }}</p>
+    <p v-if="visible.length === 0" :class="$style.empty">
+      {{ query ? $t('common.nothingFound') : $t('tree.empty') }}
+    </p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import AppIcon from '@/components/common/AppIcon.vue';
 import AppImage from '@/components/common/AppImage.vue';
 import { usePlaylistsStore } from '@/stores/playlists';
+import { fuzzyFilterItems } from '@/utils/fuzzy';
 
 defineProps<{ selectedId: number | null }>();
 defineEmits<{ select: [id: number]; create: [] }>();
 
 const store = usePlaylistsStore();
+const query = ref('');
+const visible = computed(() =>
+  fuzzyFilterItems(query.value.trim(), store.playlists, (playlist) => [playlist.title]),
+);
 
 onMounted(store.fetch);
 </script>
@@ -61,6 +75,10 @@ onMounted(store.fetch);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.filter {
+  margin: 0 8px 6px;
 }
 
 .item {

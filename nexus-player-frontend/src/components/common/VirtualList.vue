@@ -149,6 +149,9 @@ onMounted(async () => {
   } else {
     resizeObserver = new ResizeObserver(updateDimensions);
     resizeObserver.observe(scrollContainer as HTMLElement);
+    // Content above a managed list can grow after mount, which moves the list down.
+    const content = (scrollContainer as HTMLElement).firstElementChild;
+    if (managed.value && content) resizeObserver.observe(content);
   }
 });
 

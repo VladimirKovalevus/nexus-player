@@ -1,86 +1,72 @@
 <template>
   <div :class="$style.historyView" class="history-scroll-container">
-    <header :class="$style.header">
-      <h1 :class="$style.title">История</h1>
-      <div :class="$style.actions">
-        <button :class="$style.clearButton" @click="handleClearHistory" :disabled="loading || historyEntries.length === 0">
-          Очистить
+    <div>
+      <header class="view-header">
+        <h1 class="view-title">{{ $t('nav.history') }}</h1>
+        <span class="view-spacer" />
+        <button class="deck-btn" :disabled="loading" @click="() => fetchHistory(page)">
+          {{ loading ? $t('common.loading') : $t('common.refresh') }}
         </button>
-        <button :class="$style.refreshButton" @click="() => fetchHistory(page)" :disabled="loading">
-          {{ loading ? 'Загрузка...' : 'Обновить' }}
+        <button class="deck-btn deck-btn--danger" :disabled="loading || historyEntries.length === 0" @click="handleClearHistory">
+          {{ $t('history.clear') }}
         </button>
-      </div>
-    </header>
+      </header>
 
-    <div v-if="error" :class="$style.error">{{ error }}</div>
+      <div v-if="error" :class="$style.error">{{ error }}</div>
 
-    <div v-if="historyEntries.length > 0" :class="$style.list">
       <VirtualList
+        v-if="historyEntries.length > 0"
         :items="historyEntries"
-        :item-height="80"
+        :item-height="rowHeights.table.value"
         container-selector=".history-scroll-container"
       >
         <template #default="{ item: entry }">
-          <div
-            :class="$style.entry"
-            @click="handleEntryClick(entry)"
-          >
-            <div :class="$style.entryMain">
-              <AppImage :src="entry.artworkUrl" :class="$style.artwork" alt="Artwork">
-                <template #placeholder>
-                  <div :class="$style.artworkPlaceholder"><AppIcon name="music-note" :size="24" /></div>
-                </template>
-              </AppImage>
-
-              <div :class="$style.info">
-                <div :class="$style.trackTitle">{{ entry.title }}</div>
-                <div :class="$style.trackArtist">{{ entry.artist || 'Неизвестный исполнитель' }}</div>
-              </div>
+          <div :class="$style.entry" @click="handleEntryClick(entry)">
+            <AppImage :src="entry.artworkUrl" :class="$style.artwork" :alt="entry.title">
+              <template #placeholder>
+                <span :class="$style.artworkPlaceholder"><AppIcon name="music-note" :size="14" /></span>
+              </template>
+            </AppImage>
+            <div :class="$style.info">
+              <div :class="$style.trackTitle" :title="entry.title">{{ entry.title }}</div>
+              <div :class="$style.trackArtist">{{ entry.artist || $t('track.unknownArtist') }}</div>
             </div>
-
-            <div :class="$style.meta">
-              <div :class="$style.system">{{ entry.source.system }}</div>
-              <div :class="$style.playedAt">{{ formatTime(entry.playedAt) }}</div>
-            </div>
-
+            <span :class="$style.source"><span class="source-tag">{{ entry.source.system }}</span></span>
+            <span :class="$style.playedAt">{{ formatTime(entry.playedAt) }}</span>
           </div>
         </template>
       </VirtualList>
-    </div>
 
-    <div v-if="!loading && historyEntries.length === 0" :class="$style.empty">
-      История воспроизведения пуста.
-    </div>
+      <div v-if="!loading && historyEntries.length === 0" :class="$style.empty">
+        {{ $t('history.empty') }}
+      </div>
 
-    <div v-if="historyEntries.length > 0 || page > 0" :class="$style.pagination">
-      <button
-        :class="$style.pageButton"
-        :disabled="loading || page === 0"
-        @click="goToPage(page - 1)"
-      >
-        Назад
-      </button>
-      <span :class="$style.pageIndicator">Страница {{ page + 1 }}</span>
-      <button
-        :class="$style.pageButton"
-        :disabled="loading || historyEntries.length < pageSize"
-        @click="goToPage(page + 1)"
-      >
-        Вперёд
-      </button>
+      <div v-if="historyEntries.length > 0 || page > 0" :class="$style.pagination">
+        <button class="deck-btn" :disabled="loading || page === 0" @click="goToPage(page - 1)">
+          {{ $t('common.back') }}
+        </button>
+        <span class="view-count">{{ $t('history.page', { page: page + 1 }) }}</span>
+        <button class="deck-btn" :disabled="loading || historyEntries.length < pageSize" @click="goToPage(page + 1)">
+          {{ $t('common.forward') }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, inject } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
 import VirtualList from '@/components/common/VirtualList.vue';
 import AppIcon from '@/components/common/AppIcon.vue';
 import AppImage from '@/components/common/AppImage.vue';
 import type { PlayHistoryEntryDto } from '@/types/types';
 import { useNotificationStore } from '@/stores/notifications';
+import { useRowHeights } from '@/composables/useRowHeights';
 
+const { t, locale } = useI18n();
+const rowHeights = useRowHeights();
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
 const notifications = useNotificationStore();
 
@@ -102,7 +88,7 @@ const fetchHistory = async (targetPage: number) => {
     page.value = targetPage;
   } catch (e) {
     console.error('Failed to fetch history:', e);
-    error.value = `Ошибка: ${e}`;
+    error.value = t('common.error', { error: String(e) });
   } finally {
     loading.value = false;
   }
@@ -120,11 +106,11 @@ const handleClearHistory = async () => {
     await invoke('clear_play_history');
     historyEntries.value = [];
     page.value = 0;
-    notifications.addNotification('История очищена', 'success');
+    notifications.addNotification(t('history.cleared'), 'success');
   } catch (e) {
     console.error('Failed to clear history:', e);
-    error.value = `Ошибка: ${e}`;
-    notifications.addNotification('Не удалось очистить историю', 'error');
+    error.value = t('common.error', { error: String(e) });
+    notifications.addNotification(t('history.clearFailed'), 'error');
   } finally {
     loading.value = false;
   }
@@ -145,16 +131,16 @@ const handleEntryClick = async (entry: PlayHistoryEntryDto) => {
   try {
     await invoke('handle_streaming_track', { searchResult, strategy: 'cache', searchType: 'track' });
     refreshQueue();
-    notifications.addNotification(`Добавлено: ${entry.title}`, 'success');
+    notifications.addNotification(t('history.added', { title: entry.title }), 'success');
   } catch (e) {
     console.error('Failed to add to queue:', e);
-    notifications.addNotification('Не удалось добавить в очередь', 'error');
+    notifications.addNotification(t('history.addFailed'), 'error');
   }
 };
 
 const formatTime = (timestamp: number) => {
   const date = new Date(timestamp * 1000);
-  return date.toLocaleString();
+  return date.toLocaleString(locale.value);
 };
 
 onMounted(() => fetchHistory(0));
@@ -165,176 +151,118 @@ onMounted(() => fetchHistory(0));
 @import '@/styles/mixins.scss';
 
 .historyView {
-  padding: $spacing-xl;
   height: 100%;
   overflow-y: auto;
 }
 
-.header {
-  @include flex-between;
-  margin-bottom: $spacing-2xl;
-}
-
-.title {
-  font-size: $font-size-3xl;
-  font-weight: $font-weight-bold;
-  color: var(--color-text-primary);
-}
-
-.actions {
-  @include flex-start;
-  gap: $spacing-md;
-}
-
-.refreshButton {
-  padding: $spacing-sm $spacing-lg;
-  background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: $radius-md;
-  color: var(--color-text-primary);
-  cursor: pointer;
-
-  &:hover {
-    background-color: var(--color-bg-hover);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.clearButton {
-  padding: $spacing-sm $spacing-lg;
-  background-color: transparent;
-  border: 1px solid #ef4444;
-  border-radius: $radius-md;
-  color: #ef4444;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background-color: rgba(239, 68, 68, 0.1);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.pagination {
-  @include flex-center;
-  gap: $spacing-lg;
-  margin-top: $spacing-xl;
-  padding-bottom: $spacing-lg;
-}
-
-.pageButton {
-  padding: $spacing-sm $spacing-lg;
-  background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: $radius-md;
-  color: var(--color-text-primary);
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background-color: var(--color-bg-hover);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.pageIndicator {
-  color: var(--color-text-secondary);
-  font-size: $font-size-sm;
-}
-
-.list {
-  // VirtualList manages layout internally
+.error {
+  padding: 10px 12px;
+  color: var(--danger);
 }
 
 .entry {
-  @include flex-between;
-  padding: $spacing-md;
-  background-color: var(--color-bg-primary);
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 96px 150px;
+  align-items: center;
+  gap: 8px;
+  height: var(--row-height);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line-soft);
   cursor: pointer;
-  transition: background-color $transition-fast;
 
   &:hover {
-    background-color: var(--color-accent-primary);
-    color: var(--color-accent-hover);
+    background: var(--bg-selected);
   }
 }
 
-.entryMain {
-  @include flex-start;
-  gap: $spacing-md;
-  flex: 1;
-  min-width: 0;
-}
-
-.artwork {
-  width: 48px;
-  height: 48px;
-  border-radius: $radius-sm;
+.artwork,
+.artworkPlaceholder {
+  display: block;
+  width: 30px;
+  height: 30px;
   object-fit: cover;
 }
 
 .artworkPlaceholder {
-  width: 48px;
-  height: 48px;
-  border-radius: $radius-sm;
-  background-color: var(--color-bg-secondary);
   @include flex-center;
-  font-size: $font-size-xl;
+  background: var(--key);
+  color: var(--muted);
 }
 
 .info {
-  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   min-width: 0;
 }
 
 .trackTitle {
-  font-weight: $font-weight-semibold;
+  flex: 1 1 60%;
+  font-weight: 500;
   @include text-ellipsis;
-
 }
 
 .trackArtist {
-  font-size: $font-size-sm;
+  flex: 1 1 40%;
+  font-size: var(--font-size-sm);
+  color: var(--muted);
   @include text-ellipsis;
 }
 
-.meta {
-  text-align: right;
-  margin-left: $spacing-md;
-}
-
-.system {
-  font-size: $font-size-xs;
-  text-transform: uppercase;
-  margin-bottom: 2px;
-}
-
 .playedAt {
-  font-size: $font-size-xs;
-}
-
-
-.error {
-  color: #ef4444;
-  padding: $spacing-md;
-  background-color: rgba(239, 68, 68, 0.1);
-  border-radius: $radius-md;
-  margin-bottom: $spacing-lg;
+  font: 500 var(--font-size-xs) $font-family-mono;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
 }
 
 .empty {
+  padding: 36px 12px;
   text-align: center;
-  padding: $spacing-3xl;
-  color: var(--color-text-secondary);
+  color: var(--muted);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+@media (max-width: 800px) {
+  .entry {
+    grid-template-columns: 30px minmax(0, 1fr) 130px;
+  }
+
+  .source {
+    display: none;
+  }
+}
+
+@media (max-width: $mobile-breakpoint) {
+  .entry {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+  }
+
+  .artwork,
+  .artworkPlaceholder {
+    width: 40px;
+    height: 40px;
+  }
+
+  .info {
+    display: block;
+    line-height: 1.2;
+  }
+
+  .trackArtist {
+    font-size: var(--font-size-xs);
+  }
+
+  .playedAt {
+    white-space: normal;
+    max-width: 84px;
+  }
 }
 </style>

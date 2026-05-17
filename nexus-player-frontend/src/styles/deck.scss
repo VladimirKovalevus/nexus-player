@@ -1,0 +1,203 @@
+// Shared deck controls and table layout, used across views as plain global classes.
+
+.deck-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  background: var(--key);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 1px 0 var(--key-highlight), 0 1px 0 var(--key-edge);
+  font: 600 0.6563rem var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.12);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.deck-btn--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.deck-btn--danger {
+  color: var(--danger);
+}
+
+.view-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 45px;
+  padding: 8px 12px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.view-title {
+  font: 600 var(--font-size-lg) var(--font-mono);
+  letter-spacing: -0.01em;
+}
+
+.view-count {
+  font: 500 var(--font-size-xs) var(--font-mono);
+  color: var(--muted);
+}
+
+.view-spacer {
+  flex: 1;
+}
+
+.section-label {
+  font: 600 0.625rem var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 12px 8px;
+}
+
+.filter-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  margin: 0 12px 8px;
+  background: var(--bg-table);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--text);
+    font-size: var(--font-size-sm);
+
+    &::placeholder {
+      color: var(--muted);
+    }
+  }
+
+  button {
+    display: flex;
+  }
+}
+
+.source-tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 5px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font: 600 0.5938rem var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+// Track table. The wrapper is a size container because the free width depends on
+// whether the queue is docked, not only on the window.
+.track-table {
+  container-type: inline-size;
+}
+
+.track-grid {
+  display: grid;
+  grid-template-columns: 38px 30px minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) 96px 52px 28px 28px;
+  align-items: center;
+  column-gap: 8px;
+  padding-right: 6px;
+}
+
+.track-grid-head {
+  height: 26px;
+  border-bottom: 1px solid var(--line);
+  font: 600 0.625rem var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.track-row-artist {
+  display: none;
+}
+
+@container (max-width: 780px) {
+  .track-grid {
+    grid-template-columns: 38px 30px minmax(0, 1.6fr) minmax(0, 1fr) 52px 28px 28px;
+  }
+
+  .track-col-album,
+  .track-col-source {
+    display: none;
+  }
+}
+
+@container (max-width: 460px) {
+  .track-grid {
+    grid-template-columns: 30px minmax(0, 1fr) 46px 28px 28px;
+    padding-left: 8px;
+  }
+
+  .track-col-index,
+  .track-col-artist {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .track-grid {
+    grid-template-columns: 40px minmax(0, 1fr) 46px 34px 34px;
+    padding: 0 4px 0 10px;
+    column-gap: 8px;
+  }
+
+  .track-grid-head,
+  .track-col-index,
+  .track-col-artist,
+  .track-col-album,
+  .track-col-source {
+    display: none;
+  }
+
+  .track-row-artist {
+    display: block;
+  }
+
+  .filter-box {
+    height: 38px;
+  }
+
+  .deck-btn {
+    height: 34px;
+  }
+}
