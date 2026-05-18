@@ -2,7 +2,9 @@
   <div :class="$style.tree">
     <div :class="$style.head">
       <span>{{ $t('tree.title') }}</span>
-      <button :class="$style.add" @click="$emit('create')">+ {{ $t('tree.add') }}</button>
+      <button :class="$style.add" :title="$t('tree.add')" :aria-label="$t('tree.add')" @click="$emit('create')">
+        <AppIcon name="plus" :size="14" />
+      </button>
     </div>
     <label class="filter-box" :class="$style.filter">
       <AppIcon name="search" :size="13" />
@@ -70,11 +72,8 @@ onMounted(store.fetch);
 }
 
 .add {
+  display: flex;
   color: var(--accent);
-  font: inherit;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .filter {

@@ -615,6 +615,18 @@ onUnmounted(() => {
   }
 }
 
+// All keys must stay on screen: the queue key is the last one in the row.
+@media (max-width: 760px) {
+  .deck {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+
+  .key {
+    min-width: 34px;
+    padding: 0 6px;
+  }
+}
+
 @media (max-width: $mobile-breakpoint) {
   .deck {
     grid-template-columns: minmax(0, 1fr);

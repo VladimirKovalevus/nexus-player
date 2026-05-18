@@ -51,6 +51,9 @@ defineEmits<{ closeQueue: [] }>();
   overflow: hidden;
   background-color: var(--bg-body);
   color: var(--text);
+  // The first tab and the playlist tree share this width so their edges line up.
+  // Below 1280px the tree keeps a usable size and the first tab grows with it.
+  --tree-width: max(160px, 12.5%);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
@@ -72,7 +75,8 @@ defineEmits<{ closeQueue: [] }>();
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 230px minmax(0, 1fr) auto;
+  // The extra pixel holds the tree's right border, in line with the 1px gap after the first tab.
+  grid-template-columns: calc(var(--tree-width) + 1px) minmax(0, 1fr) auto;
   position: relative;
 }
 
@@ -109,7 +113,7 @@ defineEmits<{ closeQueue: [] }>();
 // Too narrow to dock the queue next to the table: it floats over the main area.
 @media (max-width: 1100px) {
   .body {
-    grid-template-columns: 190px minmax(0, 1fr);
+    grid-template-columns: calc(var(--tree-width) + 1px) minmax(0, 1fr);
   }
 
   .backdrop {

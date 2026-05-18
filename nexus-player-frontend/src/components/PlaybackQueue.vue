@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@/utils/providerAuth';
 import MediaRow from './common/MediaRow.vue';
 import PlaylistCreateSimpleModal from './PlaylistCreateSimpleModal.vue';
+import { usePlaylistActions } from '@/composables/usePlaylistActions';
 import VirtualList from './common/VirtualList.vue';
 import AppIcon from './common/AppIcon.vue';
 import { useI18n } from 'vue-i18n';
@@ -17,6 +18,7 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 const isModalOpen = ref(false);
 const isSavingPlaylist = ref(false);
+const { addContainerToPlaylist } = usePlaylistActions();
 const expandedContainers = ref<Set<number>>(new Set());
 const playlistInitialData = ref<{
   title?: string;
@@ -261,28 +263,23 @@ const handleContainerAddToPlaylist = async (
   const entry = audioStore.entries[itemIndex];
   if (entry?.entryType !== 'container') return;
 
-  try {
+  await addContainerToPlaylist(playlistId, entry.meta.title, async () => {
     if (!entry.tracks) {
       const result = await invoke<any>('expand_queue_container', { itemIndex });
       audioStore.updateQueueState(result);
     }
     const freshEntry = audioStore.entries[itemIndex];
-    if (freshEntry?.entryType === 'container' && freshEntry.tracks) {
-      const childId = await invoke<number>('create_playlist_with_tracks', {
-        request: {
-          title: freshEntry.meta.title,
-          description: `${freshEntry.meta.artist}`,
-          tracks: freshEntry.tracks,
-        },
-      });
-      await invoke('add_playlist_to_playlist', {
-        parentPlaylistId: playlistId,
-        childPlaylistId: childId,
-      });
+    if (freshEntry?.entryType !== 'container' || !freshEntry.tracks) {
+      throw new Error('The container has no tracks');
     }
-  } catch (e) {
-    console.error('Failed to add container to playlist:', e);
-  }
+    return invoke<number>('create_playlist_with_tracks', {
+      request: {
+        title: freshEntry.meta.title,
+        description: `${freshEntry.meta.artist}`,
+        tracks: freshEntry.tracks,
+      },
+    });
+  });
 };
 
 const handleContainerRemove = async (itemIndex: number) => {
@@ -377,6 +374,7 @@ defineExpose({ fetchQueue, openCreatePlaylistModal, clearQueue });
               show-action
               context="queue"
               container-mode
+              expandable
               :is-expanded="isContainerExpanded(item.index)"
               @click="toggleContainer(item.index)"
               @toggle-expand="toggleContainer(item.index)"

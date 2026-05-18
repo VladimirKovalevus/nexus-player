@@ -38,6 +38,26 @@ export function usePlaylistActions() {
     }
   };
 
+  /** Saves a streaming album or playlist as a new playlist and nests it in the target. */
+  const addContainerToPlaylist = async (
+    targetPlaylistId: number,
+    title: string,
+    createChild: () => Promise<number>,
+  ) => {
+    let childPlaylistId: number;
+    try {
+      childPlaylistId = await createChild();
+    } catch (e) {
+      console.error('Failed to save container as a playlist:', e);
+      notifications.addNotification(t('playlist.addFailed', { error: String(e) }), 'error');
+      return;
+    }
+    await addToPlaylist(targetPlaylistId, title, 'add_playlist_to_playlist', {
+      parentPlaylistId: targetPlaylistId,
+      childPlaylistId,
+    });
+  };
+
   /** Queues every track of the playlist for download. Nested playlists are not followed. */
   const cachePlaylist = async (playlistId: number, title: string) => {
     notifications.addNotification(t('playlist.cacheStarted', { title }), 'info');
@@ -88,5 +108,5 @@ export function usePlaylistActions() {
     }
   };
 
-  return { addToPlaylist, cachePlaylist, deletePlaylist };
+  return { addToPlaylist, addContainerToPlaylist, cachePlaylist, deletePlaylist };
 }

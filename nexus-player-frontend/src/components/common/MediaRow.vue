@@ -37,12 +37,15 @@
 
     <div :class="$style.main">
       <div :class="$style.title" :title="entity.title">{{ entity.title }}</div>
-      <div :class="[$style.artist, { 'track-row-artist': layout === 'table' }]">{{ entity.artist }}</div>
+      <div :class="[$style.artist, { 'track-row-artist': layout === 'table' }]">{{ secondLine }}</div>
     </div>
 
     <template v-if="layout === 'table'">
       <span class="track-col-artist" :class="$style.cell" :title="entity.artist">{{ entity.artist }}</span>
-      <span class="track-col-album" :class="$style.cell">{{ track?.album ?? '' }}</span>
+      <span class="track-col-album" :class="$style.cell">
+        <span v-if="kindLabel" class="source-tag">{{ kindLabel }}</span>
+        <template v-else>{{ track?.album ?? '' }}</template>
+      </span>
       <span class="track-col-source"><span v-if="sourceLabel" class="source-tag">{{ sourceLabel }}</span></span>
     </template>
 
@@ -61,7 +64,7 @@
       <AppIcon :name="track?.liked ? 'heart-filled' : 'heart-outline'" :size="14" />
     </button>
     <button
-      v-else-if="containerMode || expandable"
+      v-else-if="expandable"
       :class="$style.action"
       :title="$t(isExpanded ? 'media.collapse' : 'media.expand')"
       :aria-label="$t(isExpanded ? 'media.collapse' : 'media.expand')"
@@ -110,6 +113,7 @@ import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
 import type { TrackDto, PlaylistDto, ContainerMetaDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
+import { useNotificationStore } from '@/stores/notifications';
 import { usePlaylistActions } from '@/composables/usePlaylistActions';
 import ActionMenu from './ActionMenu.vue';
 import MenuItem from './MenuItem.vue';
@@ -118,7 +122,21 @@ import AppIcon from './AppIcon.vue';
 import AppImage from './AppImage.vue';
 const store = useAudioStore();
 const { t } = useI18n();
+const notifications = useNotificationStore();
 const { addToPlaylist } = usePlaylistActions();
+
+/** Library tracks carry artworkUrl and a database id, streaming results a thumbnail and a hashed id. */
+type RowTrack = Omit<Partial<TrackDto>, 'title' | 'liked' | 'state'> & {
+  title: string;
+  liked: boolean;
+  state?: { type: string };
+  thumbnail?: string;
+};
+
+type RowContainer = Omit<ContainerMetaDto, 'kind' | 'trackCount'> & {
+  kind: ContainerMetaDto['kind'] | 'channel';
+  trackCount?: number;
+};
 
 interface Props {
   type: 'track' | 'playlist' | 'album';
@@ -127,11 +145,13 @@ interface Props {
   /** Row number; the drag grip replaces it when `draggable` is set. */
   index?: number;
   draggable?: boolean;
-  /** Shows the chevron without the queue and search container menu. */
+  /** Shows the expand chevron. */
   expandable?: boolean;
-  track?: TrackDto & { thumbnail?: string };
+  /** Result type tag for search, shown in place of the album. */
+  kindLabel?: string;
+  track?: RowTrack;
   playlist?: PlaylistDto;
-  album?: ContainerMetaDto;
+  album?: RowContainer;
   showAction?: boolean;
   context?: string;
   isLocal?: boolean;
@@ -165,7 +185,7 @@ const entity = computed(() => {
 
   if (props.type === 'track' && props.track) {
     return {
-      id: props.track.id,
+      id: props.track.id ?? 0,
       title: props.track.title,
       artist: props.track.artist || t('track.unknownArtist'),
       thumbnail: props.track.artworkUrl||props.track.thumbnail,
@@ -187,7 +207,7 @@ const entity = computed(() => {
     return {
       id: props.album.id,
       title: props.album.title,
-      artist: props.album.artist || t('track.unknownArtist'),
+      artist: props.album.artist || (props.album.kind === 'channel' ? '' : t('track.unknownArtist')),
       thumbnail: props.album.thumbnail || undefined,
       duration: undefined,
       trackCount: props.album.trackCount,
@@ -206,6 +226,10 @@ const entity = computed(() => {
   };
 });
 
+const secondLine = computed(() =>
+  [props.kindLabel, entity.value.artist].filter(Boolean).join(' · '),
+);
+
 interface MenuOption {
   label: string;
   icon: string;
@@ -216,6 +240,17 @@ interface MenuOption {
 
 const menuOptions = computed<MenuOption[]>(() => {
   if (props.containerMode) {
+    const remove: MenuOption = {
+      label: t(props.context === 'queue' ? 'media.removeFromQueue' : 'media.removeFromResults'),
+      icon: 'trash',
+      isDanger: true,
+      action: () => {
+        closeMenu();
+        emit('containerRemove');
+      },
+    };
+    // A channel has no track list the backend can save.
+    if (props.album?.kind === 'channel') return [remove];
     return [
       { label: t('media.saveToPlaylist'), icon: 'playlist', action: handleShowPlaylistSubmenu, hasSubmenu: true },
       {
@@ -226,15 +261,7 @@ const menuOptions = computed<MenuOption[]>(() => {
           emit('containerCreatePlaylist');
         },
       },
-      {
-        label: t(props.context === 'queue' ? 'media.removeFromQueue' : 'media.removeFromResults'),
-        icon: 'trash',
-        isDanger: true,
-        action: () => {
-          closeMenu();
-          emit('containerRemove');
-        },
-      },
+      remove,
     ];
   }
 
@@ -271,7 +298,8 @@ const menuOptions = computed<MenuOption[]>(() => {
 
   if (props.context === 'queue') {
     options.push({ label: t('media.removeFromQueue'), icon: 'trash', action: handleRemoveFromQueue });
-  } else {
+  } else if (props.context !== 'search') {
+    // The queue takes library tracks only; a search result has no row in the database.
     options.push({ label: t('media.addToQueue'), icon: 'plus', action: handleAddToQueue });
   }
 
@@ -296,7 +324,7 @@ const sourceLabel = computed(() => {
     if (system) return system;
     return t(isCached.value ? 'track.source.cached' : 'track.source.local');
   }
-  return (props.album as { system?: string } | undefined)?.system ?? props.playlist?.source?.system ?? '';
+  return props.album?.system ?? props.playlist?.source?.system ?? '';
 });
 
 const placeholderIcon = computed(() => {
@@ -306,7 +334,8 @@ const placeholderIcon = computed(() => {
     case 'playlist':
       return 'folder';
     case 'album':
-      return 'album';
+      if (props.album?.kind === 'channel') return 'channel';
+      return props.album?.kind === 'playlist' ? 'folder' : 'album';
     default:
       return 'music-note';
   }
@@ -317,6 +346,19 @@ const formatDuration = (seconds: number): string => {
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
+
+const toTrackDto = (source: RowTrack) => ({
+  id: source.id ?? 0,
+  title: source.title,
+  artist: source.artist ?? null,
+  album: source.album ?? null,
+  durationSecs: source.durationSecs ?? null,
+  artworkUrl: source.artworkUrl ?? source.thumbnail ?? null,
+  playCount: source.playCount ?? 0,
+  liked: source.liked,
+  state: source.state ?? { type: 'streaming' },
+  source: source.source ?? null,
+});
 
 const handleClick = () => {
   emit('click');
@@ -350,19 +392,7 @@ const handleAddToPlaylist = async (playlistId: number) => {
   }
   closeMenu();
   if (props.type === 'track' && props.track) {
-    const source = props.track as any;
-    const track = {
-      id: source.id ?? 0,
-      title: source.title,
-      artist: source.artist ?? null,
-      album: source.album ?? null,
-      durationSecs: source.durationSecs ?? null,
-      artworkUrl: source.artworkUrl ?? source.thumbnail ?? null,
-      playCount: source.playCount ?? 0,
-      liked: source.liked ?? false,
-      state: source.state ?? { type: 'streaming' },
-      source: source.source ?? null,
-    };
+    const track = toTrackDto(props.track);
     await addToPlaylist(playlistId, track.title, 'add_track_to_playlist', { playlistId, track });
   } else if (props.type === 'playlist' && props.playlist) {
     await addToPlaylist(playlistId, props.playlist.title, 'add_playlist_to_playlist', {
@@ -378,10 +408,11 @@ const handleAddToQueue = async () => {
   try {
     await invoke('add_to_queue', { trackId: entity.value.id });
     emit('refresh');
-    closeMenu();
   } catch (e) {
     console.error('Failed to add track to queue:', e);
+    notifications.addNotification(t('common.error', { error: String(e) }), 'error');
   }
+  closeMenu();
 };
 
 const handleRemoveFromQueue = async () => {
@@ -397,21 +428,9 @@ const handleRemoveFromQueue = async () => {
 };
 
 const handleDownload = async () => {
+  if (!props.track) return;
   try {
-    const t = props.track as any;
-    const track = {
-      id: t.id ?? 0,
-      title: t.title,
-      artist: t.artist ?? null,
-      album: t.album ?? null,
-      durationSecs: t.durationSecs ?? null,
-      artworkUrl: t.artworkUrl ?? t.thumbnail ?? null,
-      playCount: t.playCount ?? 0,
-      liked: t.liked ?? false,
-      state: t.state ?? { type: 'streaming' },
-      source: t.source ?? null,
-    };
-    await invoke('save_track_to_file', { track });
+    await invoke('save_track_to_file', { track: toTrackDto(props.track) });
   } catch (e) {
     console.error('Failed to start download process:', e);
   }
@@ -437,12 +456,7 @@ const handleToggleLike = async () => {
   try {
     props.track.liked =  !props.track.liked
 
-    await invoke('toggle_liked', { track: {
-...props.track,
-// Same precedence as `entity` and handleAddToPlaylist: library DTOs carry
-// artworkUrl, streaming results carry thumbnail.
-artworkUrl: props.track.artworkUrl ?? props.track.thumbnail ?? null,
-    } });
+    await invoke('toggle_liked', { track: toTrackDto(props.track) });
     emit('refresh');
   } catch (e) {
     console.error('Failed to toggle like:', e);

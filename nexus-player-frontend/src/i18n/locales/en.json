@@ -29,7 +29,8 @@
     "sort": "Sort",
     "previousPage": "Previous page",
     "nextPage": "Next page",
-    "forward": "Forward"
+    "forward": "Forward",
+    "save": "Save"
   },
   "nav": {
     "home": "Home",
@@ -94,7 +95,17 @@
   "downloads": {
     "started": "Download started: {artist} - {title}",
     "finished": "Download finished!",
-    "failed": "Download failed: {error}"
+    "failed": "Download failed: {error}",
+    "empty": "No active downloads",
+    "remove": "Remove from list",
+    "trackFallback": "Track #{id}",
+    "state": {
+      "pending": "Queued",
+      "downloading": "Downloading",
+      "complete": "Done",
+      "cancelled": "Cancelled",
+      "failed": "Failed"
+    }
   },
   "playlist": {
     "deleteTitle": "Delete playlist “{title}”?",
@@ -120,7 +131,8 @@
     "artist": "Artist",
     "album": "Album",
     "source": "Source",
-    "duration": "Time"
+    "duration": "Time",
+    "kind": "Type"
   },
   "media": {
     "saveToPlaylist": "Save to playlist",
@@ -194,5 +206,59 @@
     "folderRemoved": "Folder removed from sources. Press Refresh to check the catalog.",
     "fileUnavailable": "This file is not available right now",
     "playFailed": "Could not play the file: {error}"
+  },
+  "search": {
+    "placeholder": "Title or link",
+    "submit": "Search",
+    "searching": "Searching…",
+    "provider": "Source",
+    "type": "Type",
+    "limit": "Limit",
+    "emptyQuery": "Enter a search query",
+    "failed": "Search failed: {error}",
+    "noResults": "Nothing found for “{query}”",
+    "hint": "Find music by title or paste a link",
+    "count": "Results: {count}",
+    "page": "Page {page}",
+    "channelUnsupported": "Channels cannot be opened in the player yet",
+    "types": {
+      "all": "All",
+      "track": "Track",
+      "playlist": "Playlist",
+      "album": "Album",
+      "channel": "Channel"
+    }
+  },
+  "radio": {
+    "subtitle": "An endless stream from your library. The order is built once when you turn it on and never changes after that.",
+    "source": "Source",
+    "modes": {
+      "tracks": {
+        "name": "From tracks",
+        "hint": "Every track in the library in random order"
+      },
+      "playlists": {
+        "name": "From playlists",
+        "hint": "Whole playlists, with tracks outside playlists in between"
+      }
+    },
+    "turnOn": "Turn radio on",
+    "turnOff": "Turn radio off",
+    "starting": "Building the queue…",
+    "playing": "Radio is playing: {mode}",
+    "off": "Radio is off",
+    "failed": "Radio: {error}"
+  },
+  "playlistForm": {
+    "create": "Create playlist",
+    "createFromQueue": "Create playlist",
+    "title": "Title",
+    "titlePlaceholder": "New playlist",
+    "description": "Description",
+    "descriptionPlaceholder": "What is this playlist about?",
+    "artwork": "Cover",
+    "pickFile": "Choose file",
+    "saving": "Saving…",
+    "tracks": "Tracks, selected: {count}"
   }
 }

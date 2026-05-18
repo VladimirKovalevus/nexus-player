@@ -4,12 +4,13 @@
       v-for="item in NAV_ITEMS"
       :key="item.view"
       :class="[$style.tab, { [$style.active]: activeView === item.view }]"
+      :title="$t(`nav.${item.view}`)"
       @click="$emit('changeView', item.view)"
     >
       <AppIcon :name="item.icon" :size="15" />
       <span :class="$style.label">{{ $t(`nav.${item.view}`) }}</span>
     </button>
-    <button :class="$style.tab" @click="$emit('openSettings')">
+    <button :class="$style.tab" :title="$t('nav.settings')" @click="$emit('openSettings')">
       <AppIcon name="settings" :size="15" />
       <span :class="$style.label">{{ $t('nav.settings') }}</span>
     </button>
@@ -37,14 +38,14 @@ const NAV_ITEMS = [
 @import '@/styles/variables.scss';
 
 .tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--tree-width) repeat(7, minmax(0, 1fr));
   gap: 1px;
   background: var(--line);
   border-bottom: 1px solid var(--line);
 }
 
 .tab {
-  flex: 1;
   min-width: 0;
   height: 34px;
   display: flex;
@@ -69,12 +70,18 @@ const NAV_ITEMS = [
   box-shadow: inset 0 2px 0 var(--accent);
 }
 
-// Eight labels stop fitting; the icons stay and the title of each tab is the icon's meaning.
 @media (max-width: 860px) {
   .tab {
     gap: 5px;
     font-size: 0.625rem;
     letter-spacing: 0;
+  }
+}
+
+// Eight labels stop fitting; the icons stay and each tab's title names it.
+@media (max-width: 720px) {
+  .label {
+    display: none;
   }
 }
 </style>

@@ -34,6 +34,33 @@
   color: var(--danger);
 }
 
+// A row of mutually exclusive keys; the pressed one is lit.
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+
+  button {
+    height: 26px;
+    padding: 0 9px;
+    background: var(--key);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 1px 0 var(--key-edge);
+    font: 600 0.6563rem var(--font-mono);
+    color: var(--muted);
+    white-space: nowrap;
+
+    &:hover {
+      color: var(--text);
+    }
+
+    &[aria-pressed='true'] {
+      background: var(--accent);
+      color: var(--on-accent);
+    }
+  }
+}
+
 .view-header {
   position: sticky;
   top: 0;
@@ -109,11 +136,49 @@
   }
 }
 
+// Form fields, for modals and settings.
+.deck-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.deck-input {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 9px;
+  background: var(--bg-table);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--font-size-base);
+
+  &::placeholder {
+    color: var(--muted);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+  }
+}
+
+textarea.deck-input {
+  min-height: 72px;
+  resize: vertical;
+}
+
 .source-tag {
   display: inline-block;
   max-width: 100%;
   padding: 2px 5px;
   overflow: hidden;
+  vertical-align: middle;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   font: 600 0.5938rem var(--font-mono);
@@ -162,7 +227,22 @@
   }
 }
 
+// Search results differ by type, so its column stays when the album would be dropped.
+@container (min-width: 461px) and (max-width: 780px) {
+  .track-table--kinds .track-grid {
+    grid-template-columns: 38px 30px minmax(0, 1.6fr) minmax(0, 1fr) 76px 52px 28px 28px;
+  }
+
+  .track-table--kinds .track-col-album {
+    display: block;
+  }
+}
+
 @container (max-width: 460px) {
+  .track-row-artist {
+    display: block;
+  }
+
   .track-grid {
     grid-template-columns: 30px minmax(0, 1fr) 46px 28px 28px;
     padding-left: 8px;
@@ -197,7 +277,15 @@
     height: 38px;
   }
 
+  .deck-input {
+    min-height: 40px;
+  }
+
   .deck-btn {
+    height: 34px;
+  }
+
+  .seg button {
     height: 34px;
   }
 }
