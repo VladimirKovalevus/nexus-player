@@ -10,10 +10,6 @@
       <AppIcon :name="item.icon" :size="15" />
       <span :class="$style.label">{{ $t(`nav.${item.view}`) }}</span>
     </button>
-    <button :class="$style.tab" :title="$t('nav.settings')" @click="$emit('openSettings')">
-      <AppIcon name="settings" :size="15" />
-      <span :class="$style.label">{{ $t('nav.settings') }}</span>
-    </button>
   </div>
 </template>
 
@@ -21,7 +17,7 @@
 import AppIcon from '@/components/common/AppIcon.vue';
 
 defineProps<{ activeView: string }>();
-defineEmits<{ changeView: [view: string]; openSettings: [] }>();
+defineEmits<{ changeView: [view: string] }>();
 
 const NAV_ITEMS = [
   { view: 'home', icon: 'home' },
@@ -31,6 +27,7 @@ const NAV_ITEMS = [
   { view: 'history', icon: 'history' },
   { view: 'cache', icon: 'album' },
   { view: 'downloads', icon: 'download-tray' },
+  { view: 'settings', icon: 'settings' },
 ];
 </script>
 

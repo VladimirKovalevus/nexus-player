@@ -10,7 +10,55 @@
       "languages": {
         "ru": "Русский",
         "en": "English"
-      }
+      },
+      "title": "Appearance"
+    },
+    "saved": "Settings saved",
+    "audio": {
+      "title": "Audio",
+      "waveform": "Waveform analysis",
+      "waveformHint": "Analyzes a track while it loads to show its waveform.",
+      "memLimit": "Cache memory limit, bytes",
+      "memLimitHint": "For example, 104857600 for 100 MB.",
+      "fadeIn": "Fade in on track change",
+      "fadeOut": "Fade out at track end",
+      "ms": "{value} ms"
+    },
+    "network": {
+      "title": "Network and buffering",
+      "timeout": "Timeout, sec",
+      "chunkSize": "Chunk size, bytes",
+      "bufferSize": "Buffer size, bytes"
+    },
+    "providers": {
+      "title": "Sources"
+    },
+    "sync": {
+      "title": "Sync",
+      "botToken": "Bot token",
+      "botTokenHint": "Create a bot with BotFather and paste its token.",
+      "chatId": "Channel ID",
+      "chatIdHint": "Create a private channel, add the bot as an admin and copy the channel ID.",
+      "checking": "Checking…",
+      "connected": "Connected · {chatId}",
+      "botNotResponding": "The bot does not respond. Check the token and channel ID.",
+      "full": "Full sync",
+      "fullHint": "Replaces everything on the receiving side",
+      "diff": "Partial sync",
+      "diffHint": "Only adds what is new",
+      "send": "Send",
+      "receive": "Receive",
+      "fullSent": "Full sync sent.",
+      "diffSent": "Partial sync sent.",
+      "applied": "Sync applied."
+    },
+    "library": {
+      "title": "Library",
+      "cleanup": "Clean up library",
+      "cleanupHint": "Deletes tracks that are in no playlist and are not liked.",
+      "cleanupAction": "Clean up",
+      "cleanupConfirm": "Clean up the library?",
+      "cleanupResult": "Deleted tracks: {tracks}, covers: {artworks}"
     }
   },
   "common": {
@@ -30,7 +78,9 @@
     "previousPage": "Previous page",
     "nextPage": "Next page",
     "forward": "Forward",
-    "save": "Save"
+    "save": "Save",
+    "on": "On",
+    "off": "Off"
   },
   "nav": {
     "home": "Home",
@@ -55,7 +105,8 @@
       "cached": "Cached"
     },
     "unknownCreator": "Unknown creator",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
+    "unavailable": "The track is unavailable and has been marked so"
   },
   "player": {
     "noTrack": "Nothing playing",
@@ -260,5 +311,51 @@
     "pickFile": "Choose file",
     "saving": "Saving…",
     "tracks": "Tracks, selected: {count}"
+  },
+  "visualizer": {
+    "fullscreen": "Fullscreen",
+    "backToCover": "Back to cover",
+    "random": "Random",
+    "randomWith": "Random ({name})",
+    "modeTracks": "Tracks",
+    "modePlaylists": "Playlists",
+    "startHint": "Click to start the visualizer",
+    "changeHint": "Click to change the style"
+  },
+  "cmd": {
+    "placeholder": "command",
+    "badCount": "{cmd}: invalid count",
+    "nextTrack": "next track",
+    "previousTrack": "previous track",
+    "noActiveTrack": "no active track",
+    "skippedForward": "+{n} tracks",
+    "skippedBack": "-{n} tracks",
+    "badIndex": "{cmd}: invalid number",
+    "playingIndex": "playing #{n}",
+    "playing": "playing",
+    "playlistTitleRequired": "play playlist: put the title in single quotes",
+    "playlistNotFound": "playlist not found: {title}",
+    "stopped": "stopped",
+    "viewRequired": "switch: name a page",
+    "unknownView": "unknown page: {view}",
+    "queueToggled": "queue toggled",
+    "queuePlaylist": "creating a playlist…",
+    "queueCleared": "queue cleared",
+    "noResult": "no result {n} (total {total})",
+    "queued": "queued: {title}",
+    "providerRequired": "search: name a source",
+    "unknownProvider": "search: unknown source: {value}",
+    "unknownType": "search: unknown type: {value}",
+    "badLimit": "search: invalid limit",
+    "badPage": "search: invalid page",
+    "limitPage": "limit {limit} · page {page}",
+    "unknownCommand": "unknown command: {cmd}"
+  },
+  "provider": {
+    "challenge": "{provider} needs a check. Please wait…",
+    "failed": "SoundCloud: error: {error}",
+    "opening": "SoundCloud: opening the check…",
+    "waiting": "SoundCloud: window open, waiting for the check to finish…",
+    "received": "SoundCloud: check passed"
   }
 }

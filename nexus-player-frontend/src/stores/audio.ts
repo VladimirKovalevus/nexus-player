@@ -1,3 +1,4 @@
+import { i18n } from '@/i18n';
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { AudioState, QueueState, AudioEvent } from '@/types/types';
@@ -292,7 +293,7 @@ export const useAudioStore = defineStore('audio', () => {
       case 'TrackUnavailable':
         if (event.payload?.trackId !== undefined) {
           lastUnavailableTrackId.value = event.payload.trackId;
-          notificationStore.addNotification('Трек недоступен и помечен как недоступный', 'error');
+          notificationStore.addNotification(i18n.global.t('track.unavailable'), 'error');
         }
         break;
       case 'ProviderChallenge':

@@ -30,10 +30,6 @@
           <AppIcon :name="item.icon" :size="18" />
           {{ $t(`nav.${item.view}`) }}
         </button>
-        <button :class="$style.menuItem" @click="openSettings">
-          <AppIcon name="settings" :size="18" />
-          {{ $t('nav.settings') }}
-        </button>
       </div>
     </template>
   </div>
@@ -44,7 +40,7 @@ import { computed, ref } from 'vue';
 import AppIcon from '@/components/common/AppIcon.vue';
 
 const props = defineProps<{ activeView: string }>();
-const emit = defineEmits<{ changeView: [view: string]; openSettings: [] }>();
+const emit = defineEmits<{ changeView: [view: string] }>();
 
 const PRIMARY_ITEMS = [
   { view: 'home', icon: 'home' },
@@ -56,6 +52,7 @@ const MORE_ITEMS = [
   { view: 'history', icon: 'history' },
   { view: 'cache', icon: 'album' },
   { view: 'downloads', icon: 'download-tray' },
+  { view: 'settings', icon: 'settings' },
 ];
 
 const moreOpen = ref(false);
@@ -64,11 +61,6 @@ const isMoreView = computed(() => MORE_ITEMS.some((item) => item.view === props.
 const select = (view: string) => {
   moreOpen.value = false;
   emit('changeView', view);
-};
-
-const openSettings = () => {
-  moreOpen.value = false;
-  emit('openSettings');
 };
 </script>
 

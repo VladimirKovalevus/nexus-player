@@ -47,14 +47,14 @@ function formatGain(db: number): string {
         <div class="eq-panel" ref="panelRef">
           <!-- Header -->
           <div class="eq-header">
-            <span class="eq-title">Эквалайзер</span>
+            <h2 class="view-title">{{ $t('player.equalizer') }}</h2>
             <label class="eq-toggle">
               <input
                 type="checkbox"
                 :checked="eqStore.settings.enabled"
                 @change="eqStore.setEnabled(($event.target as HTMLInputElement).checked)"
               />
-              <span class="eq-toggle-label">{{ eqStore.settings.enabled ? 'Вкл' : 'Выкл' }}</span>
+              <span>{{ $t(eqStore.settings.enabled ? 'common.on' : 'common.off') }}</span>
             </label>
           </div>
 
@@ -81,12 +81,11 @@ function formatGain(db: number): string {
           </div>
 
           <!-- Presets -->
-          <div class="eq-presets">
+          <div class="seg eq-presets">
             <button
               v-for="preset in eqStore.presets"
               :key="preset.name"
-              class="preset-btn"
-              :class="{ active: eqStore.settings.presetName === preset.name }"
+              :aria-pressed="eqStore.settings.presetName === preset.name"
               @click="eqStore.applyPreset(preset)"
             >
               {{ preset.name }}
@@ -101,29 +100,26 @@ function formatGain(db: number): string {
 <style scoped lang="scss">
 @import '@/styles/variables.scss';
 
+// Opens under the deck, right below the EQ key.
 .eq-overlay {
   position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
-  padding-bottom: 108px;
-  padding-right: 16px;
-  pointer-events: none;
+  top: 124px;
+  right: 10px;
+  z-index: $z-modal;
+  max-width: calc(100vw - 20px);
 }
 
 .eq-panel {
-  pointer-events: all;
-  background: var(--color-bg-player);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 16px;
-  width: 520px;
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 520px;
+  max-width: 100%;
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
 }
 
 .eq-header {
@@ -132,38 +128,34 @@ function formatGain(db: number): string {
   justify-content: space-between;
 }
 
-.eq-title {
-  font-size: 0.95rem;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
-  letter-spacing: 0.05em;
-}
-
 .eq-toggle {
   display: flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  font-size: 0.85rem;
-  color: var(--color-text-secondary);
+  font: 600 var(--font-size-xs) $font-family-mono;
+  text-transform: uppercase;
 
-  input[type='checkbox'] {
-    accent-color: var(--color-accent-primary);
+  input {
     width: 16px;
     height: 16px;
-    cursor: pointer;
+    accent-color: var(--accent);
   }
-}
 
-.eq-toggle-label {
-  color: var(--color-text-primary);
+  // Fits the longest label, so the checkbox stays put when the text changes.
+  span {
+    width: 4ch;
+  }
 }
 
 .eq-bands {
   display: flex;
-  gap: 4px;
   align-items: flex-end;
   justify-content: space-between;
+  gap: 4px;
+  padding: 8px 4px;
+  background: var(--screen);
+  border-radius: var(--radius-sm);
 
   &.disabled {
     opacity: 0.4;
@@ -172,19 +164,25 @@ function formatGain(db: number): string {
 }
 
 .eq-band {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  flex: 1;
+  min-width: 0;
+}
+
+.band-value,
+.band-freq {
+  font: 500 0.625rem $font-family-mono;
+  color: var(--screen-muted);
+  text-align: center;
+  white-space: nowrap;
 }
 
 .band-value {
-  font-size: 0.65rem;
-  color: var(--color-text-muted);
   min-height: 14px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+  color: var(--led);
 }
 
 .band-slider {
@@ -193,58 +191,38 @@ function formatGain(db: number): string {
   appearance: slider-vertical;
   -webkit-appearance: slider-vertical;
   width: 20px;
-  height: 100px;
+  height: 110px;
   cursor: pointer;
-  accent-color: var(--color-accent-primary);
-
-  &::-webkit-slider-thumb {
-    width: 14px;
-    height: 14px;
-  }
-}
-
-.band-freq {
-  font-size: 0.6rem;
-  color: var(--color-text-muted);
-  text-align: center;
+  accent-color: var(--led);
 }
 
 .eq-presets {
-  display: flex;
   flex-wrap: wrap;
-  gap: 6px;
 }
 
-.preset-btn {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  color: var(--color-text-primary);
-  font-size: 0.75rem;
-  padding: 4px 10px;
-  cursor: pointer;
-  transition: all 0.15s;
-
-  &:hover {
-    background: var(--color-bg-hover);
-    color: white;
-  }
-
-  &.active {
-    background: var(--color-accent-primary);
-    border-color: var(--color-accent-primary);
-    color: var(--color-bg-player);
-  }
-}
-
-// Transition
 .eq-panel-enter-active,
 .eq-panel-leave-active {
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  transition: opacity var(--transition-base), transform var(--transition-base);
 }
+
 .eq-panel-enter-from,
 .eq-panel-leave-to {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(-6px);
+}
+
+// The deck is taller here, so the panel sits above the tab bar instead.
+@media (max-width: $mobile-breakpoint) {
+  .eq-overlay {
+    top: auto;
+    right: 8px;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    left: 8px;
+    max-width: none;
+  }
+
+  .eq-panel {
+    width: 100%;
+  }
 }
 </style>

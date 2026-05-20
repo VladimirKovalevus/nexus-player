@@ -16,11 +16,11 @@ import CacheView from './views/CacheView.vue';
 import DownloadsView from './views/DownloadsView.vue';
 import LibraryView from './views/LibraryView.vue';
 import RadioView from './views/RadioView.vue';
+import SettingsView from './views/SettingsView.vue';
 import StreamingSearch from './components/StreamingSearch.vue';
 import GlobalNotifications from './components/common/GlobalNotifications.vue';
 import VisualizerOverlay from './components/VisualizerOverlay.vue';
 import CommandLine from './components/CommandLine.vue';
-import SettingsModal from './components/SettingsModal.vue';
 import PlaylistCreateModal from './components/PlaylistCreateModal.vue';
 import ConfirmDialog from './components/common/ConfirmDialog.vue';
 
@@ -28,10 +28,10 @@ const playbackQueueRef = ref<InstanceType<typeof PlaybackQueue> | null>(null);
 const playerControlRef = ref<InstanceType<typeof PlayerControl> | null>(null);
 // Docked by default only where it leaves room for the table; see AppLayout's breakpoints.
 const showQueue = ref(window.matchMedia('(min-width: 1101px)').matches);
-const isSettingsOpen = ref(false);
 const isCreatePlaylistOpen = ref(false);
 const showVisualizer = ref(false);
 const currentView = ref('home');
+const viewBeforeSettings = ref('home');
 const selectedPlaylistId = ref<number | null>(null);
 const playlistHistory = ref<number[]>([]);
 
@@ -70,6 +70,12 @@ const toggleQueue = () => {
 };
 
 const changeView = (view: string) => {
+  // Settings is a detour: leaving it returns to the same view and open playlist.
+  if (view === 'settings') {
+    if (currentView.value !== 'settings') viewBeforeSettings.value = currentView.value;
+    currentView.value = 'settings';
+    return;
+  }
   currentView.value = view;
   selectedPlaylistId.value = null;
   playlistHistory.value = [];
@@ -118,7 +124,7 @@ provide('openNewPlaylist', () => { isCreatePlaylistOpen.value = true; });
     </template>
 
     <template #tabs>
-      <TabBar :active-view="currentView" @change-view="changeView" @open-settings="isSettingsOpen = true" />
+      <TabBar :active-view="currentView" @change-view="changeView" />
     </template>
 
     <template #tree>
@@ -130,7 +136,7 @@ provide('openNewPlaylist', () => { isCreatePlaylistOpen.value = true; });
     </template>
 
     <template #mobileNav>
-      <MobileNav :active-view="currentView" @change-view="changeView" @open-settings="isSettingsOpen = true" />
+      <MobileNav :active-view="currentView" @change-view="changeView" />
     </template>
 
     <template #queue>
@@ -154,11 +160,11 @@ provide('openNewPlaylist', () => { isCreatePlaylistOpen.value = true; });
     <DownloadsView v-else-if="currentView === 'downloads'" />
     <LibraryView v-else-if="currentView === 'library'" />
     <RadioView v-else-if="currentView === 'radio'" />
+    <SettingsView v-else-if="currentView === 'settings'" @close="currentView = viewBeforeSettings" />
   </AppLayout>
   <GlobalNotifications />
   <VisualizerOverlay :is-open="showVisualizer" @close="showVisualizer = false" />
   <CommandLine />
-  <SettingsModal :is-open="isSettingsOpen" @close="isSettingsOpen = false" />
   <PlaylistCreateModal :is-open="isCreatePlaylistOpen" @close="isCreatePlaylistOpen = false" @created="isCreatePlaylistOpen = false" />
   <ConfirmDialog />
 </template>

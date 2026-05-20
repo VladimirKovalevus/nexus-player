@@ -1,3 +1,4 @@
+import { i18n } from '@/i18n';
 import { invoke as rawInvoke, type InvokeArgs, type InvokeOptions } from '@tauri-apps/api/core';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
@@ -64,7 +65,7 @@ export function requestProviderAuth(provider: string, url: string): Promise<void
     }
     const notificationStore = useNotificationStore();
     notificationStore.addNotification(
-      `Требуется проверка для ${provider}. Пожалуйста, подождите...`,
+      i18n.global.t('provider.challenge', { provider }),
       'info',
     );
     try {
@@ -73,7 +74,7 @@ export function requestProviderAuth(provider: string, url: string): Promise<void
       await rawInvoke('update_provider_auth', { provider, authData: clientId });
     } catch (e) {
       console.error('[SC-Auth] Failed:', e);
-      notificationStore.addNotification(`[SC] Ошибка: ${e}`, 'error');
+      notificationStore.addNotification(i18n.global.t('provider.failed', { error: String(e) }), 'error');
       throw e;
     }
   })().finally(() => pending.delete(provider));
@@ -92,16 +93,16 @@ async function solveSoundCloudChallenge(url: string): Promise<string> {
   const notificationStore = useNotificationStore();
 
   if (/Android/.test(navigator.userAgent)) {
-    notificationStore.addNotification('[SC] Android: вызываем плагин...', 'info');
+    notificationStore.addNotification(i18n.global.t('provider.opening'), 'info');
     const slowHint = setTimeout(() => {
-      notificationStore.addNotification('[SC] Диалог открыт, ожидаем client_id...', 'info');
+      notificationStore.addNotification(i18n.global.t('provider.waiting'), 'info');
     }, 3000);
     try {
       const result = await rawInvoke<{ clientId: string; label: string }>(
         'plugin:soundCloudChallenge|open',
         { label: SC_LABEL, url, script: '' },
       );
-      notificationStore.addNotification(`[SC] Получен client_id: ${result.clientId.slice(0, 8)}...`, 'success');
+      notificationStore.addNotification(i18n.global.t('provider.received'), 'success');
       return result.clientId;
     } finally {
       clearTimeout(slowHint);

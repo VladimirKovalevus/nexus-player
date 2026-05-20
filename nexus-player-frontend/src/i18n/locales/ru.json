@@ -10,7 +10,55 @@
       "languages": {
         "ru": "Русский",
         "en": "English"
-      }
+      },
+      "title": "Внешний вид"
+    },
+    "saved": "Настройки сохранены",
+    "audio": {
+      "title": "Аудио",
+      "waveform": "Анализ формы волны",
+      "waveformHint": "Анализирует трек во время загрузки, чтобы показать форму волны.",
+      "memLimit": "Лимит памяти для кэша, байт",
+      "memLimitHint": "Например, 104857600 для 100 МБ.",
+      "fadeIn": "Плавное появление при смене трека",
+      "fadeOut": "Плавное затухание в конце трека",
+      "ms": "{value} мс"
+    },
+    "network": {
+      "title": "Сеть и буферизация",
+      "timeout": "Таймаут, сек",
+      "chunkSize": "Размер чанка, байт",
+      "bufferSize": "Размер буфера, байт"
+    },
+    "providers": {
+      "title": "Источники"
+    },
+    "sync": {
+      "title": "Синхронизация",
+      "botToken": "Токен бота",
+      "botTokenHint": "Создайте бота через BotFather и вставьте токен.",
+      "chatId": "ID канала",
+      "chatIdHint": "Создайте приватный канал, добавьте бота администратором и скопируйте ID канала.",
+      "checking": "Проверяем…",
+      "connected": "Подключено · {chatId}",
+      "botNotResponding": "Бот не отвечает. Проверьте токен и ID канала.",
+      "full": "Полная синхронизация",
+      "fullHint": "Заменяет всё на принимающей стороне",
+      "diff": "Частичная синхронизация",
+      "diffHint": "Только добавляет новое",
+      "send": "Отправить",
+      "receive": "Получить",
+      "fullSent": "Полная синхронизация отправлена.",
+      "diffSent": "Частичная синхронизация отправлена.",
+      "applied": "Синхронизация применена."
+    },
+    "library": {
+      "title": "Библиотека",
+      "cleanup": "Почистить библиотеку",
+      "cleanupHint": "Удаляет треки, которые не входят ни в один плейлист и не отмечены лайком.",
+      "cleanupAction": "Почистить",
+      "cleanupConfirm": "Почистить библиотеку?",
+      "cleanupResult": "Удалено треков: {tracks}, обложек: {artworks}"
     }
   },
   "common": {
@@ -30,7 +78,9 @@
     "previousPage": "Предыдущая страница",
     "nextPage": "Следующая страница",
     "forward": "Вперёд",
-    "save": "Сохранить"
+    "save": "Сохранить",
+    "on": "Вкл",
+    "off": "Выкл"
   },
   "nav": {
     "home": "Главная",
@@ -55,7 +105,8 @@
       "cached": "Кэш"
     },
     "unknownCreator": "Автор неизвестен",
-    "unknown": "Неизвестно"
+    "unknown": "Неизвестно",
+    "unavailable": "Трек недоступен и помечен как недоступный"
   },
   "player": {
     "noTrack": "Ничего не играет",
@@ -260,5 +311,51 @@
     "pickFile": "Выбрать файл",
     "saving": "Сохраняем…",
     "tracks": "Треки, выбрано: {count}"
+  },
+  "visualizer": {
+    "fullscreen": "Полноэкранный режим",
+    "backToCover": "Вернуться к обложке",
+    "random": "Случайный",
+    "randomWith": "Случайный ({name})",
+    "modeTracks": "Треки",
+    "modePlaylists": "Плейлисты",
+    "startHint": "Нажмите, чтобы запустить визуализацию",
+    "changeHint": "Нажмите, чтобы сменить стиль"
+  },
+  "cmd": {
+    "placeholder": "команда",
+    "badCount": "{cmd}: некорректное количество",
+    "nextTrack": "следующий трек",
+    "previousTrack": "предыдущий трек",
+    "noActiveTrack": "нет активного трека",
+    "skippedForward": "+{n} треков",
+    "skippedBack": "-{n} треков",
+    "badIndex": "{cmd}: некорректный номер",
+    "playingIndex": "воспроизведение #{n}",
+    "playing": "воспроизведение",
+    "playlistTitleRequired": "play playlist: укажите название в одинарных кавычках",
+    "playlistNotFound": "плейлист не найден: {title}",
+    "stopped": "остановлено",
+    "viewRequired": "switch: укажите страницу",
+    "unknownView": "неизвестная страница: {view}",
+    "queueToggled": "очередь переключена",
+    "queuePlaylist": "создание плейлиста…",
+    "queueCleared": "очередь очищена",
+    "noResult": "нет результата {n} (всего {total})",
+    "queued": "в очереди: {title}",
+    "providerRequired": "search: укажите источник",
+    "unknownProvider": "search: неизвестный источник: {value}",
+    "unknownType": "search: неизвестный тип: {value}",
+    "badLimit": "search: некорректный лимит",
+    "badPage": "search: некорректная страница",
+    "limitPage": "лимит {limit} · стр. {page}",
+    "unknownCommand": "неизвестная команда: {cmd}"
+  },
+  "provider": {
+    "challenge": "Требуется проверка для {provider}. Пожалуйста, подождите…",
+    "failed": "SoundCloud: ошибка: {error}",
+    "opening": "SoundCloud: открываем проверку…",
+    "waiting": "SoundCloud: окно открыто, ждём завершения проверки…",
+    "received": "SoundCloud: проверка пройдена"
   }
 }

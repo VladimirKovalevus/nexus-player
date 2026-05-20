@@ -228,13 +228,16 @@ textarea.deck-input {
 }
 
 // Search results differ by type, so its column stays when the album would be dropped.
-@container (min-width: 461px) and (max-width: 780px) {
-  .track-table--kinds .track-grid {
-    grid-template-columns: 38px 30px minmax(0, 1.6fr) minmax(0, 1fr) 76px 52px 28px 28px;
-  }
+// Not on phones: their rows have fewer cells and show the type on the second line.
+@media (min-width: 641px) {
+  @container (min-width: 461px) and (max-width: 780px) {
+    .track-table--kinds .track-grid {
+      grid-template-columns: 38px 30px minmax(0, 1.6fr) minmax(0, 1fr) 76px 52px 28px 28px;
+    }
 
-  .track-table--kinds .track-col-album {
-    display: block;
+    .track-table--kinds .track-col-album {
+      display: block;
+    }
   }
 }
 
@@ -261,7 +264,6 @@ textarea.deck-input {
     column-gap: 8px;
   }
 
-  .track-grid-head,
   .track-col-index,
   .track-col-artist,
   .track-col-album,

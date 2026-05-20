@@ -80,7 +80,7 @@ defineEmits<{ click: []; play: [] }>();
   position: absolute;
   inset: 0;
   background: var(--overlay);
-  color: var(--screen-text);
+  color: var(--on-overlay);
   opacity: 0;
 }
 

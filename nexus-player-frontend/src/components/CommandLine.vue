@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, inject, nextTick, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
 import { useAudioStore } from '../stores/audio';
 import { useStreamingStore } from '../stores/streaming';
@@ -110,6 +111,8 @@ interface CmdSpec {
 // UI State  (declared before exec fns so they can close over them)
 // ════════════════════════════════════════════════════════════════════
 
+const { t } = useI18n();
+
 const isOpen      = ref(false);
 const input       = ref('');
 const feedback    = ref('');
@@ -159,7 +162,7 @@ const playlistTitleCompleter: Completer = async () =>
 // Static Completion Sets
 // ════════════════════════════════════════════════════════════════════
 
-const VIEWS     = ['home', 'search', 'library', 'playlists', 'radio', 'history', 'cache', 'downloads'];
+const VIEWS     = ['home', 'search', 'library', 'radio', 'history', 'cache', 'downloads', 'settings'];
 const PROVIDERS = ['bandcamp', 'soundcloud'];
 const CTYPES    = ['all', 'track', 'playlist', 'album', 'channel'];
 
@@ -169,76 +172,77 @@ const CTYPES    = ['all', 'track', 'playlist', 'album', 'channel'];
 
 const execNext: ExecFn = async ([countStr]) => {
   const n = countStr ? parseInt(countStr) : 1;
-  if (isNaN(n) || n < 1) { showFeedback('next: некорректное количество', true, 1500); return; }
-  if (n === 1) { await invoke('play_next'); showFeedback('следующий трек'); }
+  if (isNaN(n) || n < 1) { showFeedback(t('cmd.badCount', { cmd: 'next' }), true, 1500); return; }
+  if (n === 1) { await invoke('play_next'); showFeedback(t('cmd.nextTrack')); }
   else {
     const idx = audioStore.currentIndex;
-    if (idx === null) { showFeedback('нет активного трека', true); return; }
+    if (idx === null) { showFeedback(t('cmd.noActiveTrack'), true); return; }
     await invoke('play_at_index', { index: idx + n });
-    showFeedback(`+${n} треков`);
+    showFeedback(t('cmd.skippedForward', { n }));
   }
 };
 
 const execPrev: ExecFn = async ([countStr]) => {
   const n = countStr ? parseInt(countStr) : 1;
-  if (isNaN(n) || n < 1) { showFeedback('previous: некорректное количество', true, 1500); return; }
-  if (n === 1) { await invoke('play_previous'); showFeedback('предыдущий трек'); }
+  if (isNaN(n) || n < 1) { showFeedback(t('cmd.badCount', { cmd: 'previous' }), true, 1500); return; }
+  if (n === 1) { await invoke('play_previous'); showFeedback(t('cmd.previousTrack')); }
   else {
     const idx = audioStore.currentIndex;
-    if (idx === null) { showFeedback('нет активного трека', true); return; }
+    if (idx === null) { showFeedback(t('cmd.noActiveTrack'), true); return; }
     await invoke('play_at_index', { index: Math.max(0, idx - n) });
-    showFeedback(`-${n} треков`);
+    showFeedback(t('cmd.skippedBack', { n }));
   }
 };
 
 const execPlay: ExecFn = async ([idxStr]) => {
   if (idxStr) {
     const n = parseInt(idxStr);
-    if (isNaN(n) || n < 1) { showFeedback('play: некорректный индекс', true, 1500); return; }
+    if (isNaN(n) || n < 1) { showFeedback(t('cmd.badIndex', { cmd: 'play' }), true, 1500); return; }
     await invoke('play_at_index', { index: n - 1 });
-    showFeedback(`воспроизведение #${n}`);
+    showFeedback(t('cmd.playingIndex', { n }));
   } else if (audioStore.isPaused) {
-    await invoke('resume'); showFeedback('воспроизведение');
+    await invoke('resume'); showFeedback(t('cmd.playing'));
   } else {
-    await invoke('play_at_index', { index: 0 }); showFeedback('воспроизведение');
+    await invoke('play_at_index', { index: 0 }); showFeedback(t('cmd.playing'));
   }
 };
 
 const execPlayPlaylist: ExecFn = async (_, raw) => {
   const afterPath = raw.replace(/^play\s+playlist\s+/i, '');
   const titleArg = shiftArg(afterPath);
-  if (!titleArg?.val) { showFeedback("play playlist: укажи название в ''", true, 1500); return; }
+  if (!titleArg?.val) { showFeedback(t('cmd.playlistTitleRequired'), true, 1500); return; }
   const startN = titleArg.rest ? (parseInt(titleArg.rest) || 1) : 1;
   const playlists = await fetchPlaylists();
   const tq = titleArg.val.toLowerCase();
   const match = playlists.find(p => p.title.toLowerCase() === tq)
     ?? fuzzyFilter(tq, playlists.map(p => p.title)).map(t => playlists.find(p => p.title === t)!)[0];
-  if (!match) { showFeedback(`playlist не найден: ${titleArg.val}`, true, 1500); return; }
+  if (!match) { showFeedback(t('cmd.playlistNotFound', { title: titleArg.val }), true, 1500); return; }
   await invoke('load_playlist_and_play', { playlistId: match.id, startIndex: startN - 1 });
   showFeedback(`▶ ${match.title}${startN > 1 ? ` #${startN}` : ''}`);
 };
 
 const execStop: ExecFn = async () => {
-  await invoke('pause'); showFeedback('остановлено');
+  await invoke('pause'); showFeedback(t('cmd.stopped'));
 };
 
 const execSwitch: ExecFn = async ([viewArg]) => {
-  if (!viewArg) { showFeedback('switch: укажи страницу', true, 1500); return; }
+  if (!viewArg) { showFeedback(t('cmd.viewRequired'), true, 1500); return; }
   const view = fuzzyFilter(viewArg, VIEWS)[0];
-  if (!view) { showFeedback(`неизвестная страница: ${viewArg}`, true, 1500); return; }
+  if (!view) { showFeedback(t('cmd.unknownView', { view: viewArg }), true, 1500); return; }
   changeView?.(view); showFeedback(`→ ${view}`);
 };
 
-const execQueueToggle:   ExecFn = async () => { toggleQueue?.();       showFeedback('очередь переключена'); };
-const execQueuePlaylist: ExecFn = async () => { openQueuePlaylist?.(); showFeedback('создание плейлиста...'); };
-const execQueueClear:    ExecFn = async () => { clearQueue?.();        showFeedback('очередь очищена'); };
+const execQueueToggle:   ExecFn = async () => { toggleQueue?.();       showFeedback(t('cmd.queueToggled')); };
+const execQueuePlaylist: ExecFn = async () => { openQueuePlaylist?.(); showFeedback(t('cmd.queuePlaylist')); };
+const execQueueClear:    ExecFn = async () => { clearQueue?.();        showFeedback(t('cmd.queueCleared')); };
 
 const execSearchPlay: ExecFn = async ([idxStr]) => {
   const n = idxStr ? parseInt(idxStr) : 1;
-  if (isNaN(n) || n < 1) { showFeedback('search play: некорректный номер', true, 1500); return; }
+  if (isNaN(n) || n < 1) { showFeedback(t('cmd.badIndex', { cmd: 'search play' }), true, 1500); return; }
   const results = streamingStore.searchResults;
   const result  = results[n - 1];
-  if (!result) { showFeedback(`нет результата ${n} (всего ${results.length})`, true, 1500); return; }
+  if (!result) { showFeedback(t('cmd.noResult', { n, total: results.length }), true, 1500); return; }
+  if (result.type === 'channel') { showFeedback(t('search.channelUnsupported'), true, 1500); return; }
   try {
     await invoke('handle_search', {
       system: streamingStore.activeProvider,
@@ -254,19 +258,19 @@ const execSearchPlay: ExecFn = async ([idxStr]) => {
       query: streamingStore.activeQuery, searchType: streamingStore.activeContentType,
     });
   }
-  showFeedback(`→ очередь: ${(result as any).title ?? (result as any).name ?? n}`);
+  showFeedback(t('cmd.queued', { title: result.title }));
 };
 
 const execSearch: ExecFn = async ([provArg, typeArg, limitArg, pageArg], _, query) => {
-  if (!provArg) { showFeedback('search: укажи провайдера', true, 1800); return; }
+  if (!provArg) { showFeedback(t('cmd.providerRequired'), true, 1800); return; }
   const provider = fuzzyFilter(provArg, PROVIDERS)[0];
-  if (!provider) { showFeedback(`search: неизвестный провайдер: ${provArg}`, true, 1500); return; }
+  if (!provider) { showFeedback(t('cmd.unknownProvider', { value: provArg }), true, 1500); return; }
   const ctRaw    = typeArg ? fuzzyFilter(typeArg, CTYPES)[0] : null;
-  if (typeArg && !ctRaw) { showFeedback(`search: неизвестный тип: ${typeArg}`, true, 1500); return; }
+  if (typeArg && !ctRaw) { showFeedback(t('cmd.unknownType', { value: typeArg }), true, 1500); return; }
   const limit = limitArg ? parseInt(limitArg) : 20;
   const page  = pageArg  ? parseInt(pageArg)  : 0;
-  if (limitArg && (isNaN(limit) || limit < 1)) { showFeedback('search: некорректный limit', true, 1500); return; }
-  if (pageArg  && (isNaN(page)  || page  < 0)) { showFeedback('search: некорректная страница', true, 1500); return; }
+  if (limitArg && (isNaN(limit) || limit < 1)) { showFeedback(t('cmd.badLimit'), true, 1500); return; }
+  if (pageArg  && (isNaN(page)  || page  < 0)) { showFeedback(t('cmd.badPage'), true, 1500); return; }
   const norm = ctRaw === 'all' ? null : ctRaw;
   Object.assign(streamingStore, {
     selectedProvider: provider, activeProvider: provider,
@@ -282,7 +286,7 @@ const execSearch: ExecFn = async ([provArg, typeArg, limitArg, pageArg], _, quer
     streamingStore.searchResults = results;
     showFeedback(`"${query}" → ${provider}`);
   } else {
-    showFeedback(`${provider}${norm ? ` · ${norm}` : ''} · limit ${limit} · стр. ${page + 1}`);
+    showFeedback(`${provider}${norm ? ` · ${norm}` : ''} · ${t('cmd.limitPage', { limit, page: page + 1 })}`);
   }
 };
 
@@ -522,7 +526,7 @@ const execute = async () => {
 
   const resolved = resolveSpec(allTokens);
   if (!resolved) {
-    showFeedback(`неизвестная команда: ${allTokens[0]}`, true, 1500);
+    showFeedback(t('cmd.unknownCommand', { cmd: allTokens[0] }), true, 1500);
     return;
   }
 
@@ -530,7 +534,7 @@ const execute = async () => {
     await resolved.spec.exec(resolved.argTokens, raw, query);
     pushHistory(raw);
   } catch (e) {
-    showFeedback(`ошибка: ${e}`, true, 2000);
+    showFeedback(t('common.error', { error: String(e) }), true, 2000);
   }
 };
 
@@ -584,7 +588,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onGlobalKeydown); if (
           autocorrect="off"
           autocapitalize="off"
           spellcheck="false"
-          placeholder="команда..."
+          :placeholder="$t('cmd.placeholder')"
         />
         <Transition name="feedback">
           <span
@@ -621,113 +625,115 @@ onUnmounted(() => { window.removeEventListener('keydown', onGlobalKeydown); if (
   justify-content: flex-end;
 }
 
+.cmdline-bar,
 .cmdline-completions {
   pointer-events: auto;
   width: 100%;
+  background: var(--screen);
+  font-family: $font-family-mono;
+}
+
+.cmdline-completions {
   display: flex;
-  gap: $spacing-xs;
-  padding: $spacing-xs $spacing-md;
-  background: $color-bg-secondary;
-  border-bottom: 1px solid $color-border;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-height: 30vh;
+  overflow-y: auto;
+  padding: 5px 12px;
+  border-top: 1px solid var(--screen-track);
 }
 
 .cmdline-completion {
-  padding: $spacing-xxs $spacing-sm;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', $font-family-primary;
-  font-size: $font-size-xs;
-  color: $color-text-muted;
-  border-radius: $radius-sm;
+  padding: 2px 7px;
+  font-size: var(--font-size-xs);
+  color: var(--screen-muted);
+  border-radius: var(--radius-sm);
 
   &.active {
-    background: $color-accent-primary;
-    color: $color-accent-hover;
-    font-weight: $font-weight-semibold;
+    background: var(--led);
+    color: var(--on-accent);
+    font-weight: 600;
   }
 }
 
 .cmdline-bar {
-  pointer-events: auto;
-  width: 100%;
   display: flex;
   align-items: center;
-  gap: $spacing-xs;
-  padding: $spacing-sm $spacing-md;
-  background: $color-bg-player;
-  border-top: 1px solid $color-accent-primary;
-  font-family:
-    'JetBrains Mono', 'Fira Code', 'Cascadia Code', $font-family-primary;
-  font-size: $font-size-sm;
-  box-shadow: $shadow-xl;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 12px calc(env(safe-area-inset-bottom));
+  border-top: 2px solid var(--led);
+  font-size: var(--font-size-base);
+  box-shadow: var(--shadow-lg);
 }
 
 .cmdline-prompt {
-  color: $color-accent-primary;
-  font-weight: $font-weight-bold;
-  font-size: $font-size-base;
-  line-height: 1;
+  flex: none;
+  color: var(--led);
+  font-weight: 700;
   user-select: none;
-  flex-shrink: 0;
 }
 
 .cmdline-input {
   flex: 1;
+  min-width: 0;
+  padding: 0;
   background: transparent;
-  border: none;
+  border: 0;
+  border-radius: 0;
   outline: none;
-  color: $color-accent-hover;
+  color: var(--led);
   font-family: inherit;
   font-size: inherit;
-  caret-color: $color-accent-primary;
-  min-width: 0;
+  caret-color: var(--led);
 
   &::placeholder {
-    color: $color-text-muted;
+    color: var(--screen-muted);
   }
 }
 
 .cmdline-feedback {
-  flex-shrink: 0;
-  font-size: $font-size-xs;
-  color: $color-text-secondary;
-  padding-left: $spacing-sm;
-  border-left: 1px solid $color-border;
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  padding-left: 8px;
+  border-left: 1px solid var(--screen-track);
+  font-size: var(--font-size-xs);
+  color: var(--screen-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 
   &.error {
-    color: $color-accent-primary;
+    color: var(--led-hot);
   }
 }
 
 .cmdline-enter-active,
-.cmdline-leave-active {
-  transition:
-    opacity $transition-fast,
-    transform $transition-fast;
+.cmdline-leave-active,
+.completions-enter-active,
+.completions-leave-active {
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
 }
 
 .cmdline-enter-from,
 .cmdline-leave-to {
   opacity: 0;
-  transform: translateY($spacing-sm);
-}
-
-.feedback-enter-active,
-.feedback-leave-active {
-  transition: opacity $transition-base;
-}
-
-.feedback-enter-from,
-.feedback-leave-to {
-  opacity: 0;
-}
-
-.completions-enter-active,
-.completions-leave-active {
-  transition: opacity $transition-fast, transform $transition-fast;
+  transform: translateY(8px);
 }
 
 .completions-enter-from,
 .completions-leave-to {
   opacity: 0;
   transform: translateY(-4px);
+}
+
+.feedback-enter-active,
+.feedback-leave-active {
+  transition: opacity var(--transition-base);
+}
+
+.feedback-enter-from,
+.feedback-leave-to {
+  opacity: 0;
 }
 </style>

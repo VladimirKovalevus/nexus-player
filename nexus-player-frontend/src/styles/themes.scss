@@ -1,5 +1,4 @@
 // Theme tokens. Dark is the default; light overrides under data-theme.
-// The deck's screens stay dark in both themes, like a real device display.
 
 :root {
   color-scheme: dark;
@@ -31,6 +30,10 @@
   --led-hot: #ff4d2e;
   --led-ok: #7bc950;
   --led-glow: rgba(255, 176, 0, 0.35);
+
+  // Text on a dimmed cover, and the surface behind the visualizer. Dark media in both themes.
+  --on-overlay: #f2f0e4;
+  --video-bg: #0b0c0a;
 
   --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -129,9 +132,16 @@
   --overlay: rgba(40, 38, 30, 0.45);
   --key-highlight: rgba(255, 255, 255, 0.6);
 
-  --screen: #1a1b17;
-  --led-dim: #6e5a22;
-  --waveform-buffered: #93782c;
+  --screen: #f7f4ea;
+  --screen-text: #23231e;
+  --screen-muted: #6c6a5e;
+  --screen-track: #cfcabb;
+  --led: #c43f0b;
+  --led-dim: #dcc7b0;
+  --led-hot: #c92a20;
+  --led-ok: #3f8a24;
+  --led-glow: transparent;
+  --waveform-buffered: #c79a7c;
 
   --shadow-md: 0 2px 6px rgba(60, 55, 40, 0.18);
   --shadow-lg: 0 6px 18px rgba(60, 55, 40, 0.24);

@@ -410,7 +410,7 @@ onUnmounted(() => {
   small {
     font-size: var(--font-size-base);
     font-weight: 500;
-    color: var(--led-dim);
+    color: var(--screen-muted);
     text-shadow: none;
   }
 }

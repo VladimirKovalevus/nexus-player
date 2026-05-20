@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useAudioStore } from '../stores/audio';
 import { useRadioStore } from '../stores/radio';
 import type { RadioMode } from '../types/types';
@@ -21,13 +22,14 @@ const emit = defineEmits<{
   close: [];
 }>();
 
+const { t } = useI18n();
 const audioStore = useAudioStore();
 const radioStore = useRadioStore();
 const { playNext, playPrevious } = audioStore;
 
-const RADIO_MODES: Array<{ mode: RadioMode; label: string }> = [
-  { mode: 'tracks', label: 'Треки' },
-  { mode: 'playlists', label: 'Плейлисты' },
+const RADIO_MODES: Array<{ mode: RadioMode; labelKey: string }> = [
+  { mode: 'tracks', labelKey: 'visualizer.modeTracks' },
+  { mode: 'playlists', labelKey: 'visualizer.modePlaylists' },
 ];
 const isCanvasActive = ref(false);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
@@ -79,6 +81,8 @@ const setVolume = async (event: Event) => {
 };
 
 const togglePlayPause = async () => {
+  // Nothing loaded: no command would run, and the loading state would never clear.
+  if (!audioStore.isPlaying && !audioStore.isPaused) return;
   audioStore.startLoading();
   try {
     if (audioStore.isPlaying) await invoke('pause');
@@ -99,8 +103,6 @@ const loadRandomPreset = () => {
   
   // Update the name even if in random mode so user sees what's playing
   selectedPresetName.value = name;
-  
-  console.log('[Butterchurn] New random preset loaded:', name);
 };
 
 const selectPreset = (name: string) => {
@@ -164,8 +166,6 @@ const initButterchurn = () => {
       return;
     }
 
-    console.log('[Butterchurn] Attempting init with Raw Interface...', { width, height, pixelRatio: window.devicePixelRatio });
-    
     // We use the new Raw interface from the fork:
     // Passing null as the first argument disables internal AudioContext/Analyser creation.
     visualizer = butterchurn.createVisualizer(null, canvas, {
@@ -179,8 +179,6 @@ const initButterchurn = () => {
       console.error('[Butterchurn] Initialization failed: No GL context returned', { visualizer });
       throw new Error('WebGL context could not be created. Check browser support.');
     }
-
-    console.log('[Butterchurn] Initialization successful. GL Version:', visualizer.gl.getParameter(visualizer.gl.VERSION));
 
     // Get preset list
     const presets = butterchurnPresets.getPresets();
@@ -212,7 +210,6 @@ const initButterchurn = () => {
     window.addEventListener('resize', onWindowResize);
 
     butterchurnError.value = null;
-    console.log('[Butterchurn] Initialized with Raw Interface');
   } catch (e: any) {
     console.error('[Butterchurn] Init Error:', e);
     butterchurnError.value = e.message;
@@ -356,109 +353,133 @@ const toggleFullscreen = async () => {
   const canvas = canvasRef.value;
   if (canvas) resizeCanvas(canvas.clientWidth, canvas.clientHeight);
 };
-const handleClose=()=>{
-emit("close");
-}
 
+const presetLabel = (name: string) => (name === 'Random' ? t('visualizer.random') : name);
 </script>
 
 <template>
   <Transition name="overlay-slide">
     <div v-if="isOpen" class="player-overlay" :class="{ 'is-fullscreen': isFullscreen }">
-      <div class="top-controls">
-        <button class="fullscreen-btn" @click="toggleFullscreen" title="Полноэкранный режим">
-          <AppIcon :name="isFullscreen ? 'fullscreen-exit' : 'fullscreen-enter'" :size="18" />
+      <div class="top-bar">
+        <button
+          class="deck-btn"
+          :title="$t('visualizer.fullscreen')"
+          :aria-label="$t('visualizer.fullscreen')"
+          @click="toggleFullscreen"
+        >
+          <AppIcon :name="isFullscreen ? 'fullscreen-exit' : 'fullscreen-enter'" :size="14" />
         </button>
 
-        <div v-if="isCanvasActive" class="visualizer-tools">
-          <button class="tool-btn" @click="isCanvasActive = false" title="Вернуться к обложке">
-            <AppIcon name="image" :size="16" />
+        <button
+          class="deck-btn"
+          :class="{ 'is-on': radioStore.isActive }"
+          :disabled="radioStore.isStarting"
+          :title="$t(radioStore.isActive ? 'radio.turnOff' : 'radio.turnOn')"
+          @click="radioStore.toggle()"
+        >
+          <AppIcon name="radio" :size="13" /> {{ $t('nav.radio') }}
+        </button>
+        <div class="seg">
+          <button
+            v-for="option in RADIO_MODES"
+            :key="option.mode"
+            :aria-pressed="radioStore.selectedMode === option.mode"
+            @click="radioStore.selectMode(option.mode)"
+          >
+            {{ $t(option.labelKey) }}
+          </button>
+        </div>
+
+        <template v-if="isCanvasActive">
+          <button
+            class="deck-btn"
+            :title="$t('visualizer.backToCover')"
+            :aria-label="$t('visualizer.backToCover')"
+            @click="isCanvasActive = false"
+          >
+            <AppIcon name="image" :size="14" />
           </button>
 
           <div class="preset-selector">
-            <button class="tool-btn preset-btn" @click="togglePresetList" :title="selectedPresetName">
-              <AppIcon name="palette" :size="14" /> {{ isRandomMode ? `Random (${selectedPresetName})` : selectedPresetName }}
+            <button class="deck-btn preset-btn" :title="selectedPresetName" @click="togglePresetList">
+              <AppIcon name="palette" :size="13" />
+              <span class="preset-name">
+                {{ isRandomMode ? $t('visualizer.randomWith', { name: selectedPresetName }) : selectedPresetName }}
+              </span>
             </button>
-            
+
             <div v-if="showPresetList" class="preset-dropdown">
-              <div 
-                v-for="name in presetList" 
+              <button
+                v-for="name in presetList"
                 :key="name"
                 class="preset-item"
                 :class="{ active: selectedPresetName === name }"
                 @click="selectPreset(name)"
               >
-                {{ name }}
-              </div>
+                {{ presetLabel(name) }}
+              </button>
             </div>
           </div>
-        </div>
+        </template>
 
-        <div class="radio-tools">
-          <button
-            class="tool-btn radio-btn"
-            :class="{ active: radioStore.isActive }"
-            :disabled="radioStore.isStarting"
-            :title="radioStore.isActive ? 'Выключить радио' : 'Включить радио'"
-            @click="radioStore.toggle()"
-          >
-            <AppIcon name="radio" :size="14" /> Радио
-          </button>
-          <button
-            v-for="option in RADIO_MODES"
-            :key="option.mode"
-            class="tool-btn radio-mode-btn"
-            :class="{ active: radioStore.selectedMode === option.mode }"
-            :title="option.label"
-            @click="radioStore.selectMode(option.mode)"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-
-        <button class="close-btn" @click="handleClose"><AppIcon name="close" :size="18" /></button>
+        <span class="view-spacer" />
+        <button class="deck-btn" :title="$t('common.close')" :aria-label="$t('common.close')" @click="emit('close')">
+          <AppIcon name="close" :size="14" />
+        </button>
       </div>
-      
-      <div class="main-content">
-        <div class="visualizer-container" @click="handleCanvasClick">
-          <Transition name="fade" mode="out-in">
-            <div v-if="!isCanvasActive" key="cover" class="cover-wrapper" @click.stop="isCanvasActive = true">
-              <AppImage
-                :src="audioStore.currentTrack?.artworkUrl"
-                variant="large"
-                class="big-cover"
-              >
-                <template #placeholder>
-                  <div class="big-cover-placeholder"><AppIcon name="music-note" :size="128" /></div>
-                </template>
-              </AppImage>
-            </div>
-            <div v-else key="canvas" class="canvas-wrapper">
-              <div v-if="butterchurnError" class="error-msg">
-                Error: {{ butterchurnError }}
-              </div>
-              <canvas ref="canvasRef"></canvas>
-              <div class="canvas-hint">Milkdrop Active • Click to change style</div>
-            </div>
-          </Transition>
-        </div>
 
+      <div class="stage" @click="handleCanvasClick">
+        <Transition name="fade" mode="out-in">
+          <div v-if="!isCanvasActive" key="cover" class="cover-wrapper" @click.stop="isCanvasActive = true">
+            <AppImage :src="audioStore.currentTrack?.artworkUrl" variant="large" class="big-cover">
+              <template #placeholder>
+                <div class="big-cover-placeholder"><AppIcon name="music-note" :size="96" /></div>
+              </template>
+            </AppImage>
+            <div class="stage-hint">{{ $t('visualizer.startHint') }}</div>
+          </div>
+          <div v-else key="canvas" class="canvas-wrapper">
+            <div v-if="butterchurnError" class="error-msg">{{ $t('common.error', { error: butterchurnError }) }}</div>
+            <canvas ref="canvasRef"></canvas>
+            <div class="stage-hint">{{ $t('visualizer.changeHint') }}</div>
+          </div>
+        </Transition>
+      </div>
+
+      <div class="console">
         <div class="track-details">
-          <h1 class="title">{{ audioStore.currentTrack?.title || 'No track' }}</h1>
-          <h2 class="artist">{{ audioStore.currentTrack?.artist || 'Unknown Artist' }}</h2>
+          <div class="title" :title="audioStore.currentTrack?.title">{{ audioStore.currentTrack?.title || $t('player.noTrack') }}</div>
+          <div class="artist">{{ audioStore.currentTrack?.artist || $t('track.unknownArtist') }}</div>
         </div>
 
         <div class="playback-controls">
-          <button class="control-btn" @click="playPrevious">
-            <AppIcon name="prev" :size="24" />
+          <button class="deck-btn control-btn" :title="$t('player.previous')" :aria-label="$t('player.previous')" @click="playPrevious">
+            <AppIcon name="prev" :size="16" />
           </button>
-          <button class="control-btn play-btn" @click="togglePlayPause">
-            <AppIcon v-if="!audioStore.isPlaying" name="play" :size="32" />
-            <AppIcon v-else name="pause" :size="32" />
+          <button
+            class="deck-btn deck-btn--primary control-btn play-btn"
+            :title="$t(audioStore.isPlaying ? 'player.pause' : 'player.play')"
+            :aria-label="$t(audioStore.isPlaying ? 'player.pause' : 'player.play')"
+            @click="togglePlayPause"
+          >
+            <AppIcon :name="audioStore.isPlaying ? 'pause' : 'play'" :size="18" />
           </button>
-          <button class="control-btn" @click="playNext">
-            <AppIcon name="next" :size="24" />
+          <button class="deck-btn control-btn" :title="$t('player.next')" :aria-label="$t('player.next')" @click="playNext">
+            <AppIcon name="next" :size="16" />
           </button>
+        </div>
+
+        <div class="volume-section">
+          <AppIcon name="volume-high" :size="16" />
+          <input
+            type="range"
+            :value="localVolume"
+            min="0"
+            max="1"
+            step="0.01"
+            :aria-label="$t('player.volume', { percent: Math.round(localVolume * 100) })"
+            @input="setVolume"
+          />
         </div>
 
         <div class="waveform-section">
@@ -467,24 +488,6 @@ emit("close");
             <WaveformBar />
           </div>
           <span class="time">{{ formatTime(audioStore.duration) }}</span>
-        </div>
-
-        <div class="volume-section">
-          <AppIcon name="volume-high" :size="20" class="volume-icon" />
-          <input
-            type="range"
-            class="volume-slider"
-            :value="localVolume"
-            min="0"
-            max="1"
-            step="0.01"
-            @input="setVolume"
-            :style="{
-              '--volume-fill-color': 'var(--color-accent-hover, #00ffd2)',
-              '--volume-bg-color': 'var(--color-bg-secondary, #333)',
-              background: `linear-gradient(to right, var(--volume-fill-color) ${localVolume * 100}%, var(--volume-bg-color) ${localVolume * 100}%)`
-            }"
-          />
         </div>
       </div>
     </div>
@@ -497,314 +500,311 @@ emit("close");
 
 .player-overlay {
   position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background-color: $color-bg-player;
+  inset: 0;
   z-index: $z-modal;
   display: flex;
   flex-direction: column;
-  padding: $spacing-xl;
-  padding-top: calc($spacing-xl + env(safe-area-inset-top));
-  padding-bottom: calc($spacing-xl + env(safe-area-inset-bottom));
-  padding-left: calc($spacing-xl + env(safe-area-inset-left));
-  padding-right: calc($spacing-xl + env(safe-area-inset-right));
-  color: $color-text-primary;
-  overflow-y: auto;
-
-  @media (max-width: $mobile-breakpoint) {
-    padding: $spacing-md;
-    padding-top: calc($spacing-lg + env(safe-area-inset-top));
-    padding-bottom: calc($spacing-lg + env(safe-area-inset-bottom));
-    padding-left: calc($spacing-md + env(safe-area-inset-left));
-    padding-right: calc($spacing-md + env(safe-area-inset-right));
-  }
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background: var(--bg-body);
+  color: var(--text);
 }
 
-.close-btn, .fullscreen-btn {
-  position: absolute;
-  top: calc($spacing-md + env(safe-area-inset-top));
-  background: rgba(0, 0, 0, 0.45);
-  border: none;
-  color: #fff;
-  cursor: pointer;
-  z-index: 10;
-  border-radius: $radius-md;
-  width: 36px; height: 36px;
-  display: flex; align-items: center; justify-content: center;
-  backdrop-filter: blur(6px);
-  opacity: 0.75;
-  transition: opacity 0.2s;
-
-  &:hover { opacity: 1; }
-}
-
-.close-btn {
-  right: $spacing-lg;
-  font-size: 1.5rem;
-}
-
-.fullscreen-btn {
-  left: $spacing-lg;
-  font-size: 1.2rem;
-}
-
-.top-controls {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 60px;
-  z-index: 100;
-  pointer-events: none;
-
-  & > * {
-    pointer-events: auto;
-  }
-}
-
-.visualizer-tools {
-  position: absolute;
-  top: calc($spacing-md + env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
+.top-bar {
   display: flex;
-  gap: $spacing-sm;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+  min-height: 45px;
+  padding: 8px 10px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--line);
 }
 
-.tool-btn {
-  background: rgba(0, 0, 0, 0.45);
-  border: none;
-  color: #fff;
-  cursor: pointer;
-  border-radius: $radius-md;
-  height: 36px;
-  padding: 0 $spacing-md;
-  display: flex; align-items: center; justify-content: center;
-  backdrop-filter: blur(6px);
-  opacity: 0.75;
-  transition: all 0.2s;
-  font-size: $font-size-sm;
-
-  &:hover { opacity: 1; background: rgba(0, 0, 0, 0.6); }
-}
-
-// Sits to the right of the fullscreen button so it never collides with the
-// centred .visualizer-tools group.
-.radio-tools {
-  position: absolute;
-  top: calc($spacing-md + env(safe-area-inset-top));
-  left: calc($spacing-lg + 36px + $spacing-sm);
-  display: flex;
-  gap: $spacing-xs;
-}
-
-.radio-btn {
-  gap: $spacing-xs;
-
-  &.active {
-    opacity: 1;
-    color: var(--color-accent-primary);
-    box-shadow: inset 0 0 0 1px var(--color-accent-primary);
-  }
-
-  &:disabled {
-    cursor: default;
-    opacity: 0.5;
-  }
-}
-
-.radio-mode-btn {
-  height: 36px;
-  font-size: $font-size-xs;
-
-  &.active {
-    opacity: 1;
-    box-shadow: inset 0 0 0 1px var(--color-accent-primary);
-  }
+.is-on {
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
 .preset-selector {
   position: relative;
+  min-width: 0;
 }
 
 .preset-btn {
-  max-width: 200px;
-  white-space: nowrap;
+  max-width: 240px;
+}
+
+.preset-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-transform: none;
 }
 
 .preset-dropdown {
   position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: $spacing-xs;
-  background: rgba(20, 20, 20, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: $radius-md;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  width: min(280px, 80vw);
   max-height: 300px;
   overflow-y: auto;
-  width: 250px;
-  z-index: 100;
-  backdrop-filter: blur(10px);
-
-  &::-webkit-scrollbar { width: 6px; }
-  &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+  padding: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
 }
 
 .preset-item {
-  padding: $spacing-sm $spacing-md;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: $font-size-xs;
-  color: rgba(255, 255, 255, 0.7);
-  white-space: nowrap;
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
   overflow: hidden;
+  font-size: var(--font-size-sm);
+  text-align: left;
   text-overflow: ellipsis;
+  white-space: nowrap;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: var(--bg-selected);
   }
 
   &.active {
-    background: var(--color-accent-primary);
-    color: #fff;
+    color: var(--accent);
+    font-weight: 600;
   }
 }
 
-.main-content {
+.stage {
+  position: relative;
   flex: 1;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: $spacing-lg;
-  max-width: 600px; margin: 0 auto; width: 100%;
-}
-
-.visualizer-container {
-  width: 100%; aspect-ratio: 1;
-  position: relative; cursor: pointer;
-  box-shadow: $shadow-xl;
-  border-radius: $radius-lg;
+  min-height: 0;
   overflow: hidden;
-  background: #000;
-  transition: all 0.3s ease;
+  background: var(--screen);
+  cursor: pointer;
 }
 
-.player-overlay.is-fullscreen {
-  padding: 0;
+.cover-wrapper,
+.canvas-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
 
-  .main-content {
-    max-width: none;
-    gap: 0;
-  }
+// The bottom padding leaves room for the hint under the cover.
+.cover-wrapper {
+  padding: 16px 16px 30px;
+}
 
-  .visualizer-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    border-radius: 0;
-    z-index: 1;
-    aspect-ratio: auto;
-  }
+.canvas-wrapper {
+  background: var(--video-bg);
 
-  .track-details,
-  .playback-controls,
-  .waveform-section,
-  .volume-section {
-    display: none;
-  }
-
-  .close-btn, .fullscreen-btn {
-    z-index: 100;
+  .stage-hint {
+    color: var(--on-overlay);
   }
 }
 
-.cover-wrapper, .canvas-wrapper {
-  width: 100%; height: 100%;
-  display: flex; align-items: center; justify-content: center;
+.big-cover {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
-.big-cover { width: 100%; height: 100%; object-fit: cover; }
-.big-cover-placeholder { font-size: 8rem; opacity: 0.3; }
+.big-cover-placeholder {
+  color: var(--screen-muted);
+}
 
-canvas { width: 100%; height: 100%; display: block; }
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 
 .error-msg {
-  position: absolute; color: #ff4444; background: rgba(0,0,0,0.8);
-  padding: 1rem; z-index: 5;
+  position: absolute;
+  z-index: 5;
+  padding: 10px 12px;
+  background: var(--screen);
+  color: var(--led-hot);
 }
 
-.canvas-hint {
-  position: absolute; bottom: $spacing-md;
-  width: 100%; text-align: center; font-size: $font-size-sm;
-  color: #fff; text-shadow: 0 0 10px #000;
-  opacity: 0.6; pointer-events: none;
+.stage-hint {
+  position: absolute;
+  bottom: 8px;
+  width: 100%;
+  font: 500 var(--font-size-xs) $font-family-mono;
+  text-align: center;
+  color: var(--screen-text);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.console {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 16px;
+  flex: none;
+  padding: 10px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--line);
 }
 
 .track-details {
-  text-align: center; width: 100%;
-  .title {
-    font-size: $font-size-lg; color: $color-bg-primary;
-    margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .artist {
-    font-size: $font-size-sm; color: $color-bg-primary;
-    margin: $spacing-sm 0 0 0;
-  }
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.title {
+  font-weight: 600;
+  font-size: var(--font-size-lg);
+  @include text-ellipsis;
+}
+
+.artist {
+  font-size: var(--font-size-sm);
+  color: var(--muted);
+  @include text-ellipsis;
 }
 
 .playback-controls {
-  display: flex; align-items: center; gap: $spacing-xl;
-  .control-btn {
-    background: none; border: 1px solid transparent;
-    cursor: pointer; width: 48px; height: 48px; border-radius: 50%;
-    padding: 0 !important;
-    display: flex; align-items: center; justify-content: center;
-    transition: $transition-fast;
-    img { width: 24px; height: 24px; }
-    &:hover { transform: scale(1.1); background: var(--color-bg-hover); }
-  }
-  .play-btn {
-    background: none; border: 2px solid var(--color-accent-primary);
-    img { width: 32px; height: 32px; margin-left: 2px; }
-    &:hover { background: var(--color-bg-hover); border-color: var(--color-accent-hover); }
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.control-btn {
+  width: 44px;
+  height: 36px;
+  padding: 0;
+}
+
+.play-btn {
+  width: 62px;
+}
+
+.volume-section {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--muted);
+
+  input {
+    width: min(180px, 100%);
+    min-width: 0;
+    accent-color: var(--accent);
   }
 }
 
 .waveform-section {
-  width: 100%; display: flex; align-items: center; 
-  gap: $spacing-md;
-  .time { font-size: var(--font-size-lg); color: var(--player-time-color, white); min-width: 40px; }
-  .waveform-wrapper {
-    flex: 1; height: 48px; 
-    border-radius: $radius-md; overflow: hidden;
-  }
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--screen);
+  border-radius: var(--radius-sm);
 }
 
-.volume-section {
-  width: 100%;
-  display: flex; align-items: center; gap: $spacing-md;
-  margin-top: $spacing-lg;
-  .volume-icon { width: 20px; height: 20px; opacity: 0.8; flex-shrink: 0; }
-  .volume-slider {
-    -webkit-appearance: none; flex: 1; height: 8px;
-    border-radius: $radius-sm; outline: none; cursor: pointer;
-    background: $color-bg-secondary;
-    padding: 0; margin: 0;
-    &::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 20px; height: 20px;
-      background: $color-text-primary; border-radius: 50%; box-shadow: $shadow-md;
+.time {
+  flex: none;
+  min-width: 40px;
+  font: 500 var(--font-size-sm) $font-family-mono;
+  color: var(--led);
+  text-align: center;
+}
+
+.waveform-wrapper {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  overflow: hidden;
+}
+
+// The stage takes the whole window; the bar appears on hover and stays where there is no hover.
+.is-fullscreen {
+  .console {
+    display: none;
+  }
+
+  .top-bar {
+    position: absolute;
+    top: env(safe-area-inset-top);
+    right: 0;
+    left: 0;
+    z-index: 10;
+    transition: opacity var(--transition-base);
+
+    @media (hover: hover) {
+      opacity: 0;
+
+      &:hover,
+      &:focus-within {
+        opacity: 1;
+      }
     }
   }
 }
 
-.overlay-slide-enter-active, .overlay-slide-leave-active { transition: transform $transition-slow; }
-.overlay-slide-enter-from, .overlay-slide-leave-to { transform: translateY(100%); }
-.fade-enter-active, .fade-leave-active { transition: opacity $transition-base; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+@media (max-width: $mobile-breakpoint) {
+  .console {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    padding: 10px 12px;
+  }
+
+  .track-details {
+    width: 100%;
+    text-align: center;
+  }
+
+  .control-btn {
+    width: 64px;
+    height: 48px;
+  }
+
+  .play-btn {
+    width: 84px;
+  }
+
+  .volume-section {
+    width: 100%;
+
+    input {
+      width: 100%;
+    }
+  }
+
+  .waveform-section {
+    width: 100%;
+  }
+}
+
+.overlay-slide-enter-active,
+.overlay-slide-leave-active {
+  transition: transform var(--transition-slow);
+}
+
+.overlay-slide-enter-from,
+.overlay-slide-leave-to {
+  transform: translateY(100%);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--transition-base);
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
 </style>
