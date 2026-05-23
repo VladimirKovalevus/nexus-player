@@ -1,70 +1,9 @@
-// Design tokens. Values live in themes.scss; these names point at them.
+// Sass values that CSS custom properties cannot replace: breakpoints in media queries
+// and shared names for the stacking order. Colors and sizes live in themes.scss.
 
-$color-bg-primary: var(--color-bg-primary);
-$color-bg-secondary: var(--color-bg-secondary);
-$color-bg-sidebar: var(--color-bg-sidebar);
-$color-bg-player: var(--color-bg-player);
-$color-bg-hover: var(--color-bg-hover);
-
-$color-media-card: var(--color-accent-primary);
-$color-media-card-active: var(--color-accent-primary);
-
-$color-text-primary: var(--color-text-primary);
-$color-text-secondary: var(--color-text-secondary);
-$color-text-muted: var(--color-text-muted);
-
-$color-border: var(--color-border);
-$color-border-light: var(--color-border-light);
-
-$color-accent-primary: var(--color-accent-primary);
-$color-accent-hover: var(--color-accent-hover);
-$color-accent-purple: var(--color-accent-purple);
-
-// Typography
-$font-family-primary: var(--font-sans);
 $font-family-mono: var(--font-mono);
-$font-size-xs: var(--font-size-xs);
-$font-size-sm: var(--font-size-sm);
-$font-size-base: var(--font-size-base);
-$font-size-lg: var(--font-size-lg);
-$font-size-xl: var(--font-size-xl);
-$font-size-2xl: var(--font-size-2xl);
-$font-size-3xl: var(--font-size-3xl);
-
-$font-weight-normal: 400;
-$font-weight-medium: 500;
-$font-weight-semibold: 600;
-$font-weight-bold: 700;
-
-// Spacing
-$spacing-xs: 0.25rem;    // 4px
-$spacing-xxs: 0.1rem;
-$spacing-sm: 0.5rem;     // 8px
-$spacing-md: 1rem;       // 16px
-$spacing-lg: 1.5rem;     // 24px
-$spacing-xl: 2rem;       // 32px
-$spacing-2xl: 3rem;      // 48px
-$spacing-3xl: 4rem;      // 64px
-
-// Layout Dimensions
-$sidebar-width: 240px;
-$topbar-height: 64px;
-$player-height: 96px;
-
-// Border Radius
-$radius-sm: var(--radius-sm);
-$radius-md: var(--radius-md);
-$radius-lg: var(--radius-lg);
-$radius-xl: var(--radius-xl);
-
-// Transitions
-$transition-fast: var(--transition-fast);
-$transition-base: var(--transition-base);
-$transition-slow: var(--transition-slow);
 
 // Z-index layers
-$z-sidebar: 100;
-$z-topbar: 90;
 $z-player: 110;
 $z-queue-overlay: 120;
 $z-queue-backdrop: 115;
@@ -73,9 +12,3 @@ $z-modal: 1000;
 
 // Breakpoints
 $mobile-breakpoint: 640px;
-$mobile-nav-height: 56px;
-
-// Shadows
-$shadow-md: var(--shadow-md);
-$shadow-lg: var(--shadow-lg);
-$shadow-xl: var(--shadow-xl);

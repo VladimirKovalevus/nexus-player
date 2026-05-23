@@ -42,16 +42,10 @@
   --font-size-sm: 0.75rem;
   --font-size-base: 0.84375rem;
   --font-size-lg: 0.9375rem;
-  --font-size-xl: 1.125rem;
-  --font-size-2xl: 1.375rem;
-  --font-size-3xl: 1.75rem;
 
   --radius-sm: 2px;
   --radius-md: 3px;
-  --radius-lg: 3px;
-  --radius-xl: 4px;
 
-  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.25);
   --shadow-lg: 0 6px 18px rgba(0, 0, 0, 0.35);
   --shadow-xl: 0 12px 32px rgba(0, 0, 0, 0.45);
 
@@ -66,49 +60,6 @@
   --waveform-bg: var(--led-dim);
   --waveform-buffered: #7a6426;
   --waveform-played: var(--led);
-
-  // Aliases for components not redesigned yet. Removed when the last one is.
-  --color-bg-primary: var(--bg-table);
-  --color-bg-secondary: var(--bg-panel);
-  --color-bg-sidebar: var(--bg-panel);
-  --color-bg-player: var(--bg-panel);
-  --color-bg-hover: var(--bg-selected);
-  --color-text-primary: var(--text);
-  --color-text-secondary: var(--muted);
-  --color-text-muted: var(--muted);
-  --color-border: var(--line);
-  --color-border-light: var(--line-soft);
-  --color-accent-primary: var(--accent);
-  --color-accent-secondary: var(--muted);
-  --color-accent-hover: var(--accent);
-  --color-accent-purple: var(--accent);
-  --font-family-primary: var(--font-sans);
-  --media-card-bg: var(--bg-table);
-  --media-card-color: var(--text);
-  --media-card-hover-bg: var(--bg-selected);
-  --media-card-hover-color: var(--text);
-  --media-card-active-bg: var(--bg-selected);
-  --media-card-active-color: var(--accent);
-  --media-card-current-playing: var(--accent);
-  --media-card-action-hover-bg: var(--key);
-  --media-card-action-hover-color: var(--accent);
-  --ellipsis-v-align: center;
-  --ellipsis-offset-bottom: 4px;
-  --player-time-color: var(--text);
-  --playback-queue-pulse: var(--bg-selected);
-  --search-input-bg: var(--bg-panel);
-  --search-input-color: var(--text);
-  --search-input-placeholder: var(--muted);
-  --modal-bg: var(--bg-panel);
-  --modal-border: var(--line);
-  --modal-header-border: var(--line);
-  --modal-label-color: var(--text);
-  --modal-input-bg: var(--bg-table);
-  --modal-input-color: var(--text);
-  --modal-input-border: var(--line);
-  --modal-card-bg: var(--bg-table);
-  --modal-hint-color: var(--muted);
-  --modal-section-title-color: var(--muted);
 }
 
 [data-theme='light'] {
@@ -143,7 +94,6 @@
   --led-glow: transparent;
   --waveform-buffered: #c79a7c;
 
-  --shadow-md: 0 2px 6px rgba(60, 55, 40, 0.18);
   --shadow-lg: 0 6px 18px rgba(60, 55, 40, 0.24);
   --shadow-xl: 0 12px 32px rgba(60, 55, 40, 0.3);
 }

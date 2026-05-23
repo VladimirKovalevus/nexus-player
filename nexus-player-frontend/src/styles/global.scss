@@ -1,9 +1,9 @@
-// Global Styles - Nexus Audio Player
+// Global styles.
 @import './variables.scss';
 @import './themes.scss';
 @import './deck.scss';
 
-// CSS Reset и базовые стили
+// Reset and base styles
 *,
 *::before,
 *::after {
@@ -21,8 +21,8 @@ body {
 }
 
 body {
-  font-family: $font-family-primary;
-  font-size: $font-size-base;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
   line-height: 1.35;
   color: var(--text);
   background-color: var(--bg-body);
@@ -32,18 +32,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-// Ссылки
+// Links
 a {
-  color: var(--color-accent-primary);
+  color: var(--accent);
   text-decoration: none;
-  transition: color $transition-fast;
-
-  &:hover {
-    color: var(--color-accent-hover);
-  }
 }
 
-// Кнопки
+// Buttons
 button {
   font-family: inherit;
   font-size: inherit;
@@ -54,7 +49,7 @@ button {
   appearance: none;
   -webkit-appearance: none;
   -webkit-tap-highlight-color: transparent;
-  transition: all $transition-fast;
+  transition: all var(--transition-fast);
 
   &:focus {
     outline: none;
@@ -66,25 +61,26 @@ button {
   }
 }
 
-// Инпуты
-input,
+// Text fields. Sliders and checkboxes are left out: padding and a border shift a slider's
+// thumb off its track. :where keeps this rule weak enough for the deck controls to override.
+input:where(:not([type='range'], [type='checkbox'])),
 textarea {
   font-family: inherit;
   font-size: inherit;
-  color: var(--color-text-primary);
+  color: var(--text);
   background-color: var(--bg-table);
   border: 1px solid var(--line);
-  border-radius: $radius-md;
-  padding: $spacing-sm $spacing-md;
-  transition: border-color $transition-fast;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 1rem;
+  transition: border-color var(--transition-fast);
 
   &:focus {
     outline: none;
-    border-color: var(--color-accent-primary);
+    border-color: var(--accent);
   }
 }
 
-// Скроллбары
+// Scrollbars
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -101,17 +97,4 @@ textarea {
   &:hover {
     background: var(--muted);
   }
-}
-
-// Утилитарные классы
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
 }
