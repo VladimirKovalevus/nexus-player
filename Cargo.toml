@@ -24,7 +24,7 @@ tracing = "0.1"
 anyhow = "1.0"
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
-streaming = { path = "vendor/streaming" }
+streaming = { path = "crates/streaming" }
 rsoundcloud = { path = "vendor/rsoundcloud" }
 
 [patch.crates-io]

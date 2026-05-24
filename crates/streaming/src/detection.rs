@@ -64,7 +64,7 @@ pub async fn detect_stream_type(
     let ua = user_agent.unwrap_or_else(|| DEFAULT_USER_AGENT.to_string());
 
     // Explicitly use rustls to avoid native-tls (Windows SChannel) being selected
-    // when both TLS backends are compiled in via feature unification (e.g. vk-api pulls native-tls).
+    // when both TLS backends are compiled in via feature unification (e.g. another dependency pulls native-tls).
     // SChannel has a known JA3 fingerprint that triggers Cloudflare bot challenges.
     let client = reqwest::Client::builder()
         .use_rustls_tls()

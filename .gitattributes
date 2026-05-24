@@ -34,3 +34,4 @@ Cargo.lock linguist-generated
 *.rs linguist-language=Rust
 *.vue linguist-language=Vue
 *.ts linguist-language=TypeScript
+vendor/** linguist-vendored

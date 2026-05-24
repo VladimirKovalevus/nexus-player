@@ -12,11 +12,6 @@
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
-    <!-- Required on Android 11+ to check if VK app is installed -->
-    <queries>
-        <package android:name="com.vkontakte.android" />
-    </queries>
-
     <application
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -33,14 +28,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
                 <!-- AndroidTV support -->
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
-            <!-- VK OAuth callback: vk2685278://authorize#access_token=...
-                 Works when Kate Mobile is not installed (no competing handler) -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="vk2685278" android:host="authorize" />
             </intent-filter>
         </activity>
 
