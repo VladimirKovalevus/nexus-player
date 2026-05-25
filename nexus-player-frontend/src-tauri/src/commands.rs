@@ -3,11 +3,11 @@ use nexus_player_backend::sync::{
 };
 
 use crate::dto::{
-    AudioStateDto, CachedAlbumDto, CleanupResultDto, ContainerMetaDto, CreatePlaylistRequest,
-    CreatePlaylistWithTracksRequest, CurrentPositionDto, EqPresetDto, EqSettingsDto,
-    LibraryPageDto, PlayHistoryEntryDto, PlaylistDto, PlaylistItemDto, PlaylistWithItemsDto,
-    PlaylistWithTracksDto, QueueEntryDto, QueueStateDto, ResolvedArtworkDto, SearchContextDto,
-    SearchResultDto, TaskInfoDto, TrackDto, TrackSourceDto, hash_str_to_i64,
+    hash_str_to_i64, AudioStateDto, CachedAlbumDto, CleanupResultDto, ContainerMetaDto,
+    CreatePlaylistRequest, CreatePlaylistWithTracksRequest, CurrentPositionDto, EqPresetDto,
+    EqSettingsDto, LibraryPageDto, PlayHistoryEntryDto, PlaylistDto, PlaylistItemDto,
+    PlaylistWithItemsDto, PlaylistWithTracksDto, QueueEntryDto, QueueStateDto, ResolvedArtworkDto,
+    SearchContextDto, SearchResultDto, TaskInfoDto, TrackDto, TrackSourceDto,
 };
 use crate::events::FrontendEvent;
 use nexus_player_backend::library::local_library::{AndroidMediaEntry, MusicSource, ScanResult};
@@ -18,9 +18,9 @@ use nexus_player_backend::library::types::{
 use nexus_player_backend::playlist::cursor::ContainerContext;
 use nexus_player_backend::state::state::AppState;
 use nexus_player_backend::streaming::types::{ContentType, ResolvedContent, SearchResult};
-use streaming::images::ImageVariant;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use streaming::images::ImageVariant;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 

@@ -214,7 +214,8 @@ impl AudioDecoder {
                     self.resampler = Some(ResamplerFir::new(
                         self.channels,
                         SampleRate::try_from(self.sample_rate).unwrap_or(SampleRate::Hz44100),
-                        SampleRate::try_from(self.output_sample_rate).unwrap_or(SampleRate::Hz44100),
+                        SampleRate::try_from(self.output_sample_rate)
+                            .unwrap_or(SampleRate::Hz44100),
                         resampler::Latency::Sample64,
                         resampler::Attenuation::Db120,
                     ));
@@ -316,9 +317,9 @@ impl AudioDecoder {
 
                 if let Some(ref mut resampler) = self.resampler {
                     let ratio = self.output_sample_rate as f32 / self.sample_rate as f32;
-                    let out_capacity =
-                        ((samples.len() as f32 / self.channels as f32) * ratio).ceil() as usize
-                            * self.channels;
+                    let out_capacity = ((samples.len() as f32 / self.channels as f32) * ratio)
+                        .ceil() as usize
+                        * self.channels;
                     let mut resampled = vec![0.0f32; out_capacity];
 
                     let (_consumed, produced) = resampler

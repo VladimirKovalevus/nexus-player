@@ -18,7 +18,7 @@ use super::types::{
 };
 use std::str::FromStr;
 use streaming::state::manager::DownloadManager;
-use streaming::state::types::{DownloadOptions, ManagerConfig, TaskInfo, DefaultCallbacks};
+use streaming::state::types::{DefaultCallbacks, DownloadOptions, ManagerConfig, TaskInfo};
 
 pub struct StreamingService {
     providers: HashMap<String, Arc<dyn StreamProvider>>,
@@ -36,8 +36,9 @@ impl StreamingService {
         default_callbacks: DefaultCallbacks,
     ) -> StreamResult<Self> {
         let bandcamp = Arc::new(BandcampProvider::new()) as Arc<dyn StreamProvider>;
-        let soundcloud = Arc::new(SoundCloudProvider::new(config.soundcloud.credentials.clone()))
-            as Arc<dyn StreamProvider>;
+        let soundcloud = Arc::new(SoundCloudProvider::new(
+            config.soundcloud.credentials.clone(),
+        )) as Arc<dyn StreamProvider>;
 
         let mut providers = HashMap::new();
 
@@ -60,7 +61,12 @@ impl StreamingService {
         })
     }
 
-    pub async fn update_config(&self, config: ProviderConfig, config_audio: AudioConfig, config_network: NetworkConfig) {
+    pub async fn update_config(
+        &self,
+        config: ProviderConfig,
+        config_audio: AudioConfig,
+        config_network: NetworkConfig,
+    ) {
         if let Ok(mut c) = self.config.write() {
             *c = config.clone();
         }
@@ -71,9 +77,7 @@ impl StreamingService {
         manager_config.prefetch_limit = config_audio.prefetch_limit;
         manager_config.chunk_size = config_network.chunk_size as u64;
 
-        self.download_manager
-            .update_config(manager_config)
-            .await;
+        self.download_manager.update_config(manager_config).await;
 
         tracing::debug!("StreamingService: updating provider credentials from config");
         for (name, provider) in &self.providers {
@@ -319,9 +323,7 @@ impl StreamingService {
         }
     }
     pub async fn set_context(&self, current: Option<u64>, active_ids: Vec<u64>) {
-        self.download_manager
-            .set_context(current, active_ids)
-            .await;
+        self.download_manager.set_context(current, active_ids).await;
     }
 
     pub async fn has_track(&self, track_id: u64) -> bool {

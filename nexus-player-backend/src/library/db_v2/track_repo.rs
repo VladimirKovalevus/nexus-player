@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, QueryTrait, TransactionTrait, sea_query,
+    sea_query, ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, TransactionTrait,
 };
 
 use crate::library::entities_v2::{artwork, playlist_item, track};
@@ -257,7 +257,10 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
             .collect::<Result<Vec<_>>>()
     }
 
-    async fn find_by_source(&self, source: &crate::library::types::TrackSource) -> Result<Option<Track>> {
+    async fn find_by_source(
+        &self,
+        source: &crate::library::types::TrackSource,
+    ) -> Result<Option<Track>> {
         use serde::{Deserialize, Serialize};
         #[derive(Debug, Serialize, Deserialize)]
         #[serde(tag = "type", rename_all = "snake_case")]

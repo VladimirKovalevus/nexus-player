@@ -35,8 +35,10 @@ impl Default for ManagerConfig {
         }
     }
 }
-pub type DefaultCallback =
-    dyn Fn(TrackId, Result<BufferType, StreamingError>, Option<StreamMetadata>) + Send + Sync + 'static;
+pub type DefaultCallback = dyn Fn(TrackId, Result<BufferType, StreamingError>, Option<StreamMetadata>)
+    + Send
+    + Sync
+    + 'static;
 
 pub type TaskCallback =
     dyn Fn(Result<BufferType, StreamingError>, Option<StreamMetadata>) + Send + Sync + 'static;

@@ -149,7 +149,10 @@ mod tests {
             cache.lookup("https://example.com/cover.jpg", ImageVariant::Thumb),
             ArtworkLocation::Pending
         );
-        assert_eq!(cache.lookup("", ImageVariant::Thumb), ArtworkLocation::Pending);
+        assert_eq!(
+            cache.lookup("", ImageVariant::Thumb),
+            ArtworkLocation::Pending
+        );
     }
 
     #[tokio::test]

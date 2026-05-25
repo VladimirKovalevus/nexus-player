@@ -9,12 +9,12 @@ use crate::library::models::{
 use crate::library::types::TrackOrder;
 use crate::library::{LibraryService, PlaylistId, TrackId};
 use crate::playlist::cursor::{AppCursorResolver, ContainerContext, PlayerCursor, RadioMode};
-use crate::playlist::radio;
 use crate::playlist::playback_queue::{
     ActiveQueue, ContainerKind, ContainerMeta, CursorQueue, NextResult, RepeatMode, SearchQueue,
     SearchQueueItem,
 };
 use crate::playlist::playlist::Playlist;
+use crate::playlist::radio;
 use crate::streaming::artwork::{ArtworkCache, ArtworkLocation};
 use crate::streaming::types::ContentType;
 use crate::streaming::StreamingService;
@@ -171,8 +171,16 @@ impl AppState {
 
     pub async fn update_config(&self, config: AppConfig) -> anyhow::Result<()> {
         self.config_manager.update(config.clone())?;
-        let fade_in_ms = if config.audio.fade_in_enabled { config.audio.fade_in_ms } else { 0 };
-        let fade_out_ms = if config.audio.fade_out_enabled { config.audio.fade_out_ms } else { 0 };
+        let fade_in_ms = if config.audio.fade_in_enabled {
+            config.audio.fade_in_ms
+        } else {
+            0
+        };
+        let fade_out_ms = if config.audio.fade_out_enabled {
+            config.audio.fade_out_ms
+        } else {
+            0
+        };
         self.audio_engine.set_fade(fade_in_ms, fade_out_ms);
         self.streaming
             .update_config(config.providers, config.audio, config.network)
@@ -294,13 +302,17 @@ impl AppState {
                         }
                     };
 
-                    tracing::info!("End of queue reached. Repeat mode: {:?}, is_search: {}", repeat_mode, is_search);
+                    tracing::info!(
+                        "End of queue reached. Repeat mode: {:?}, is_search: {}",
+                        repeat_mode,
+                        is_search
+                    );
 
                     if repeat_mode == RepeatMode::All {
                         if is_search {
-                             // SearchQueue handles it internally in next(), 
-                             // but if it returned End, maybe something is wrong or items are empty
-                             tracing::warn!("SearchQueue returned End even with Repeat::All");
+                            // SearchQueue handles it internally in next(),
+                            // but if it returned End, maybe something is wrong or items are empty
+                            tracing::warn!("SearchQueue returned End even with Repeat::All");
                         } else if let Some(ctx) = context {
                             tracing::info!("Restarting context queue: {:?}", ctx);
                             if let Err(e) = self.fill_context_queue(ctx, &cancel).await {
@@ -310,7 +322,9 @@ impl AppState {
                                 continue; // Loop again to get the first track of the restarted queue
                             }
                         } else {
-                            tracing::warn!("End reached with Repeat::All but no context available to restart");
+                            tracing::warn!(
+                                "End reached with Repeat::All but no context available to restart"
+                            );
                         }
                     }
 
@@ -495,7 +509,11 @@ impl AppState {
                 }
                 Err(e) => {
                     tracing::warn!("Error resolving track source: {}", e);
-                    if let crate::streaming::error::StreamError::ChallengeRequired { provider, url } = e {
+                    if let crate::streaming::error::StreamError::ChallengeRequired {
+                        provider,
+                        url,
+                    } = e
+                    {
                         self.audio_engine().push_event(
                             crate::audio::types::AudioEvent::ProviderChallenge { provider, url },
                         );
@@ -708,7 +726,10 @@ impl AppState {
                     if preload_cancel.is_cancelled() {
                         return;
                     }
-                    match streaming.resolve(next.source.clone(), next.id as u64, None).await {
+                    match streaming
+                        .resolve(next.source.clone(), next.id as u64, None)
+                        .await
+                    {
                         Ok(wrapper) => {
                             if let Err(e) = wrapper.prepare().await {
                                 tracing::warn!(
@@ -814,7 +835,11 @@ impl AppState {
                 }
                 Err(e) => {
                     tracing::warn!("Error resolving track source: {}", e);
-                    if let crate::streaming::error::StreamError::ChallengeRequired { provider, url } = e {
+                    if let crate::streaming::error::StreamError::ChallengeRequired {
+                        provider,
+                        url,
+                    } = e
+                    {
                         self.audio_engine().push_event(
                             crate::audio::types::AudioEvent::ProviderChallenge { provider, url },
                         );
@@ -993,7 +1018,6 @@ impl AppState {
         let cancel = self.begin_exclusive_op().await;
         self.fill_context_queue(context, &cancel).await
     }
-
 
     pub async fn load_context_and_play(
         &self,

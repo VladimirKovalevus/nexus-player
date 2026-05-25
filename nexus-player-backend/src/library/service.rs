@@ -769,7 +769,9 @@ mod tests {
 
     async fn service() -> (LibraryService, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
-        let service = LibraryService::new(&dir.path().join("test.db")).await.unwrap();
+        let service = LibraryService::new(&dir.path().join("test.db"))
+            .await
+            .unwrap();
         (service, dir)
     }
 
@@ -812,7 +814,11 @@ mod tests {
         let urls: Vec<String> = awkward.iter().map(|u| u.to_string()).collect();
         let known = service.known_artwork_urls(&urls).await.unwrap();
 
-        assert_eq!(known.len(), awkward.len(), "round-trip lost a URL: {known:?}");
+        assert_eq!(
+            known.len(),
+            awkward.len(),
+            "round-trip lost a URL: {known:?}"
+        );
     }
 
     #[tokio::test]

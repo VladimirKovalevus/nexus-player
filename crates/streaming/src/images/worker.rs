@@ -87,9 +87,10 @@ async fn process(inner: &Arc<Inner>, job: &Job) -> Result<std::path::PathBuf, St
 
     // Decode + resample is CPU work measured in tens of milliseconds; keep it off
     // the runtime's worker threads.
-    let encoded = tokio::task::spawn_blocking(move || resize::to_square_webp(&source, target, quality))
-        .await
-        .map_err(|e| StreamingError::ImageDecode(format!("resize task failed: {e}")))??;
+    let encoded =
+        tokio::task::spawn_blocking(move || resize::to_square_webp(&source, target, quality))
+            .await
+            .map_err(|e| StreamingError::ImageDecode(format!("resize task failed: {e}")))??;
 
     inner.store.write(&job.key, job.variant, &encoded).await
 }

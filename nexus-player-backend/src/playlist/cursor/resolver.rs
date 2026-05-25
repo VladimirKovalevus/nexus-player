@@ -1,17 +1,17 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::library::LibraryService;
 use crate::library::models::PlaylistItemKind;
-use crate::streaming::StreamingService;
 use crate::library::types::{PlaylistId, TrackId as LibTrackId, TrackOrder};
+use crate::library::LibraryService;
 use crate::playlist::cursor::{
-    CursorSource, CursorResolver, ContainerContext, CursorItem,
-    DbTrackCursor, ProviderCursor, StreamingSearchCursor
+    ContainerContext, CursorItem, CursorResolver, CursorSource, DbTrackCursor, ProviderCursor,
+    StreamingSearchCursor,
 };
-use crate::streaming::types::{SearchResult, ContentType};
+use crate::streaming::types::{ContentType, SearchResult};
+use crate::streaming::StreamingService;
 
 pub struct AppCursorResolver {
     library: Arc<LibraryService>,
@@ -28,7 +28,8 @@ impl AppCursorResolver {
         library: &'a LibraryService,
         playlist_id: PlaylistId,
         visited: &'a mut HashSet<i64>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<LibTrackId>>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<LibTrackId>>> + Send + 'a>>
+    {
         Box::pin(async move {
             if !visited.insert(playlist_id.0) {
                 return Ok(vec![]);
@@ -68,62 +69,87 @@ impl CursorResolver for AppCursorResolver {
             ContainerContext::LocalPlaylist(id) => {
                 let playlist_id = PlaylistId(id);
                 let mut visited = HashSet::new();
-                let track_ids = Self::flatten_playlist_tracks(&self.library, playlist_id, &mut visited).await?;
+                let track_ids =
+                    Self::flatten_playlist_tracks(&self.library, playlist_id, &mut visited).await?;
 
-                Ok(Box::new(DbTrackCursor::new(self.library.clone(), track_ids)))
+                Ok(Box::new(DbTrackCursor::new(
+                    self.library.clone(),
+                    track_ids,
+                )))
             }
 
             ContainerContext::LocalAlbum(id) => {
-                // Assuming we can find tracks by album ID or name. 
+                // Assuming we can find tracks by album ID or name.
                 // For now, let's say we have a method in library or use a placeholder.
                 let tracks = self.library.get_all_tracks(TrackOrder::default()).await?; // Temporary: should be filtered by album
                 let track_ids: Vec<LibTrackId> = tracks.into_iter().map(|t| t.id).collect();
-                
-                Ok(Box::new(DbTrackCursor::new(self.library.clone(), track_ids)))
-            }
 
-            ContainerContext::ExternalPlaylist { system, id } => {
-                Ok(Box::new(ProviderCursor::new(
-                    self.streaming.clone(), 
-                    system, 
-                    id, 
-                    ContentType::Playlist
+                Ok(Box::new(DbTrackCursor::new(
+                    self.library.clone(),
+                    track_ids,
                 )))
             }
 
-            ContainerContext::ExternalAlbum { system, id } => {
-                Ok(Box::new(ProviderCursor::new(
-                    self.streaming.clone(), 
-                    system, 
-                    id, 
-                    ContentType::Album
-                )))
-            }
+            ContainerContext::ExternalPlaylist { system, id } => Ok(Box::new(ProviderCursor::new(
+                self.streaming.clone(),
+                system,
+                id,
+                ContentType::Playlist,
+            ))),
+
+            ContainerContext::ExternalAlbum { system, id } => Ok(Box::new(ProviderCursor::new(
+                self.streaming.clone(),
+                system,
+                id,
+                ContentType::Album,
+            ))),
 
             ContainerContext::Radio { track_ids, .. } => {
                 let ids: Vec<LibTrackId> = track_ids.into_iter().map(LibTrackId).collect();
                 Ok(Box::new(DbTrackCursor::new(self.library.clone(), ids)))
             }
 
-            ContainerContext::SearchQuery { system, query, content_type } => {
-                let results = self.streaming.search(&system, Some(content_type), &query, 50, 0).await?;
-                
-                let items = results.into_iter().map(|res| {
-                    match res {
-                        SearchResult::Track(info) => CursorItem::Track(info.into()),
-                        SearchResult::Playlist(info) => CursorItem::Container(ContainerContext::ExternalPlaylist { 
-                            system: system.clone(), 
-                            id: info.id 
-                        }),
-                        SearchResult::Album(info) => CursorItem::Container(ContainerContext::ExternalAlbum { 
-                            system: system.clone(), 
-                            id: info.id 
-                        }),
-                        _ => CursorItem::Container(ContainerContext::SearchQuery { system: system.clone(), query: query.clone(), content_type }) 
-                    }
-                }).collect();
+            ContainerContext::SearchQuery {
+                system,
+                query,
+                content_type,
+            } => {
+                let results = self
+                    .streaming
+                    .search(&system, Some(content_type), &query, 50, 0)
+                    .await?;
 
-                Ok(Box::new(StreamingSearchCursor::new(self.streaming.clone(), system, query, content_type, items)))
+                let items = results
+                    .into_iter()
+                    .map(|res| match res {
+                        SearchResult::Track(info) => CursorItem::Track(info.into()),
+                        SearchResult::Playlist(info) => {
+                            CursorItem::Container(ContainerContext::ExternalPlaylist {
+                                system: system.clone(),
+                                id: info.id,
+                            })
+                        }
+                        SearchResult::Album(info) => {
+                            CursorItem::Container(ContainerContext::ExternalAlbum {
+                                system: system.clone(),
+                                id: info.id,
+                            })
+                        }
+                        _ => CursorItem::Container(ContainerContext::SearchQuery {
+                            system: system.clone(),
+                            query: query.clone(),
+                            content_type,
+                        }),
+                    })
+                    .collect();
+
+                Ok(Box::new(StreamingSearchCursor::new(
+                    self.streaming.clone(),
+                    system,
+                    query,
+                    content_type,
+                    items,
+                )))
             }
         }
     }

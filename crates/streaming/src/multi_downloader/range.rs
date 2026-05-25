@@ -10,10 +10,7 @@ use crate::{
     state::types::{BufferType, DEFAULT_USER_AGENT},
 };
 
-fn with_bandcamp_headers(
-    request: reqwest::RequestBuilder,
-    url: &str,
-) -> reqwest::RequestBuilder {
+fn with_bandcamp_headers(request: reqwest::RequestBuilder, url: &str) -> reqwest::RequestBuilder {
     if url.contains("bandcamp.com") || url.contains("bcbits.com") {
         return request
             .header("Referer", "https://bandcamp.com/")
@@ -51,9 +48,7 @@ impl RangeDownloader {
         end: u64,
     ) -> Result<Vec<u8>, StreamingError> {
         let range = format!("bytes={}-{}", start, end);
-        let request = client
-            .get(url)
-            .header("Range", range);
+        let request = client.get(url).header("Range", range);
         let resp = with_bandcamp_headers(request, url)
             .send()
             .await
@@ -130,26 +125,29 @@ impl RangeDownloader {
                 current_offset + self.buffer.chunk_size() - 1,
             )
             .await;
-                            match result {
-                                                    Ok(chunk) => {
-                                                        let len = chunk.len();
-                                                        self.buffer.write_chunk(chunk_index, chunk);
-                                
-                                                                                if self.buffer.waveform_enabled() {
-                                                                                    let buffer_clone = self.buffer.clone();
-                                                                                    let chunk_data = buffer_clone.get_chunk_data(chunk_index);
-                                                        
-                                                                                    if let Some(data) = chunk_data {
-                                                                                                                        // Background analysis (simplified)
-                                                                                                                        if let Some(mut waveform) = crate::waveform::analyze_waveform(&data) {
-                                                                                                                            waveform.byte_start = Some(chunk_index * buffer_clone.chunk_size());
-                                                                                                                            waveform.byte_end = Some((chunk_index + 1) * buffer_clone.chunk_size());
-                                                                                                                            buffer_clone.set_chunk_waveform(chunk_index, waveform);
-                                                                                                                        }                                                                                    }
-                                                                                }                                
-                                                        self.position += self.buffer.chunk_size();
-                                                        return Ok(len);
-                                                    }                Err(e) => {
+            match result {
+                Ok(chunk) => {
+                    let len = chunk.len();
+                    self.buffer.write_chunk(chunk_index, chunk);
+
+                    if self.buffer.waveform_enabled() {
+                        let buffer_clone = self.buffer.clone();
+                        let chunk_data = buffer_clone.get_chunk_data(chunk_index);
+
+                        if let Some(data) = chunk_data {
+                            // Background analysis (simplified)
+                            if let Some(mut waveform) = crate::waveform::analyze_waveform(&data) {
+                                waveform.byte_start = Some(chunk_index * buffer_clone.chunk_size());
+                                waveform.byte_end =
+                                    Some((chunk_index + 1) * buffer_clone.chunk_size());
+                                buffer_clone.set_chunk_waveform(chunk_index, waveform);
+                            }
+                        }
+                    }
+                    self.position += self.buffer.chunk_size();
+                    return Ok(len);
+                }
+                Err(e) => {
                     if retries >= 3 {
                         return Err(StreamingError::Http(e.to_string()));
                     }

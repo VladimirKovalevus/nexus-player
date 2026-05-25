@@ -154,7 +154,9 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                         emit_state_update = true;
                         FrontendEvent::PlaybackStarted { track_id: track.id }
                     }
-                    AudioEvent::PreloadNextTrack { current_track_id: _ } => {
+                    AudioEvent::PreloadNextTrack {
+                        current_track_id: _,
+                    } => {
                         let cl = state.clone();
                         tokio::spawn(async move {
                             cl.preload_next_track().await;

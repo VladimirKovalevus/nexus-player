@@ -264,8 +264,12 @@ impl DownloadManager {
                 for &id in &non_current {
                     let (is_complete, is_below) = match s.get(&id) {
                         Some(TrackState::Complete { .. }) => (true, false),
-                        Some(TrackState::Downloading { buffer, .. }) => (false, buffer.progress() < prefetch_limit),
-                        Some(TrackState::Pending { buffer, .. }) => (false, buffer.progress() < prefetch_limit),
+                        Some(TrackState::Downloading { buffer, .. }) => {
+                            (false, buffer.progress() < prefetch_limit)
+                        }
+                        Some(TrackState::Pending { buffer, .. }) => {
+                            (false, buffer.progress() < prefetch_limit)
+                        }
                         _ => (false, false),
                     };
                     if !is_complete && first_incomplete.is_none() {
@@ -363,7 +367,7 @@ impl DownloadManager {
                             let mut playback = ctx.lock().await;
                             playback.low_priority_queue.retain(|&x| x != id);
                             q.remove(&id);
-                            
+
                             let mut lru_guard = lru.lock().await;
                             lru_guard.retain(|&x| x != id);
                             lru_guard.push_back(id);
@@ -422,9 +426,13 @@ impl DownloadManager {
                 } else {
                     // Truly idle, nothing even in low priority
                     if let Some(cmd) = rx.recv().await {
-                        if matches!(cmd, ManagerCommand::Shutdown()) { return; }
+                        if matches!(cmd, ManagerCommand::Shutdown()) {
+                            return;
+                        }
                         Self::handle_command(cmd, &queue, &states, &ctx, &config).await;
-                    } else { return; }
+                    } else {
+                        return;
+                    }
                 }
             }
         }
@@ -459,7 +467,11 @@ impl DownloadManager {
                             if !called {
                                 let config = config.read().await;
                                 if let Some(on_start) = &config.default_callbacks.on_start {
-                                    on_start(task.track_id, Ok(task.downloader.buffer()), meta.clone());
+                                    on_start(
+                                        task.track_id,
+                                        Ok(task.downloader.buffer()),
+                                        meta.clone(),
+                                    );
                                 }
                             }
                             *state = TrackState::Downloading {
@@ -523,7 +535,11 @@ impl DownloadManager {
                                     let config = config.read().await;
                                     if let Some(on_progress) = &config.default_callbacks.on_progress
                                     {
-                                        on_progress(task.track_id, Ok(task.downloader.buffer()), meta);
+                                        on_progress(
+                                            task.track_id,
+                                            Ok(task.downloader.buffer()),
+                                            meta,
+                                        );
                                     }
                                 }
                             }
@@ -541,7 +557,11 @@ impl DownloadManager {
                                 if !called {
                                     let config = config.read().await;
                                     if let Some(on_finish) = &config.default_callbacks.on_finish {
-                                        on_finish(task.track_id, Ok(task.downloader.buffer()), meta.clone());
+                                        on_finish(
+                                            task.track_id,
+                                            Ok(task.downloader.buffer()),
+                                            meta.clone(),
+                                        );
                                     }
                                 }
                                 *state = TrackState::Complete {
@@ -613,7 +633,9 @@ impl DownloadManager {
     }
 
     pub async fn set_context(&self, current: Option<TrackId>, active_ids: Vec<TrackId>) {
-        let _ = self.sender.send(ManagerCommand::SetPlayback(current, active_ids));
+        let _ = self
+            .sender
+            .send(ManagerCommand::SetPlayback(current, active_ids));
     }
 
     pub async fn get_track(&self, track_id: u64) -> Option<Source> {
@@ -690,10 +712,7 @@ impl DownloadManager {
             .map(|(id, state)| {
                 let (url, state_name, bytes, progress, meta) = match state {
                     TrackState::Pending {
-                        url,
-                        buffer,
-                        meta,
-                        ..
+                        url, buffer, meta, ..
                     } => (
                         url.clone(),
                         "Pending".to_string(),
@@ -771,9 +790,7 @@ impl DownloadManager {
                 let lru_guard = self.lru.lock().await;
                 lru_guard
                     .iter()
-                    .find(|&&id| {
-                        Some(id) != protected_current && !protected_active.contains(&id)
-                    })
+                    .find(|&&id| Some(id) != protected_current && !protected_active.contains(&id))
                     .copied()
             };
 

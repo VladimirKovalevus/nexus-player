@@ -4,10 +4,7 @@ use crate::{
     state::types::DEFAULT_USER_AGENT,
 };
 
-fn with_bandcamp_headers(
-    request: reqwest::RequestBuilder,
-    url: &str,
-) -> reqwest::RequestBuilder {
+fn with_bandcamp_headers(request: reqwest::RequestBuilder, url: &str) -> reqwest::RequestBuilder {
     if url.contains("bandcamp.com") || url.contains("bcbits.com") {
         return request
             .header("Referer", "https://bandcamp.com/")
@@ -80,7 +77,11 @@ pub async fn detect_stream_type(
     loop {
         attempts += 1;
 
-        tracing::debug!("[detect_stream_type] attempt={} url={}", attempts, current_url);
+        tracing::debug!(
+            "[detect_stream_type] attempt={} url={}",
+            attempts,
+            current_url
+        );
 
         let request = client
             .get(&current_url)
@@ -121,7 +122,10 @@ pub async fn detect_stream_type(
                     .await
                     .map_err(|e| StreamingError::Http(e.to_string()))?;
 
-                tracing::debug!("[detect_stream_type] detected HLS playlist at url={}", current_url);
+                tracing::debug!(
+                    "[detect_stream_type] detected HLS playlist at url={}",
+                    current_url
+                );
 
                 match parse_m3u8(&content, &current_url) {
                     Ok(playlist) => {
@@ -154,7 +158,10 @@ pub async fn detect_stream_type(
                 );
 
                 if let Some(stream_url) = extract_bandcamp_stream_url(&html) {
-                    tracing::debug!("[detect_stream_type] extracted stream url from HTML: {}", stream_url);
+                    tracing::debug!(
+                        "[detect_stream_type] extracted stream url from HTML: {}",
+                        stream_url
+                    );
                     current_url = stream_url;
                     continue;
                 } else {
@@ -190,7 +197,11 @@ pub async fn detect_stream_type(
         };
 
         if supports_range {
-            tracing::debug!("[detect_stream_type] result=Range url={} size={:?}", current_url, size);
+            tracing::debug!(
+                "[detect_stream_type] result=Range url={} size={:?}",
+                current_url,
+                size
+            );
             return Ok(StreamType::Range {
                 url: current_url,
                 size,

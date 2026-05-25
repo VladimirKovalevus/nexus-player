@@ -86,7 +86,9 @@ pub enum AudioCommand {
 }
 #[derive(Debug, Clone)]
 pub enum AudioEvent {
-    PlaybackStarted { track: Track },
+    PlaybackStarted {
+        track: Track,
+    },
 
     PlaybackPaused,
 
@@ -96,9 +98,13 @@ pub enum AudioEvent {
 
     TrackFinished,
 
-    GaplessSwitched { track: Track },
+    GaplessSwitched {
+        track: Track,
+    },
 
-    PreloadNextTrack { current_track_id: usize },
+    PreloadNextTrack {
+        current_track_id: usize,
+    },
 
     PositionUpdated {
         position: Duration,
@@ -106,25 +112,42 @@ pub enum AudioEvent {
         pcm: Option<Vec<u8>>,
     },
 
-    DurationChanged { duration: Duration },
+    DurationChanged {
+        duration: Duration,
+    },
 
-    VolumeChanged { volume: f32 },
+    VolumeChanged {
+        volume: f32,
+    },
 
-    Error { message: String },
+    Error {
+        message: String,
+    },
 
     BufferingStarted,
 
     BufferingFinished,
 
-    BufferUpdated { ranges: Vec<BufferedRange> },
+    BufferUpdated {
+        ranges: Vec<BufferedRange>,
+    },
 
-    WaveformUpdated { waveforms: Vec<Waveform> },
+    WaveformUpdated {
+        waveforms: Vec<Waveform>,
+    },
 
-    LoadingStarted { track: Track },
+    LoadingStarted {
+        track: Track,
+    },
 
-    TrackUnavailable { track_id: i64 },
+    TrackUnavailable {
+        track_id: i64,
+    },
 
-    ProviderChallenge { provider: String, url: String },
+    ProviderChallenge {
+        provider: String,
+        url: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -306,10 +329,14 @@ impl From<crate::library::models::Track> for Track {
                 .audio_info
                 .as_ref()
                 .and_then(|info| info.duration_secs.map(|secs| Duration::from_secs_f64(secs))),
-            artwork_url: track.metadata.artwork.as_ref().and_then(|art| match &art.source {
-                crate::library::types::ArtworkSource::Url { url } => Some(url.clone()),
-                _ => None,
-            }),
+            artwork_url: track
+                .metadata
+                .artwork
+                .as_ref()
+                .and_then(|art| match &art.source {
+                    crate::library::types::ArtworkSource::Url { url } => Some(url.clone()),
+                    _ => None,
+                }),
             format: track.audio_info.as_ref().and_then(|info| {
                 info.sample_rate
                     .zip(info.channels)

@@ -69,7 +69,6 @@ pub enum Relation {
         to = "super::artwork::Column::Id"
     )]
     Artwork,
-
 }
 
 impl Related<super::artwork::Entity> for Entity {

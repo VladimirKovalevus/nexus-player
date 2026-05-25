@@ -3,13 +3,13 @@ mod db_v2;
 pub mod convert;
 pub mod convert_v2;
 pub mod entities_v2;
-pub mod metadata;
 pub mod local_library;
+pub mod metadata;
 pub mod models;
 pub mod repository;
 pub mod repository_v2;
-pub mod types;
 pub mod service;
+pub mod types;
 
 pub use types::{ArtworkId, AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackSource};
 

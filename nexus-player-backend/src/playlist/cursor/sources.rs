@@ -2,12 +2,12 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 
+use super::{ContainerContext, CursorItem, CursorSource};
 use crate::audio::types::Track;
-use crate::library::LibraryService;
 use crate::library::types::TrackId as LibTrackId;
-use crate::streaming::StreamingService;
+use crate::library::LibraryService;
 use crate::streaming::types::{ContentType, SearchResult};
-use super::{CursorSource, CursorItem, ContainerContext};
+use crate::streaming::StreamingService;
 
 /// A simple cursor that iterates over a pre-loaded list of tracks.
 pub struct StaticTrackCursor {
@@ -34,7 +34,7 @@ impl CursorSource for StaticTrackCursor {
             .cloned()
             .map(CursorItem::Track)
             .collect();
-        
+
         self.index = end;
         Ok(batch)
     }
@@ -53,7 +53,11 @@ pub struct DbTrackCursor {
 
 impl DbTrackCursor {
     pub fn new(library: Arc<LibraryService>, track_ids: Vec<LibTrackId>) -> Self {
-        Self { library, track_ids, index: 0 }
+        Self {
+            library,
+            track_ids,
+            index: 0,
+        }
     }
 }
 
@@ -98,7 +102,12 @@ pub struct ProviderCursor {
 }
 
 impl ProviderCursor {
-    pub fn new(streaming: Arc<StreamingService>, system: String, id: String, content_type: ContentType) -> Self {
+    pub fn new(
+        streaming: Arc<StreamingService>,
+        system: String,
+        id: String,
+        content_type: ContentType,
+    ) -> Self {
         Self {
             streaming,
             system,
@@ -114,11 +123,15 @@ impl ProviderCursor {
             return Ok(());
         }
 
-        let tracks = self.streaming.expand_collection(&self.system, self.content_type, &self.id).await?;
-        
-        let items = tracks.into_iter().map(|info| {
-            CursorItem::Track(info.into())
-        }).collect();
+        let tracks = self
+            .streaming
+            .expand_collection(&self.system, self.content_type, &self.id)
+            .await?;
+
+        let items = tracks
+            .into_iter()
+            .map(|info| CursorItem::Track(info.into()))
+            .collect();
 
         self.items = Some(items);
         Ok(())
@@ -129,7 +142,7 @@ impl ProviderCursor {
 impl CursorSource for ProviderCursor {
     async fn next_batch(&mut self, limit: usize) -> Result<Vec<CursorItem>> {
         self.ensure_loaded().await?;
-        
+
         let items = self.items.as_ref().unwrap();
         if self.index >= items.len() {
             return Ok(Vec::new());
@@ -137,7 +150,7 @@ impl CursorSource for ProviderCursor {
 
         let end = (self.index + limit).min(items.len());
         let batch = items[self.index..end].iter().cloned().collect();
-        
+
         self.index = end;
         Ok(batch)
     }
@@ -164,7 +177,13 @@ pub struct StreamingSearchCursor {
 }
 
 impl StreamingSearchCursor {
-    pub fn new(streaming: Arc<StreamingService>, system: String, query: String, content_type: ContentType, initial_items: Vec<CursorItem>) -> Self {
+    pub fn new(
+        streaming: Arc<StreamingService>,
+        system: String,
+        query: String,
+        content_type: ContentType,
+        initial_items: Vec<CursorItem>,
+    ) -> Self {
         let count = initial_items.len();
         Self {
             streaming,
@@ -184,32 +203,56 @@ impl StreamingSearchCursor {
             return Ok(());
         }
 
-        tracing::info!("Fetching next page for search: {} (offset: {})", self.query, self.offset);
-        
-        let results = self.streaming.search(&self.system, Some(self.content_type), &self.query, self.limit, self.offset).await?;
-        
+        tracing::info!(
+            "Fetching next page for search: {} (offset: {})",
+            self.query,
+            self.offset
+        );
+
+        let results = self
+            .streaming
+            .search(
+                &self.system,
+                Some(self.content_type),
+                &self.query,
+                self.limit,
+                self.offset,
+            )
+            .await?;
+
         if results.is_empty() {
             self.has_more = false;
             return Ok(());
         }
 
         let content_type = self.content_type;
-        let new_items: Vec<CursorItem> = results.into_iter().filter_map(|res| match res {
-            SearchResult::Track(info) => Some(CursorItem::Track(info.into())),
-            SearchResult::Playlist(info) => Some(CursorItem::Container(ContainerContext::ExternalPlaylist { 
-                system: self.system.clone(), 
-                id: info.id 
-            })),
-            SearchResult::Album(info) => Some(CursorItem::Container(ContainerContext::ExternalAlbum { 
-                system: self.system.clone(), 
-                id: info.id 
-            })),
-            _ => Some(CursorItem::Container(ContainerContext::SearchQuery { system: self.system.clone(), query: self.query.clone(), content_type })),
-        }).collect();
+        let new_items: Vec<CursorItem> = results
+            .into_iter()
+            .filter_map(|res| match res {
+                SearchResult::Track(info) => Some(CursorItem::Track(info.into())),
+                SearchResult::Playlist(info) => {
+                    Some(CursorItem::Container(ContainerContext::ExternalPlaylist {
+                        system: self.system.clone(),
+                        id: info.id,
+                    }))
+                }
+                SearchResult::Album(info) => {
+                    Some(CursorItem::Container(ContainerContext::ExternalAlbum {
+                        system: self.system.clone(),
+                        id: info.id,
+                    }))
+                }
+                _ => Some(CursorItem::Container(ContainerContext::SearchQuery {
+                    system: self.system.clone(),
+                    query: self.query.clone(),
+                    content_type,
+                })),
+            })
+            .collect();
 
         self.offset += new_items.len();
         self.items.extend(new_items);
-        
+
         Ok(())
     }
 }
@@ -227,7 +270,7 @@ impl CursorSource for StreamingSearchCursor {
 
         let end = (self.index + limit).min(self.items.len());
         let batch = self.items[self.index..end].iter().cloned().collect();
-        
+
         self.index = end;
         Ok(batch)
     }

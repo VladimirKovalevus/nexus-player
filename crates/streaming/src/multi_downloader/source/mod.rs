@@ -6,8 +6,8 @@ pub use streaming::{MediaSource, StreamingSourceV2};
 
 use crate::error::StreamingError;
 use crate::state::types::{BufferType, ManagerCommand};
-use tokio::sync::mpsc::UnboundedSender;
 use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedSender;
 
 pub enum Source {
     Streaming(StreamingSourceV2),
@@ -40,9 +40,7 @@ impl Source {
             BufferType::Chunked(chunked) => {
                 Source::Streaming(StreamingSourceV2::new(chunked.clone(), track_id, sender))
             }
-            BufferType::Hls(hls) => {
-                Source::Hls(HlsSource::new(hls.clone(), track_id, sender))
-            }
+            BufferType::Hls(hls) => Source::Hls(HlsSource::new(hls.clone(), track_id, sender)),
         }
     }
 }

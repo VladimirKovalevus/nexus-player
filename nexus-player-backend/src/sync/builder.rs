@@ -7,7 +7,9 @@ use crate::library::models::PlaylistItemKind;
 use crate::library::service::LibraryService;
 use crate::library::types::ArtworkSource;
 
-use super::types::{SyncFile, SyncPlaylist, SyncPlaylistItem, SyncTrack, SyncTrackSource, SyncType};
+use super::types::{
+    SyncFile, SyncPlaylist, SyncPlaylistItem, SyncTrack, SyncTrackSource, SyncType,
+};
 
 pub struct SyncBuilder<'a> {
     service: &'a LibraryService,
@@ -89,10 +91,14 @@ impl<'a> SyncBuilder<'a> {
                 })
                 .collect();
 
-            let artwork_url = playlist.metadata.artwork.as_ref().and_then(|a| match &a.source {
-                ArtworkSource::Url { url } => Some(url.clone()),
-                _ => None,
-            });
+            let artwork_url = playlist
+                .metadata
+                .artwork
+                .as_ref()
+                .and_then(|a| match &a.source {
+                    ArtworkSource::Url { url } => Some(url.clone()),
+                    _ => None,
+                });
 
             sync_playlists.push(SyncPlaylist {
                 sync_id,

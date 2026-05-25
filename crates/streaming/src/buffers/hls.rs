@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::{Cursor, Read, Write, Seek, SeekFrom};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -428,7 +428,11 @@ impl HlsBuffer {
         // Previously returning only downloaded bytes when bitrate==0 caused a mismatch:
         // total_size was ~8x too small, making seek_to_byte_approx compute a near-EOF
         // byte offset as pointing to a middle segment that isn't yet buffered.
-        let bitrate = if inner.bitrate > 0 { inner.bitrate } else { 128_000 };
+        let bitrate = if inner.bitrate > 0 {
+            inner.bitrate
+        } else {
+            128_000
+        };
         let total_bits = bitrate as f64 * total_duration;
         let total_bytes = (total_bits / 8.0) as u64;
 

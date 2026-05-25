@@ -1,12 +1,12 @@
+use crate::state::types::Waveform;
+use std::io::Cursor;
 use symphonia::core::audio::{AudioBufferRef, Signal};
-use symphonia::core::codecs::{DecoderOptions, Decoder};
+use symphonia::core::codecs::{Decoder, DecoderOptions};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader};
-use symphonia::core::io::{MediaSourceStream, MediaSource};
+use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
-use std::io::Cursor;
-use crate::state::types::Waveform;
 
 pub struct StatefulWaveformAnalyzer {
     format: Box<dyn FormatReader>,
@@ -54,10 +54,10 @@ impl StatefulWaveformAnalyzer {
     pub fn analyze_segment(&mut self, duration: f64) -> Option<Waveform> {
         let mut amplitudes = Vec::new();
         let target_end_time = self.current_time + duration;
-        
+
         // Safety break to prevent infinite loops if something goes wrong with timestamps
         let mut packets_processed = 0;
-        let max_packets_per_segment = 1000; 
+        let max_packets_per_segment = 1000;
 
         while self.current_time < target_end_time && packets_processed < max_packets_per_segment {
             let packet = match self.format.next_packet() {
@@ -73,7 +73,7 @@ impl StatefulWaveformAnalyzer {
                 Ok(decoded) => {
                     let rms = calculate_rms(&decoded);
                     amplitudes.push(rms);
-                    
+
                     // Update current time based on decoded frames
                     let frames = decoded.frames();
                     self.current_time += frames as f64 / self.sample_rate as f64;
@@ -82,17 +82,17 @@ impl StatefulWaveformAnalyzer {
                 Err(Error::DecodeError(_)) => continue,
                 Err(_) => break,
             }
-            
+
             packets_processed += 1;
         }
-        
+
         // Ensure we don't get stuck if segment was shorter or packet durations were slightly off
         if self.current_time < target_end_time && packets_processed > 0 {
-             // If we processed some data but didn't reach target time (e.g. end of segment reached in stream)
-             // we still want to progress to next segment in the next call.
-             // But we only force it if we are very close or if we suspect we hit the next segment's data.
+            // If we processed some data but didn't reach target time (e.g. end of segment reached in stream)
+            // we still want to progress to next segment in the next call.
+            // But we only force it if we are very close or if we suspect we hit the next segment's data.
         }
-        
+
         // If we didn't process anything, we might be stuck.
         if amplitudes.is_empty() {
             // We can try to advance time anyway to not block the loop in process_waveforms
@@ -102,7 +102,7 @@ impl StatefulWaveformAnalyzer {
 
         Some(Waveform {
             data: amplitudes,
-            start_time: 0.0, 
+            start_time: 0.0,
             end_time: 0.0,
             byte_start: None,
             byte_end: None,
@@ -138,7 +138,7 @@ pub fn analyze_waveform(data: &[u8]) -> Option<Waveform> {
     let mut amplitudes = Vec::new();
 
     // We only decode a limited number of packets to keep it fast
-    let max_packets = 50; 
+    let max_packets = 50;
     let mut packets_count = 0;
 
     while let Ok(packet) = format.next_packet() {
@@ -181,44 +181,66 @@ fn calculate_rms(decoded: &AudioBufferRef) -> f32 {
     match decoded {
         AudioBufferRef::F32(buf) => {
             let samples = buf.chan(0);
-            if samples.is_empty() { return 0.0; }
+            if samples.is_empty() {
+                return 0.0;
+            }
             let sum_sq: f32 = samples.iter().map(|&s| s * s).sum();
             (sum_sq / samples.len() as f32).sqrt()
         }
         AudioBufferRef::U8(buf) => {
             let samples = buf.chan(0);
-            if samples.is_empty() { return 0.0; }
-            let sum_sq: f32 = samples.iter().map(|&s| {
-                let f = (s as f32 - 128.0) / 128.0;
-                f * f
-            }).sum();
+            if samples.is_empty() {
+                return 0.0;
+            }
+            let sum_sq: f32 = samples
+                .iter()
+                .map(|&s| {
+                    let f = (s as f32 - 128.0) / 128.0;
+                    f * f
+                })
+                .sum();
             (sum_sq / samples.len() as f32).sqrt()
         }
         AudioBufferRef::U16(buf) => {
             let samples = buf.chan(0);
-            if samples.is_empty() { return 0.0; }
-            let sum_sq: f32 = samples.iter().map(|&s| {
-                let f = (s as f32 - 32768.0) / 32768.0;
-                f * f
-            }).sum();
+            if samples.is_empty() {
+                return 0.0;
+            }
+            let sum_sq: f32 = samples
+                .iter()
+                .map(|&s| {
+                    let f = (s as f32 - 32768.0) / 32768.0;
+                    f * f
+                })
+                .sum();
             (sum_sq / samples.len() as f32).sqrt()
         }
         AudioBufferRef::S8(buf) => {
             let samples = buf.chan(0);
-            if samples.is_empty() { return 0.0; }
-            let sum_sq: f32 = samples.iter().map(|&s| {
-                let f = s as f32 / 128.0;
-                f * f
-            }).sum();
+            if samples.is_empty() {
+                return 0.0;
+            }
+            let sum_sq: f32 = samples
+                .iter()
+                .map(|&s| {
+                    let f = s as f32 / 128.0;
+                    f * f
+                })
+                .sum();
             (sum_sq / samples.len() as f32).sqrt()
         }
         AudioBufferRef::S16(buf) => {
             let samples = buf.chan(0);
-            if samples.is_empty() { return 0.0; }
-            let sum_sq: f32 = samples.iter().map(|&s| {
-                let f = s as f32 / 32768.0;
-                f * f
-            }).sum();
+            if samples.is_empty() {
+                return 0.0;
+            }
+            let sum_sq: f32 = samples
+                .iter()
+                .map(|&s| {
+                    let f = s as f32 / 32768.0;
+                    f * f
+                })
+                .sum();
             (sum_sq / samples.len() as f32).sqrt()
         }
         _ => 0.0, // Other formats not implemented for brevity

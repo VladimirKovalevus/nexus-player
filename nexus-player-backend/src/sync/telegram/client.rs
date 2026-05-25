@@ -45,7 +45,10 @@ impl TelegramClient {
             .use_rustls_tls()
             .timeout(Duration::from_secs(TIMEOUT_SECS))
             .build()?;
-        Ok(Self { http, token: token.into() })
+        Ok(Self {
+            http,
+            token: token.into(),
+        })
     }
 
     fn api_url(&self, method: &str) -> String {
@@ -55,9 +58,13 @@ impl TelegramClient {
     async fn check<T: for<'de> Deserialize<'de>>(&self, resp: reqwest::Response) -> Result<T> {
         let tg: TgResponse<T> = resp.json().await?;
         if tg.ok {
-            tg.result.ok_or_else(|| anyhow!("Telegram: ok=true but result is null"))
+            tg.result
+                .ok_or_else(|| anyhow!("Telegram: ok=true but result is null"))
         } else {
-            Err(anyhow!("Telegram API error: {}", tg.description.unwrap_or_default()))
+            Err(anyhow!(
+                "Telegram API error: {}",
+                tg.description.unwrap_or_default()
+            ))
         }
     }
 
@@ -103,7 +110,10 @@ impl TelegramClient {
         if tg.ok {
             Ok(())
         } else {
-            Err(anyhow!("deleteMessage failed: {}", tg.description.unwrap_or_default()))
+            Err(anyhow!(
+                "deleteMessage failed: {}",
+                tg.description.unwrap_or_default()
+            ))
         }
     }
 
@@ -125,7 +135,10 @@ impl TelegramClient {
         if tg.ok {
             Ok(())
         } else {
-            Err(anyhow!("pinChatMessage failed: {}", tg.description.unwrap_or_default()))
+            Err(anyhow!(
+                "pinChatMessage failed: {}",
+                tg.description.unwrap_or_default()
+            ))
         }
     }
 

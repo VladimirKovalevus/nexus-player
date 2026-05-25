@@ -258,9 +258,15 @@ impl PlaybackEngine {
     }
 
     pub fn preload_local(&mut self, path: &std::path::Path) -> Result<(), AudioError> {
-        info!("[PlaybackEngine] Начало предзагрузки локального файла: {:?}", path);
+        info!(
+            "[PlaybackEngine] Начало предзагрузки локального файла: {:?}",
+            path
+        );
         let output_sample_rate = self.config.sample_rate.0;
-        info!("[PlaybackEngine] Инициализация декодера для локального файла, output_sample_rate: {}", output_sample_rate);
+        info!(
+            "[PlaybackEngine] Инициализация декодера для локального файла, output_sample_rate: {}",
+            output_sample_rate
+        );
         let decoder = AudioDecoder::new(path, output_sample_rate)?;
         info!("[PlaybackEngine] Декодер создан успешно. Сохранение в next_decoder.");
         *self.next_decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
@@ -271,7 +277,10 @@ impl PlaybackEngine {
     pub fn preload_hls(&mut self, source: HlsSource) -> Result<(), AudioError> {
         info!("[PlaybackEngine] Начало предзагрузки HLS потока");
         let output_sample_rate = self.config.sample_rate.0;
-        info!("[PlaybackEngine] Инициализация HLS декодера, output_sample_rate: {}", output_sample_rate);
+        info!(
+            "[PlaybackEngine] Инициализация HLS декодера, output_sample_rate: {}",
+            output_sample_rate
+        );
         let decoder = HlsAudioDecoder::new(source, output_sample_rate)?;
         info!("[PlaybackEngine] HLS декодер создан успешно. Сохранение в next_decoder.");
         *self.next_decoder.lock().unwrap() = Some(DecoderType::from_hls(decoder));
@@ -279,15 +288,17 @@ impl PlaybackEngine {
         Ok(())
     }
 
-    pub fn preload_audio_source(
-        &mut self,
-        source: Box<dyn MediaSource>,
-    ) -> Result<(), AudioError> {
+    pub fn preload_audio_source(&mut self, source: Box<dyn MediaSource>) -> Result<(), AudioError> {
         info!("[PlaybackEngine] Начало предзагрузки из AudioSource");
         let output_sample_rate = self.config.sample_rate.0;
-        info!("[PlaybackEngine] Инициализация декодера для AudioSource, output_sample_rate: {}", output_sample_rate);
+        info!(
+            "[PlaybackEngine] Инициализация декодера для AudioSource, output_sample_rate: {}",
+            output_sample_rate
+        );
         let decoder = AudioDecoder::from_reader(source, None, output_sample_rate)?;
-        info!("[PlaybackEngine] Декодер для AudioSource создан успешно. Сохранение в next_decoder.");
+        info!(
+            "[PlaybackEngine] Декодер для AudioSource создан успешно. Сохранение в next_decoder."
+        );
         *self.next_decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
         info!("[PlaybackEngine] Предзагрузка из AudioSource завершена.");
         Ok(())
@@ -429,7 +440,8 @@ impl PlaybackEngine {
                                         let mut next_guard = next_decoder.lock().unwrap();
                                         if let Some(next) = next_guard.take() {
                                             info!("Бесшовный переход на следующий трек");
-                                            let next_duration = next.duration().map(Duration::from_secs_f64);
+                                            let next_duration =
+                                                next.duration().map(Duration::from_secs_f64);
                                             let next_sr = next.sample_rate();
 
                                             *dec = next;
@@ -476,7 +488,7 @@ impl PlaybackEngine {
                         let to_copy = available.min(needed);
 
                         let input = &buffer[*buf_pos..*buf_pos + to_copy];
-                        
+
                         // Volume will be applied in the final ramp loop below
                         data[output_pos..output_pos + to_copy].copy_from_slice(input);
 
@@ -486,7 +498,8 @@ impl PlaybackEngine {
                         let num_frames = to_copy / channels;
                         *samples_played.lock().unwrap() += num_frames as u64;
                         let sr = *sample_rate_arc.lock().unwrap();
-                        let position_secs = *samples_played.lock().unwrap() as f64 / config.sample_rate.0 as f64;
+                        let position_secs =
+                            *samples_played.lock().unwrap() as f64 / config.sample_rate.0 as f64;
                         *current_position.lock().unwrap() = Duration::from_secs_f64(position_secs);
                     }
 
@@ -506,7 +519,10 @@ impl PlaybackEngine {
                     // Initialise fade-in when a new track has just been started.
                     if fade_in_pending_arc.swap(false, Ordering::Relaxed) {
                         fade_in_remaining = fade_in_smp.load(Ordering::Relaxed);
-                        info!("[fade] pending fired: fade_in_remaining={}", fade_in_remaining);
+                        info!(
+                            "[fade] pending fired: fade_in_remaining={}",
+                            fade_in_remaining
+                        );
                     }
 
                     let fin_total = fade_in_smp.load(Ordering::Relaxed);
@@ -660,7 +676,7 @@ impl PlaybackEngine {
 
     pub fn stop(&mut self) {
         *self.is_playing.lock().unwrap() = false;
-        
+
         self.stream = None;
         *self.decoder.lock().unwrap() = None;
         *self.next_decoder.lock().unwrap() = None;
@@ -787,7 +803,10 @@ impl PlaybackEngine {
         let sr = self.config.sample_rate.0 as f64;
         let fin = (fade_in_ms as f64 / 1000.0 * sr) as u64;
         let fout = (fade_out_ms as f64 / 1000.0 * sr) as u64;
-        info!("[fade] set_fade: in={}ms→{}smp, out={}ms→{}smp, sr={}", fade_in_ms, fin, fade_out_ms, fout, sr);
+        info!(
+            "[fade] set_fade: in={}ms→{}smp, out={}ms→{}smp, sr={}",
+            fade_in_ms, fin, fade_out_ms, fout, sr
+        );
         self.fade_in_samples.store(fin, Ordering::Relaxed);
         self.fade_out_samples.store(fout, Ordering::Relaxed);
     }

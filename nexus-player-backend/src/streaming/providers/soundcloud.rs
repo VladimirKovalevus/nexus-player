@@ -4,12 +4,12 @@ use rsoundcloud::models::track::BasicTrack;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use rsoundcloud::{MiscApi, PlaylistsApi, ResourceId, SearchApi, SoundCloudClient, TracksApi};
 use rsoundcloud::models::SearchItem;
+use rsoundcloud::{MiscApi, PlaylistsApi, ResourceId, SearchApi, SoundCloudClient, TracksApi};
 
 use crate::audio::types::MediaSource;
 use crate::library::TrackSource;
-use crate::streaming::error::{StreamResult, StreamError};
+use crate::streaming::error::{StreamError, StreamResult};
 use crate::streaming::provider::StreamProvider;
 use crate::streaming::types::{
     AlbumInfo, ContentType, PlaylistInfo, ResolveOptions, ResolvedContent, SearchResult,
@@ -57,7 +57,10 @@ impl SoundCloudProvider {
     }
 
     pub async fn set_client_id(&self, client_id: String) {
-        tracing::info!("SoundCloudProvider: updating client_id (len={})", client_id.len());
+        tracing::info!(
+            "SoundCloudProvider: updating client_id (len={})",
+            client_id.len()
+        );
         let mut client_lock = self.client.write().await;
         if let Some(c) = &mut *client_lock {
             c.set_client_id(client_id);
@@ -77,7 +80,10 @@ impl SoundCloudProvider {
     /// 401 = stale/invalid client_id, 403 = blocked; both are fixed by re-solving the challenge.
     fn is_auth_error(msg: &str) -> bool {
         let lower = msg.to_lowercase();
-        msg.contains("401") || msg.contains("403") || lower.contains("unauthorized") || lower.contains("forbidden")
+        msg.contains("401")
+            || msg.contains("403")
+            || lower.contains("unauthorized")
+            || lower.contains("forbidden")
     }
 
     fn map_error(&self, e: impl std::fmt::Display, url: String) -> StreamError {
@@ -156,7 +162,9 @@ impl StreamProvider for SoundCloudProvider {
                 title: Some(track.track.title),
                 artist: Some(track.user.username),
                 album: None,
-                duration: Some(std::time::Duration::from_millis(track.track.duration as u64)),
+                duration: Some(std::time::Duration::from_millis(
+                    track.track.duration as u64,
+                )),
                 artwork_url: track.track.artwork_url,
                 sample_rate: None,
                 channels: None,
@@ -226,7 +234,9 @@ impl StreamProvider for SoundCloudProvider {
                 let results = client
                     .search_tracks(query, collection_params)
                     .await
-                    .map_err(|e| self.map_error(e, "https://soundcloud.com/search/tracks".to_string()))?;
+                    .map_err(|e| {
+                        self.map_error(e, "https://soundcloud.com/search/tracks".to_string())
+                    })?;
 
                 let search_results: Vec<SearchResult> = results
                     .into_iter()
@@ -252,7 +262,9 @@ impl StreamProvider for SoundCloudProvider {
                 let results = client
                     .search_playlists(query, collection_params)
                     .await
-                    .map_err(|e| self.map_error(e, "https://soundcloud.com/search/playlists".to_string()))?;
+                    .map_err(|e| {
+                        self.map_error(e, "https://soundcloud.com/search/playlists".to_string())
+                    })?;
 
                 let mut search_results = Vec::new();
                 for item in results {
@@ -298,7 +310,9 @@ impl StreamProvider for SoundCloudProvider {
                 let results = client
                     .search_albums(query, collection_params)
                     .await
-                    .map_err(|e| self.map_error(e, "https://soundcloud.com/search/albums".to_string()))?;
+                    .map_err(|e| {
+                        self.map_error(e, "https://soundcloud.com/search/albums".to_string())
+                    })?;
 
                 let mut search_results = Vec::new();
                 for item in results {
@@ -383,9 +397,10 @@ impl StreamProvider for SoundCloudProvider {
         }
 
         let client = self.get_client().await?;
-        let item = client.resolve(url).await.map_err(|e| {
-            self.map_error(e, url.to_string())
-        })?;
+        let item = client
+            .resolve(url)
+            .await
+            .map_err(|e| self.map_error(e, url.to_string()))?;
 
         match item {
             SearchItem::Track(track) => Ok(SearchResult::Track(TrackInfo {
@@ -395,7 +410,9 @@ impl StreamProvider for SoundCloudProvider {
                 },
                 title: track.track.title,
                 artist: track.user.username,
-                duration: Some(std::time::Duration::from_millis(track.track.duration as u64)),
+                duration: Some(std::time::Duration::from_millis(
+                    track.track.duration as u64,
+                )),
                 thumbnail: track.track.artwork_url,
                 description: track.track.description,
             })),
@@ -412,7 +429,9 @@ impl StreamProvider for SoundCloudProvider {
                             },
                             title: t.track.title,
                             artist: t.user.username,
-                            duration: Some(std::time::Duration::from_millis(t.track.duration as u64)),
+                            duration: Some(std::time::Duration::from_millis(
+                                t.track.duration as u64,
+                            )),
                             thumbnail: t.track.artwork_url,
                             description: t.track.description,
                         }),

@@ -44,7 +44,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let manager = DownloadManager::new_default();
     let track_id = 1_u64;
-    let source = manager.add_download_task(&stream_url, track_id, None).await?;
+    let source = manager
+        .add_download_task(&stream_url, track_id, None)
+        .await?;
     source.prepare().await?;
     println!("Download started, waiting for completion...");
 

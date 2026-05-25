@@ -262,9 +262,7 @@ pub struct CreatePlaylistWithTracksRequest {
 }
 
 impl TrackDto {
-    pub fn try_to_audio_track(
-        &self,
-    ) -> Result<nexus_player_backend::audio::types::Track, String> {
+    pub fn try_to_audio_track(&self) -> Result<nexus_player_backend::audio::types::Track, String> {
         use nexus_player_backend::audio::types::{Track, TrackSource, TrackState};
 
         let src = self
@@ -539,7 +537,9 @@ impl From<nexus_player_backend::audio::types::TrackSource> for TrackSourceDto {
                 url,
                 system: "http".to_string(),
             },
-            nexus_player_backend::audio::types::TrackSource::External { id, system } => Self { url: id, system },
+            nexus_player_backend::audio::types::TrackSource::External { id, system } => {
+                Self { url: id, system }
+            }
             nexus_player_backend::audio::types::TrackSource::Cached { cache_path, .. } => Self {
                 url: cache_path.display().to_string(),
                 system: "cache".to_string(),

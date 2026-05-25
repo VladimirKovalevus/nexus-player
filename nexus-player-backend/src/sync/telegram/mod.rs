@@ -41,7 +41,11 @@ impl TelegramSync {
 
         // Delete previous sync message if we know its ID
         if let Some(old_id) = self.config.last_message_id {
-            if let Err(e) = self.client.delete_message(&self.config.chat_id, old_id).await {
+            if let Err(e) = self
+                .client
+                .delete_message(&self.config.chat_id, old_id)
+                .await
+            {
                 tracing::warn!("Could not delete old sync message {}: {}", old_id, e);
             }
         }

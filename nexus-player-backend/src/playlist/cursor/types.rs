@@ -9,15 +9,28 @@ pub enum ContainerContext {
     LocalAlbum(i64),
 
     // External Provider sources
-    ExternalPlaylist { system: String, id: String },
-    ExternalAlbum { system: String, id: String },
+    ExternalPlaylist {
+        system: String,
+        id: String,
+    },
+    ExternalAlbum {
+        system: String,
+        id: String,
+    },
 
     // Dynamic sources
-    SearchQuery { system: String, query: String, content_type: crate::streaming::types::ContentType },
+    SearchQuery {
+        system: String,
+        query: String,
+        content_type: crate::streaming::types::ContentType,
+    },
 
     // Radio: a precomputed play order. The shuffled ids live in the context itself so
     // the queue replays the exact same order when Repeat::All restarts it.
-    Radio { mode: RadioMode, track_ids: Vec<i64> },
+    Radio {
+        mode: RadioMode,
+        track_ids: Vec<i64>,
+    },
 }
 
 /// What a radio session is built from.

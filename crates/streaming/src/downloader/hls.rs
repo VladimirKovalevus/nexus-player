@@ -29,7 +29,12 @@ impl HlsDownloader {
 
         let thread = std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(Self::download_loop(url_clone, buffer_clone, rx, bandwidth_bps));
+            rt.block_on(Self::download_loop(
+                url_clone,
+                buffer_clone,
+                rx,
+                bandwidth_bps,
+            ));
         });
 
         Self {

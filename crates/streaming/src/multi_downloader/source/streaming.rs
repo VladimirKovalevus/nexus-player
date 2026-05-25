@@ -1,6 +1,6 @@
-use tokio::sync::mpsc::UnboundedSender;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::buffers::{chunked::ChunkedBuffer, Buffer};
 use crate::error::StreamingError;

@@ -167,9 +167,9 @@ impl HlsAudioDecoder {
             Ok(Some(samples)) => {
                 if let Some(ref mut resampler) = self.resampler {
                     let ratio = self.output_sample_rate as f32 / self.sample_rate as f32;
-                    let out_capacity =
-                        ((samples.len() as f32 / self.channels as f32) * ratio).ceil() as usize
-                            * self.channels;
+                    let out_capacity = ((samples.len() as f32 / self.channels as f32) * ratio)
+                        .ceil() as usize
+                        * self.channels;
                     let mut resampled = vec![0.0f32; out_capacity];
 
                     let (_consumed, produced) = resampler
@@ -204,7 +204,9 @@ impl HlsAudioDecoder {
                                 self.decoder.reset();
                                 return Ok(Some(vec![]));
                             }
-                            Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            Err(Error::IoError(e))
+                                if e.kind() == std::io::ErrorKind::WouldBlock =>
+                            {
                                 return Err(AudioError::InProgress);
                             }
                             Err(Error::DecodeError(e)) => {
@@ -276,7 +278,9 @@ impl HlsAudioDecoder {
                                 self.decoder.reset();
                                 return Ok(Some(vec![]));
                             }
-                            Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            Err(Error::IoError(e))
+                                if e.kind() == std::io::ErrorKind::WouldBlock =>
+                            {
                                 return Err(AudioError::InProgress);
                             }
                             Err(Error::DecodeError(e)) => {

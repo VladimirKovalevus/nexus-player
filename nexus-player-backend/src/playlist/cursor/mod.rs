@@ -1,15 +1,15 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
-pub mod types;
 pub mod engine;
-pub mod sources;
 pub mod resolver;
+pub mod sources;
+pub mod types;
 
-pub use types::{ContainerContext, CursorItem, RadioMode};
-pub use engine::{PlayerCursor, CursorResolver};
-pub use sources::{StaticTrackCursor, DbTrackCursor, ProviderCursor, StreamingSearchCursor};
+pub use engine::{CursorResolver, PlayerCursor};
 pub use resolver::AppCursorResolver;
+pub use sources::{DbTrackCursor, ProviderCursor, StaticTrackCursor, StreamingSearchCursor};
+pub use types::{ContainerContext, CursorItem, RadioMode};
 
 #[async_trait]
 pub trait CursorSource: Send + Sync {

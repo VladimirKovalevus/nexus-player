@@ -78,7 +78,7 @@ impl CursorQueue {
         // 3. Fetch from cursor if available
         if self.cursor.is_some() {
             if self.shuffle_enabled {
-                // If shuffle is enabled and manual queue is empty, 
+                // If shuffle is enabled and manual queue is empty,
                 // prefetch a batch so we have something to shuffle
                 let _ = self.prefetch(50).await?;
                 if !self.manual_queue.is_empty() {
@@ -355,7 +355,9 @@ impl SearchQueue {
             if index < self.shuffle_order.len() {
                 self.current_index = Some(index);
                 let real_idx = self.shuffle_order[index];
-                if let Some(SearchQueueItem::Container { play_index, .. }) = self.items.get_mut(real_idx) {
+                if let Some(SearchQueueItem::Container { play_index, .. }) =
+                    self.items.get_mut(real_idx)
+                {
                     *play_index = 0;
                 }
             }
@@ -370,7 +372,7 @@ impl SearchQueue {
 
     pub fn jump_to_with_track_index(&mut self, index: usize, track_idx: usize) {
         // Here 'index' is index in the visible list (snapshot)
-        // If shuffle is enabled, we need to handle it. 
+        // If shuffle is enabled, we need to handle it.
         // But usually snapshot() returns tracks in shuffle order if enabled.
         // Let's assume index is already the "shuffle" index if shuffle is on.
 
@@ -451,13 +453,21 @@ impl SearchQueue {
 
         // 2. Subsequent items
         let next_start = current_shuffle_idx + 1;
-        let total_len = if self.shuffle_enabled { self.shuffle_order.len() } else { self.items.len() };
+        let total_len = if self.shuffle_enabled {
+            self.shuffle_order.len()
+        } else {
+            self.items.len()
+        };
 
         for i in next_start..total_len {
             if result.len() >= limit {
                 break;
             }
-            let idx = if self.shuffle_enabled { self.shuffle_order[i] } else { i };
+            let idx = if self.shuffle_enabled {
+                self.shuffle_order[i]
+            } else {
+                i
+            };
             match &self.items[idx] {
                 SearchQueueItem::Track(track) => result.push(track.clone()),
                 SearchQueueItem::Container {
@@ -501,10 +511,18 @@ impl SearchQueue {
 
         // 2. Otherwise, check the next item in the queue
         let next_shuffle_idx = current_shuffle_idx + 1;
-        let total_len = if self.shuffle_enabled { self.shuffle_order.len() } else { self.items.len() };
+        let total_len = if self.shuffle_enabled {
+            self.shuffle_order.len()
+        } else {
+            self.items.len()
+        };
 
         if next_shuffle_idx < total_len {
-            let next_real_idx = if self.shuffle_enabled { self.shuffle_order[next_shuffle_idx] } else { next_shuffle_idx };
+            let next_real_idx = if self.shuffle_enabled {
+                self.shuffle_order[next_shuffle_idx]
+            } else {
+                next_shuffle_idx
+            };
             match &self.items[next_real_idx] {
                 SearchQueueItem::Track(track) => return Some(track.clone()),
                 SearchQueueItem::Container {
@@ -540,19 +558,27 @@ impl SearchQueue {
                     }
                     return NextResult::End;
                 }
-                
+
                 if self.shuffle_enabled && self.shuffle_order.is_empty() {
                     self.regenerate_shuffle();
                 }
 
                 self.current_index = Some(0);
-                let first_real_idx = if self.shuffle_enabled { self.shuffle_order[0] } else { 0 };
+                let first_real_idx = if self.shuffle_enabled {
+                    self.shuffle_order[0]
+                } else {
+                    0
+                };
                 return self.return_current_or_expand(first_real_idx);
             }
         };
 
         // If current is a container with tracks, try advancing within it
-        let real_idx = if self.shuffle_enabled { self.shuffle_order[current_shuffle_idx] } else { current_shuffle_idx };
+        let real_idx = if self.shuffle_enabled {
+            self.shuffle_order[current_shuffle_idx]
+        } else {
+            current_shuffle_idx
+        };
 
         if let Some(SearchQueueItem::Container {
             expanded_tracks: Some(tracks),
@@ -576,7 +602,11 @@ impl SearchQueue {
 
         // Move to next item
         let next_shuffle_idx = current_shuffle_idx + 1;
-        let total_len = if self.shuffle_enabled { self.shuffle_order.len() } else { self.items.len() };
+        let total_len = if self.shuffle_enabled {
+            self.shuffle_order.len()
+        } else {
+            self.items.len()
+        };
 
         if next_shuffle_idx >= total_len {
             if self.has_more_pages {
@@ -589,10 +619,16 @@ impl SearchQueue {
                     self.regenerate_shuffle();
                 }
                 self.current_index = Some(0);
-                let first_real_idx = if self.shuffle_enabled { self.shuffle_order[0] } else { 0 };
-                
+                let first_real_idx = if self.shuffle_enabled {
+                    self.shuffle_order[0]
+                } else {
+                    0
+                };
+
                 // Ensure that if the first item is a container, it starts from the beginning
-                if let Some(SearchQueueItem::Container { play_index, .. }) = self.items.get_mut(first_real_idx) {
+                if let Some(SearchQueueItem::Container { play_index, .. }) =
+                    self.items.get_mut(first_real_idx)
+                {
                     *play_index = 0;
                 }
                 return self.return_current_or_expand(first_real_idx);
@@ -601,10 +637,16 @@ impl SearchQueue {
         }
 
         self.current_index = Some(next_shuffle_idx);
-        let next_real_idx = if self.shuffle_enabled { self.shuffle_order[next_shuffle_idx] } else { next_shuffle_idx };
+        let next_real_idx = if self.shuffle_enabled {
+            self.shuffle_order[next_shuffle_idx]
+        } else {
+            next_shuffle_idx
+        };
 
         // Ensure that if the next item is a container, it starts from the beginning
-        if let Some(SearchQueueItem::Container { play_index, .. }) = self.items.get_mut(next_real_idx) {
+        if let Some(SearchQueueItem::Container { play_index, .. }) =
+            self.items.get_mut(next_real_idx)
+        {
             *play_index = 0;
         }
 
@@ -624,7 +666,11 @@ impl SearchQueue {
             None => return NextResult::End,
         };
 
-        let real_idx = if self.shuffle_enabled { self.shuffle_order[current_shuffle_idx] } else { current_shuffle_idx };
+        let real_idx = if self.shuffle_enabled {
+            self.shuffle_order[current_shuffle_idx]
+        } else {
+            current_shuffle_idx
+        };
 
         // If current is a container with tracks, try going back within it
         if let Some(SearchQueueItem::Container {
@@ -650,9 +696,17 @@ impl SearchQueue {
         if current_shuffle_idx == 0 {
             // Handle Repeat All
             if self.repeat_mode == RepeatMode::All && !self.items.is_empty() {
-                let last_shuffle_idx = (if self.shuffle_enabled { self.shuffle_order.len() } else { self.items.len() }) - 1;
+                let last_shuffle_idx = (if self.shuffle_enabled {
+                    self.shuffle_order.len()
+                } else {
+                    self.items.len()
+                }) - 1;
                 self.current_index = Some(last_shuffle_idx);
-                let last_real_idx = if self.shuffle_enabled { self.shuffle_order[last_shuffle_idx] } else { last_shuffle_idx };
+                let last_real_idx = if self.shuffle_enabled {
+                    self.shuffle_order[last_shuffle_idx]
+                } else {
+                    last_shuffle_idx
+                };
 
                 // If the last item is a container, land on its last track
                 if let Some(SearchQueueItem::Container {
@@ -675,7 +729,11 @@ impl SearchQueue {
 
         let prev_shuffle_idx = current_shuffle_idx - 1;
         self.current_index = Some(prev_shuffle_idx);
-        let prev_real_idx = if self.shuffle_enabled { self.shuffle_order[prev_shuffle_idx] } else { prev_shuffle_idx };
+        let prev_real_idx = if self.shuffle_enabled {
+            self.shuffle_order[prev_shuffle_idx]
+        } else {
+            prev_shuffle_idx
+        };
 
         // If the previous item is a container, we usually want its LAST track when going backwards
         if let Some(SearchQueueItem::Container {
@@ -687,7 +745,7 @@ impl SearchQueue {
             if let Some(tracks) = expanded_tracks {
                 *play_index = tracks.len().saturating_sub(1);
             } else {
-                *play_index = 0; 
+                *play_index = 0;
             }
         }
 
@@ -742,11 +800,15 @@ impl SearchQueue {
     }
 
     pub fn snapshot(&self) -> (Vec<QueueEntry>, Option<CurrentPosition>) {
-        let items_to_show: Vec<&SearchQueueItem> = if self.shuffle_enabled && !self.shuffle_order.is_empty() {
-            self.shuffle_order.iter().map(|&idx| &self.items[idx]).collect()
-        } else {
-            self.items.iter().collect()
-        };
+        let items_to_show: Vec<&SearchQueueItem> =
+            if self.shuffle_enabled && !self.shuffle_order.is_empty() {
+                self.shuffle_order
+                    .iter()
+                    .map(|&idx| &self.items[idx])
+                    .collect()
+            } else {
+                self.items.iter().collect()
+            };
 
         let entries: Vec<QueueEntry> = items_to_show
             .iter()
@@ -1444,7 +1506,10 @@ mod search_queue_tests {
 
     #[test]
     fn jump_to_with_track_index_positions_within_container() {
-        let mut sq = queue_with(vec![container_item("c", Some(vec![track(10), track(20), track(30)]))]);
+        let mut sq = queue_with(vec![container_item(
+            "c",
+            Some(vec![track(10), track(20), track(30)]),
+        )]);
         sq.jump_to_with_track_index(0, 2);
         assert_eq!(sq.current_track().unwrap().id, 30);
     }
@@ -1537,7 +1602,10 @@ mod search_queue_tests {
 
     #[test]
     fn peek_next_inside_container_returns_next_internal_track() {
-        let mut sq = queue_with(vec![container_item("c", Some(vec![track(1), track(2), track(3)]))]);
+        let mut sq = queue_with(vec![container_item(
+            "c",
+            Some(vec![track(1), track(2), track(3)]),
+        )]);
         sq.jump_to(0);
         // play_index=0, next within container is track(2)
         assert_eq!(sq.peek_next().unwrap().id, 2);
@@ -1616,7 +1684,10 @@ mod search_queue_tests {
 
     #[test]
     fn next_on_expanded_container_returns_first_track() {
-        let mut sq = queue_with(vec![track_item(1), container_item("c", Some(vec![track(10), track(20)]))]);
+        let mut sq = queue_with(vec![
+            track_item(1),
+            container_item("c", Some(vec![track(10), track(20)])),
+        ]);
         sq.jump_to(0);
         let result = sq.next();
         assert!(matches!(result, NextResult::Track(t) if t.id == 10));
@@ -1624,7 +1695,10 @@ mod search_queue_tests {
 
     #[test]
     fn next_advances_within_container() {
-        let mut sq = queue_with(vec![container_item("c", Some(vec![track(1), track(2), track(3)]))]);
+        let mut sq = queue_with(vec![container_item(
+            "c",
+            Some(vec![track(1), track(2), track(3)]),
+        )]);
         sq.jump_to(0);
         let r1 = sq.next();
         let r2 = sq.next();
@@ -1684,7 +1758,10 @@ mod search_queue_tests {
 
     #[test]
     fn previous_goes_back_within_container() {
-        let mut sq = queue_with(vec![container_item("c", Some(vec![track(1), track(2), track(3)]))]);
+        let mut sq = queue_with(vec![container_item(
+            "c",
+            Some(vec![track(1), track(2), track(3)]),
+        )]);
         sq.jump_to_with_track_index(0, 2);
         let r1 = sq.previous();
         let r2 = sq.previous();
@@ -1809,7 +1886,10 @@ mod search_queue_tests {
 
     #[test]
     fn snapshot_position_reflects_play_index_within_container() {
-        let mut sq = queue_with(vec![container_item("c", Some(vec![track(1), track(2), track(3)]))]);
+        let mut sq = queue_with(vec![container_item(
+            "c",
+            Some(vec![track(1), track(2), track(3)]),
+        )]);
         sq.jump_to_with_track_index(0, 2);
         let (_, pos) = sq.snapshot();
         let pos = pos.unwrap();
@@ -1821,7 +1901,10 @@ mod search_queue_tests {
     fn snapshot_container_exposes_expanded_tracks() {
         let sq = queue_with(vec![container_item("c", Some(vec![track(10), track(20)]))]);
         let (entries, _) = sq.snapshot();
-        if let QueueEntry::Container { tracks, play_index, .. } = &entries[0] {
+        if let QueueEntry::Container {
+            tracks, play_index, ..
+        } = &entries[0]
+        {
             assert!(tracks.is_some());
             assert_eq!(tracks.as_ref().unwrap().len(), 2);
             assert_eq!(*play_index, 0);
@@ -1843,17 +1926,24 @@ mod search_queue_tests {
         let mut sq = queue_with(vec![track_item(1), track_item(2), track_item(3)]);
         sq.jump_to(0);
         let upcoming = sq.peek_upcoming_tracks(9);
-        assert_eq!(upcoming.iter().map(|t| t.id).collect::<Vec<_>>(), vec![2, 3]);
+        assert_eq!(
+            upcoming.iter().map(|t| t.id).collect::<Vec<_>>(),
+            vec![2, 3]
+        );
     }
 
     #[test]
     fn peek_upcoming_tracks_returns_remaining_tracks_in_current_container() {
-        let mut sq = queue_with(vec![
-            container_item("c", Some(vec![track(10), track(20), track(30)])),
-        ]);
+        let mut sq = queue_with(vec![container_item(
+            "c",
+            Some(vec![track(10), track(20), track(30)]),
+        )]);
         sq.jump_to(0); // play_index=0, current=track(10)
         let upcoming = sq.peek_upcoming_tracks(9);
-        assert_eq!(upcoming.iter().map(|t| t.id).collect::<Vec<_>>(), vec![20, 30]);
+        assert_eq!(
+            upcoming.iter().map(|t| t.id).collect::<Vec<_>>(),
+            vec![20, 30]
+        );
     }
 
     #[test]
@@ -1864,7 +1954,10 @@ mod search_queue_tests {
         ]);
         sq.jump_to(0); // play_index=0
         let upcoming = sq.peek_upcoming_tracks(9);
-        assert_eq!(upcoming.iter().map(|t| t.id).collect::<Vec<_>>(), vec![2, 3, 99]);
+        assert_eq!(
+            upcoming.iter().map(|t| t.id).collect::<Vec<_>>(),
+            vec![2, 3, 99]
+        );
     }
 
     #[test]
@@ -1876,7 +1969,10 @@ mod search_queue_tests {
         ]);
         sq.jump_to(0);
         let upcoming = sq.peek_upcoming_tracks(9);
-        assert_eq!(upcoming.iter().map(|t| t.id).collect::<Vec<_>>(), vec![10, 20, 99]);
+        assert_eq!(
+            upcoming.iter().map(|t| t.id).collect::<Vec<_>>(),
+            vec![10, 20, 99]
+        );
     }
 
     #[test]
@@ -1919,9 +2015,10 @@ mod search_queue_tests {
 
     #[test]
     fn peek_upcoming_tracks_at_mid_container_excludes_past_tracks() {
-        let mut sq = queue_with(vec![
-            container_item("c", Some(vec![track(10), track(20), track(30)])),
-        ]);
+        let mut sq = queue_with(vec![container_item(
+            "c",
+            Some(vec![track(10), track(20), track(30)]),
+        )]);
         sq.jump_to_with_track_index(0, 1); // current=track(20)
         let upcoming = sq.peek_upcoming_tracks(9);
         assert_eq!(upcoming.iter().map(|t| t.id).collect::<Vec<_>>(), vec![30]);

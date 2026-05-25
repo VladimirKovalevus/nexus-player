@@ -166,9 +166,7 @@ impl LibraryService {
                         .artist
                         .as_deref()
                         .map(str::trim)
-                        .map(|artist| {
-                            artist.is_empty() || artist.eq_ignore_ascii_case("unknown")
-                        })
+                        .map(|artist| artist.is_empty() || artist.eq_ignore_ascii_case("unknown"))
                         .unwrap_or(true);
                     if unknown_title && unknown_artist {
                         if let Some(file_name) = path.file_stem().and_then(|name| name.to_str()) {
@@ -194,8 +192,8 @@ impl LibraryService {
                 return;
             }
         };
-        let unknown_title = parsed.title.trim().is_empty()
-            || parsed.title.trim().eq_ignore_ascii_case("unknown");
+        let unknown_title =
+            parsed.title.trim().is_empty() || parsed.title.trim().eq_ignore_ascii_case("unknown");
         let unknown_artist = parsed
             .artist
             .as_deref()

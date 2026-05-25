@@ -278,9 +278,15 @@ mod tests {
         // Budget for two of the four files.
         store.prune(2100).await.unwrap();
 
-        assert!(store.path_if_present(&keys[0], ImageVariant::Thumb).is_none());
-        assert!(store.path_if_present(&keys[1], ImageVariant::Thumb).is_none());
-        assert!(store.path_if_present(&keys[3], ImageVariant::Thumb).is_some());
+        assert!(store
+            .path_if_present(&keys[0], ImageVariant::Thumb)
+            .is_none());
+        assert!(store
+            .path_if_present(&keys[1], ImageVariant::Thumb)
+            .is_none());
+        assert!(store
+            .path_if_present(&keys[3], ImageVariant::Thumb)
+            .is_some());
     }
 
     #[tokio::test]

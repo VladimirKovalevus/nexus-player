@@ -6,7 +6,7 @@ use chrono::Utc;
 use crate::library::models::{Metadata, Playlist, Track};
 use crate::library::service::LibraryService;
 use crate::library::types::{
-    AudioInfo, Artwork, ArtworkId, ArtworkSource, CacheStatus, CodecFormat, PlaylistId, TrackId,
+    Artwork, ArtworkId, ArtworkSource, AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId,
 };
 
 use super::types::{SyncFile, SyncPlaylistItem, SyncTrack, SyncType};

@@ -1,10 +1,10 @@
 use anyhow::Result;
-use std::sync::Arc;
-use std::collections::VecDeque;
 use async_trait::async_trait;
+use std::collections::VecDeque;
+use std::sync::Arc;
 
+use super::{ContainerContext, CursorItem, CursorSource};
 use crate::audio::types::Track;
-use super::{CursorSource, CursorItem, ContainerContext};
 
 /// Trait for resolving a context into a concrete source.
 /// This will be implemented by a factory that has access to Library/Streaming services.
@@ -31,7 +31,10 @@ impl PlayerCursor {
     }
 
     /// Helper to create a cursor starting from a context.
-    pub async fn from_context(context: ContainerContext, resolver: Arc<dyn CursorResolver>) -> Result<Self> {
+    pub async fn from_context(
+        context: ContainerContext,
+        resolver: Arc<dyn CursorResolver>,
+    ) -> Result<Self> {
         let root_source = resolver.resolve(context).await?;
         Ok(Self::new(root_source, resolver))
     }
@@ -60,7 +63,7 @@ impl PlayerCursor {
 
             // 3. Fetch next batch from source
             let mut batch = active_cursor.next_batch(1).await?;
-            
+
             if batch.is_empty() {
                 // 4. EOF for current cursor: Pop it and continue with the previous one
                 self.stack.pop();

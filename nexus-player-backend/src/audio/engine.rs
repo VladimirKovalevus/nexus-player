@@ -34,7 +34,8 @@ impl AudioEngine {
 
         let state = Arc::new(RwLock::new(AudioState::default()));
 
-        let audio_thread = Self::spawn_audio_thread(command_rx, event_tx.clone(), Arc::clone(&state))?;
+        let audio_thread =
+            Self::spawn_audio_thread(command_rx, event_tx.clone(), Arc::clone(&state))?;
 
         Ok(Self {
             command_tx,
@@ -107,7 +108,10 @@ impl AudioEngine {
     }
 
     pub fn set_fade(&self, fade_in_ms: u32, fade_out_ms: u32) {
-        let _ = self.command_tx.send(AudioCommand::SetFade { fade_in_ms, fade_out_ms });
+        let _ = self.command_tx.send(AudioCommand::SetFade {
+            fade_in_ms,
+            fade_out_ms,
+        });
     }
 
     pub fn set_eq(&self, settings: EqSettings) {
@@ -629,8 +633,14 @@ impl AudioEngine {
                         playback.set_eq(settings);
                     }
 
-                    AudioCommand::SetFade { fade_in_ms, fade_out_ms } => {
-                        info!("Обновление настроек fade: in={}ms, out={}ms", fade_in_ms, fade_out_ms);
+                    AudioCommand::SetFade {
+                        fade_in_ms,
+                        fade_out_ms,
+                    } => {
+                        info!(
+                            "Обновление настроек fade: in={}ms, out={}ms",
+                            fade_in_ms, fade_out_ms
+                        );
                         playback.set_fade(fade_in_ms, fade_out_ms);
                     }
 

@@ -10,9 +10,9 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::collections::HashSet;
 
+use crate::library::models::PlaylistItemKind;
 use crate::library::types::PlaylistId;
 use crate::library::LibraryService;
-use crate::library::models::PlaylistItemKind;
 use crate::playlist::cursor::{AppCursorResolver, RadioMode};
 
 /// Builds the frozen radio order for `mode`. Returns raw track ids in play order,

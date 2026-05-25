@@ -1,7 +1,7 @@
-use tokio::sync::mpsc::UnboundedSender;
 use std::io::{self, SeekFrom};
 use std::path::Path;
 use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::buffers::hls::HlsBuffer;
 use crate::error::StreamingError;
@@ -19,7 +19,11 @@ pub struct HlsSource {
 }
 
 impl HlsSource {
-    pub fn new(buffer: Arc<HlsBuffer>, track_id: u64, sender: Arc<tokio::sync::mpsc::UnboundedSender<ManagerCommand>>) -> Self {
+    pub fn new(
+        buffer: Arc<HlsBuffer>,
+        track_id: u64,
+        sender: Arc<tokio::sync::mpsc::UnboundedSender<ManagerCommand>>,
+    ) -> Self {
         Self {
             position_ms: 0,
             buffer,
