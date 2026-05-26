@@ -2,40 +2,42 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum StreamError {
-    #[error("Не найден подходящий провайдер для источника")]
+    #[error("No suitable provider found for the source")]
     NoProviderFound,
 
-    #[error("Неподдерживаемый источник: {0}")]
+    #[error("Unsupported source: {0}")]
     InvalidSource(String),
 
-    #[error("Stream недоступен: {0}")]
+    #[error("Stream unavailable: {0}")]
     NoStreamAvailable(String),
 
-    #[error("HTTP ошибка: {0}")]
+    #[error("HTTP error: {0}")]
     HttpError(#[from] reqwest::Error),
 
-    #[error("IO ошибка: {0}")]
+    #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 
-    #[error("Функция не поддерживается")]
+    #[error("Feature not supported")]
     NotSupported,
 
-    #[error("Ошибка парсинга метаданных: {0}")]
+    #[error("Metadata parsing error: {0}")]
     MetadataError(String),
 
-    #[error("Ошибка аутентификации: {0}")]
+    #[error("Authentication error: {0}")]
     AuthenticationError(String),
 
-    #[error("Превышен таймаут запроса")]
+    #[error("Request timed out")]
     Timeout,
 
-    #[error("Трек недоступен: {0}")]
+    #[error("Track unavailable: {0}")]
     Unavailable(String),
 
+    // Stays in Russian: the frontend CHALLENGE_RE (providerAuth.ts) parses this exact text.
+    // Change it together with that regex in the frontend phase.
     #[error("Требуется прохождение челленджа для {provider}: {url}")]
     ChallengeRequired { provider: String, url: String },
 
-    #[error("Ошибка streaming: {0}")]
+    #[error("Streaming error: {0}")]
     Other(String),
 }
 

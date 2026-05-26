@@ -31,7 +31,7 @@ pub struct HlsAudioDecoder {
 
 impl HlsAudioDecoder {
     pub fn new(source: HlsSource, output_sample_rate: u32) -> Result<Self, AudioError> {
-        info!("Создание HLS декодера");
+        info!("Creating HLS decoder");
 
         let durations = source.durations();
         let segment_count = durations.len();
@@ -116,7 +116,7 @@ impl HlsAudioDecoder {
         };
 
         info!(
-            "HLS декодер создан (continuous={}): segments={}, sample_rate={}, channels={}, duration={:.2}s",
+            "HLS decoder created (continuous={}): segments={}, sample_rate={}, channels={}, duration={:.2}s",
             is_continuous, segment_count, sample_rate, channels, total_duration
         );
 
@@ -510,7 +510,7 @@ impl HlsAudioDecoder {
         self.accumulated_duration += current_duration;
         self.current_segment_index = next_index;
 
-        info!("Переключение на сегмент {}", self.current_segment_index);
+        info!("Switching to segment {}", self.current_segment_index);
 
         let prewarm_idx = next_index + 1;
         if prewarm_idx < self.format_readers.len() {

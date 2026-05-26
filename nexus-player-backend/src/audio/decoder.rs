@@ -26,17 +26,17 @@ pub struct AudioDecoder {
 
 impl AudioDecoder {
     pub fn new(path: &std::path::Path, output_sample_rate: u32) -> Result<Self, AudioError> {
-        info!("Создание декодера для файла: {:?}", path);
+        info!("Creating decoder for file: {:?}", path);
 
         if !path.exists() {
             return Err(AudioError::DecodingError(format!(
-                "Файл не найден: {:?}",
+                "File not found: {:?}",
                 path
             )));
         }
 
         let file = std::fs::File::open(path)
-            .map_err(|e| AudioError::DecodingError(format!("Не удалось открыть файл: {}", e)))?;
+            .map_err(|e| AudioError::DecodingError(format!("Failed to open file: {}", e)))?;
 
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
 
@@ -52,9 +52,7 @@ impl AudioDecoder {
 
         let probed = symphonia::default::get_probe()
             .format(&hint, mss, &format_opts, &metadata_opts)
-            .map_err(|e| {
-                AudioError::DecodingError(format!("Не удалось определить формат: {}", e))
-            })?;
+            .map_err(|e| AudioError::DecodingError(format!("Failed to detect format: {}", e)))?;
 
         let format_reader = probed.format;
 
@@ -62,7 +60,7 @@ impl AudioDecoder {
             .tracks()
             .iter()
             .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
-            .ok_or_else(|| AudioError::DecodingError("Не найден аудио трек".to_string()))?;
+            .ok_or_else(|| AudioError::DecodingError("No audio track found".to_string()))?;
 
         let track_id = track.id;
 
@@ -72,13 +70,13 @@ impl AudioDecoder {
         let total_frames = codec_params.n_frames;
 
         info!(
-            "Трек найден: sample_rate={}, channels={}, frames={:?}",
+            "Track found: sample_rate={}, channels={}, frames={:?}",
             sample_rate, channels, total_frames
         );
 
         let decoder = symphonia::default::get_codecs()
             .make(codec_params, &DecoderOptions::default())
-            .map_err(|e| AudioError::DecodingError(format!("Не удалось создать декодер: {}", e)))?;
+            .map_err(|e| AudioError::DecodingError(format!("Failed to create decoder: {}", e)))?;
 
         let resampler = if sample_rate != output_sample_rate {
             Some(ResamplerFir::new(
@@ -122,7 +120,7 @@ impl AudioDecoder {
         let probed = symphonia::default::get_probe()
             .format(&hint, mss, &format_opts, &metadata_opts)
             .map_err(|e| {
-                AudioError::DecodingError(format!("Не удалось определить формат потока: {}", e))
+                AudioError::DecodingError(format!("Failed to detect stream format: {}", e))
             })?;
 
         let format_reader = probed.format;
@@ -132,7 +130,7 @@ impl AudioDecoder {
             .iter()
             .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
             .ok_or_else(|| {
-                AudioError::DecodingError("Не найден аудио трек в потоке".to_string())
+                AudioError::DecodingError("No audio track found in the stream".to_string())
             })?;
 
         let track_id = track.id;
@@ -143,13 +141,13 @@ impl AudioDecoder {
         let total_frames = codec_params.n_frames;
 
         info!(
-            "Chunked streaming трек готов: sample_rate={}, channels={}, frames={:?}, codec={:?}",
+            "Chunked streaming track ready: sample_rate={}, channels={}, frames={:?}, codec={:?}",
             sample_rate, channels, total_frames, codec_params.codec
         );
 
         let decoder = symphonia::default::get_codecs()
             .make(codec_params, &DecoderOptions::default())
-            .map_err(|e| AudioError::DecodingError(format!("Не удалось создать декодер: {}", e)))?;
+            .map_err(|e| AudioError::DecodingError(format!("Failed to create decoder: {}", e)))?;
 
         let resampler = if sample_rate != output_sample_rate {
             Some(ResamplerFir::new(
@@ -196,7 +194,7 @@ impl AudioDecoder {
     }
 
     pub fn seek(&mut self, time_secs: f64) -> Result<u64, AudioError> {
-        debug!("Перемотка на {:.2} сек", time_secs);
+        debug!("Seeking to {:.2} s", time_secs);
 
         let ts = Time::from(time_secs);
 
@@ -220,13 +218,13 @@ impl AudioDecoder {
                         resampler::Attenuation::Db120,
                     ));
                 }
-                info!("Перемотка выполнена на позицию: {:?}", seeked_to.actual_ts);
+                info!("Seek completed at position: {:?}", seeked_to.actual_ts);
                 Ok(seeked_to.actual_ts)
             }
             Err(symphonia::core::errors::Error::IoError(e))
                 if e.kind() == std::io::ErrorKind::WouldBlock =>
             {
-                // Даже если WouldBlock, сбрасываем декодер, так как позиция в стриме изменится
+                // Even on WouldBlock, reset the decoder because the stream position will change
                 self.decoder.reset();
                 Err(AudioError::InProgress)
             }
@@ -304,7 +302,7 @@ impl AudioDecoder {
                 }
                 Err(e) => {
                     return Err(AudioError::DecodingError(format!(
-                        "Ошибка чтения пакета: {}",
+                        "Packet read error: {}",
                         e
                     )));
                 }
@@ -338,11 +336,11 @@ impl AudioDecoder {
                 Ok(Some(vec![]))
             }
             Err(Error::DecodeError(e)) => {
-                warn!("Ошибка декодирования: {}", e);
+                warn!("Decoding error: {}", e);
                 Ok(Some(vec![]))
             }
             Err(e) => Err(AudioError::DecodingError(format!(
-                "Критическая ошибка декодирования: {}",
+                "Fatal decoding error: {}",
                 e
             ))),
         }

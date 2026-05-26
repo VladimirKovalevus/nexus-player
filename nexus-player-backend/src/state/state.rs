@@ -1926,7 +1926,7 @@ impl AppState {
     pub async fn start_radio(&self, mode: RadioMode) -> Result<()> {
         let track_ids = radio::build_radio_order(&self.library, mode).await?;
         if track_ids.is_empty() {
-            anyhow::bail!("Нет доступных треков для радио");
+            anyhow::bail!("No tracks available for radio");
         }
         tracing::info!("Starting radio {:?} with {} tracks", mode, track_ids.len());
 

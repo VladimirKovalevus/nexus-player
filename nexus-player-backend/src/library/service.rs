@@ -805,7 +805,7 @@ mod tests {
         let awkward = [
             "https://f4.bcbits.com/img/a123_0.jpg?a=1&b=2",
             "https://example.com/cover with spaces.jpg",
-            "https://example.com/путь/обложка.jpg",
+            "https://example.com/café/über/歌.jpg",
         ];
         for url in awkward {
             service.ensure_artwork_url(url).await.unwrap();

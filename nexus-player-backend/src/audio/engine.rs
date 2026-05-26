@@ -27,7 +27,7 @@ pub struct AudioEngine {
 
 impl AudioEngine {
     pub fn new() -> Result<Self, AudioError> {
-        info!("Инициализация аудио движка");
+        info!("Initializing audio engine");
 
         let (command_tx, command_rx) = crossbeam::channel::bounded(COMMAND_BUFFER_SIZE);
         let (event_tx, event_rx) = crossbeam::channel::bounded(EVENT_BUFFER_SIZE);
@@ -47,17 +47,17 @@ impl AudioEngine {
     }
 
     pub fn play(&self, track: Track) {
-        info!("Команда: воспроизвести трек {}", track.id);
+        info!("Command: play track {}", track.id);
         let _ = self.command_tx.send(AudioCommand::Play(track));
     }
     pub fn play_source(&self, track: Track, source: Box<dyn MediaSource>) {
-        info!("Команда: воспроизвести трек ");
+        info!("Command: play track ");
         let _ = self
             .command_tx
             .send(AudioCommand::PlaySource { track, source });
     }
     pub fn play_hls(&self, track: Track, source: HlsSource) {
-        info!("Команда: воспроизвести трек ");
+        info!("Command: play track ");
         let _ = self
             .command_tx
             .send(AudioCommand::PlayHLS { track, source });
@@ -84,22 +84,22 @@ impl AudioEngine {
     }
 
     pub fn pause(&self) {
-        info!("Команда: пауза");
+        info!("Command: pause");
         let _ = self.command_tx.send(AudioCommand::Pause);
     }
 
     pub fn resume(&self) {
-        info!("Команда: возобновить");
+        info!("Command: resume");
         let _ = self.command_tx.send(AudioCommand::Resume);
     }
 
     pub fn stop(&self) {
-        info!("Команда: остановить");
+        info!("Command: stop");
         let _ = self.command_tx.send(AudioCommand::Stop);
     }
 
     pub fn seek(&self, position: Duration) {
-        info!("Команда: перемотка на {:?}", position);
+        info!("Command: seek to {:?}", position);
         let _ = self.command_tx.send(AudioCommand::Seek(position));
     }
 
@@ -149,12 +149,12 @@ impl AudioEngine {
 
         let handle = builder
             .spawn(move || {
-                info!("Аудио поток запущен");
+                info!("Audio thread started");
                 Self::audio_thread_loop(command_rx, event_tx, state);
-                info!("Аудио поток завершен");
+                info!("Audio thread finished");
             })
             .map_err(|e| {
-                AudioError::StreamBuildError(format!("Не удалось создать аудио поток: {}", e))
+                AudioError::StreamBuildError(format!("Failed to create audio stream: {}", e))
             })?;
 
         Ok(handle)
@@ -168,7 +168,7 @@ impl AudioEngine {
         let mut playback = match PlaybackEngine::new() {
             Ok(p) => p,
             Err(e) => {
-                warn!("Не удалось создать playback engine: {}", e);
+                warn!("Failed to create playback engine: {}", e);
                 return;
             }
         };
@@ -179,15 +179,15 @@ impl AudioEngine {
         loop {
             if playback.needs_recreation() {
                 if let Err(e) = playback.recreate_stream() {
-                    warn!("Не удалось автоматически пересоздать аудио стрим: {}", e);
+                    warn!("Failed to automatically recreate audio stream: {}", e);
                     let _ = event_tx.send(AudioEvent::Error {
-                        message: format!("Ошибка аудио устройства: {}", e),
+                        message: format!("Audio device error: {}", e),
                     });
                 }
             }
 
             if playback.track_switched() {
-                info!("Детектировано бесшовное переключение трека в аудио-потоке");
+                info!("Detected gapless track switch in the audio stream");
                 let mut s = state.write().unwrap();
                 let next_track = s.next_track.take();
                 if let Some(track) = next_track {
@@ -224,7 +224,7 @@ impl AudioEngine {
                                 .as_ref()
                                 .map(|t| t.id)
                                 .unwrap_or(0);
-                            info!("Порог предзагрузки достигнут (осталось 10с), отправка запроса");
+                            info!("Preload threshold reached (10s left), sending request");
                             let _ =
                                 event_tx.send(AudioEvent::PreloadNextTrack { current_track_id });
                         }
@@ -302,7 +302,7 @@ impl AudioEngine {
                             // the stream early.
                             let has_next = state.read().unwrap().next_track.is_some();
                             if !has_next {
-                                info!("Трек завершен");
+                                info!("Track finished");
                                 let _ = event_tx.send(AudioEvent::TrackFinished);
                                 state.write().unwrap().playback_state = PlaybackState::Stopped;
                                 playback.stop();
@@ -315,38 +315,38 @@ impl AudioEngine {
             match command_rx.recv_timeout(Duration::from_millis(10)) {
                 Ok(command) => match command {
                     AudioCommand::Preload(track) => {
-                        info!("Команда Preload для трека {}", track.id);
+                        info!("Preload command for track {}", track.id);
                         match track.source {
                             TrackSource::Local(ref p) => {
                                 if let Err(e) = playback.preload_local(p) {
-                                    warn!("Ошибка предзагрузки: {}", e);
+                                    warn!("Preload error: {}", e);
                                 } else {
                                     state.write().unwrap().next_track = Some(track);
                                 }
                             }
                             _ => {
-                                warn!("Предзагрузка данного типа источника пока не поддерживается")
+                                warn!("Preloading this source type is not supported yet")
                             }
                         }
                     }
                     AudioCommand::PreloadHLS { track, source } => {
-                        info!("Команда PreloadHLS для трека {}", track.id);
+                        info!("PreloadHLS command for track {}", track.id);
                         if let Err(e) = playback.preload_hls(source) {
-                            warn!("Ошибка предзагрузки HLS: {}", e);
+                            warn!("HLS preload error: {}", e);
                         } else {
                             state.write().unwrap().next_track = Some(track);
                         }
                     }
                     AudioCommand::PreloadSource { track, source } => {
-                        info!("Команда PreloadSource для трека {}", track.id);
+                        info!("PreloadSource command for track {}", track.id);
                         if let Err(e) = playback.preload_audio_source(source) {
-                            warn!("Ошибка предзагрузки Source: {}", e);
+                            warn!("Source preload error: {}", e);
                         } else {
                             state.write().unwrap().next_track = Some(track);
                         }
                     }
                     AudioCommand::PlayHLS { track, source } => {
-                        info!("Команда PlayHLS");
+                        info!("PlayHLS command");
                         preload_triggered = false;
 
                         let use_preloaded = {
@@ -355,7 +355,7 @@ impl AudioEngine {
                         };
 
                         let result = if use_preloaded {
-                            info!("Используем предзагруженный HLS трек {}", track.id);
+                            info!("Using preloaded HLS track {}", track.id);
                             let ok = playback.use_preloaded();
                             state.write().unwrap().next_track = None;
                             ok
@@ -373,7 +373,7 @@ impl AudioEngine {
                                 track: track.clone(),
                             });
                             playback.stop();
-                            info!("Начало подготовки HLS для трека {}", track.id);
+                            info!("Preparing HLS for track {}", track.id);
                             playback.play_hls(source.clone())
                         };
 
@@ -400,19 +400,19 @@ impl AudioEngine {
                                 });
                             }
                             Err(e) => {
-                                warn!("Ошибка HLS воспроизведения: {}", e);
+                                warn!("HLS playback error: {}", e);
                                 {
                                     let mut s = state.write().unwrap();
                                     s.playback_state = PlaybackState::Stopped;
                                 }
                                 let _ = event_tx.send(AudioEvent::Error {
-                                    message: format!("Ошибка HLS воспроизведения: {}", e),
+                                    message: format!("HLS playback error: {}", e),
                                 });
                             }
                         }
                     }
                     AudioCommand::Play(track) => {
-                        info!("Команда Play");
+                        info!("Play command");
                         preload_triggered = false;
 
                         let use_preloaded = {
@@ -421,7 +421,7 @@ impl AudioEngine {
                         };
 
                         let result = if use_preloaded {
-                            info!("Используем предзагруженный локальный трек {}", track.id);
+                            info!("Using preloaded local track {}", track.id);
                             playback.use_preloaded()
                         } else {
                             {
@@ -437,7 +437,7 @@ impl AudioEngine {
                                 track: track.clone(),
                             });
                             playback.stop();
-                            info!("Начало воспроизведения трека {}", track.id);
+                            info!("Starting playback of track {}", track.id);
                             playback.play(&track.source)
                         };
 
@@ -464,19 +464,19 @@ impl AudioEngine {
                                 });
                             }
                             Err(e) => {
-                                warn!("Ошибка воспроизведения: {}", e);
+                                warn!("Playback error: {}", e);
                                 {
                                     let mut s = state.write().unwrap();
                                     s.playback_state = PlaybackState::Stopped;
                                 }
                                 let _ = event_tx.send(AudioEvent::Error {
-                                    message: format!("Ошибка воспроизведения: {}", e),
+                                    message: format!("Playback error: {}", e),
                                 });
                             }
                         }
                     }
                     AudioCommand::PlaySource { track, source } => {
-                        info!("Команда PlaySource");
+                        info!("PlaySource command");
                         preload_triggered = false;
 
                         let use_preloaded = {
@@ -485,7 +485,7 @@ impl AudioEngine {
                         };
 
                         let result = if use_preloaded {
-                            info!("Используем предзагруженный Source трек {}", track.id);
+                            info!("Using preloaded Source track {}", track.id);
                             playback.use_preloaded()
                         } else {
                             {
@@ -501,7 +501,7 @@ impl AudioEngine {
                                 track: track.clone(),
                             });
                             playback.stop();
-                            info!("Начало воспроизведения из источника для трека {}", track.id);
+                            info!("Starting playback from source for track {}", track.id);
                             playback.play_audio_source(source)
                         };
 
@@ -528,20 +528,20 @@ impl AudioEngine {
                                 });
                             }
                             Err(e) => {
-                                warn!("Ошибка воспроизведения: {}", e);
+                                warn!("Playback error: {}", e);
                                 {
                                     let mut s = state.write().unwrap();
                                     s.playback_state = PlaybackState::Stopped;
                                 }
                                 let _ = event_tx.send(AudioEvent::Error {
-                                    message: format!("Ошибка воспроизведения: {}", e),
+                                    message: format!("Playback error: {}", e),
                                 });
                             }
                         }
                     }
 
                     AudioCommand::SetLoading(track) => {
-                        info!("Команда SetLoading");
+                        info!("SetLoading command");
                         playback.stop();
                         {
                             let mut s = state.write().unwrap();
@@ -558,14 +558,14 @@ impl AudioEngine {
                     }
 
                     AudioCommand::Pause => {
-                        info!("Пауза");
+                        info!("Pause");
                         playback.pause();
                         state.write().unwrap().playback_state = PlaybackState::Paused;
                         let _ = event_tx.send(AudioEvent::PlaybackPaused);
                     }
 
                     AudioCommand::Resume => {
-                        info!("Возобновление");
+                        info!("Resume");
                         playback.resume();
                         state.write().unwrap().playback_state = PlaybackState::Playing;
 
@@ -573,7 +573,7 @@ impl AudioEngine {
                     }
 
                     AudioCommand::Stop => {
-                        info!("Остановка");
+                        info!("Stop");
                         playback.stop();
 
                         {
@@ -588,7 +588,7 @@ impl AudioEngine {
                     }
 
                     AudioCommand::Seek(position) => {
-                        info!("Перемотка на {:?}", position);
+                        info!("Seek to {:?}", position);
 
                         match playback.seek(position) {
                             Ok(_) => {
@@ -600,7 +600,7 @@ impl AudioEngine {
                                 });
                             }
                             Err(AudioError::InProgress) => {
-                                info!("Ошибка INPROGRESS:");
+                                info!("INPROGRESS error:");
                                 state.write().unwrap().position = position;
                                 let _ = event_tx.send(AudioEvent::PositionUpdated {
                                     position,
@@ -609,26 +609,28 @@ impl AudioEngine {
                                 });
                             }
                             Err(AudioError::OutsideOfBuffer) => {
-                                info!("Ошибка OutsideOfBuffer:");
+                                info!("OutsideOfBuffer error:");
                                 let _ = event_tx.send(AudioEvent::Error {
-                                    message: format!("Поиск вне буфера не поддерживается для opus"),
+                                    message: format!(
+                                        "Seeking outside the buffer is not supported for opus"
+                                    ),
                                 });
                             }
                             Err(e) => {
-                                warn!("Ошибка перемотки: {}", e);
+                                warn!("Seek error: {}", e);
                             }
                         }
                     }
 
                     AudioCommand::SetVolume(volume) => {
-                        info!("Установка громкости: {}", volume);
+                        info!("Setting volume: {}", volume);
                         state.write().unwrap().volume = volume;
                         playback.set_volume(volume);
                         let _ = event_tx.send(AudioEvent::VolumeChanged { volume });
                     }
 
                     AudioCommand::SetEq(settings) => {
-                        info!("Обновление настроек EQ, enabled={}", settings.enabled);
+                        info!("Updating EQ settings, enabled={}", settings.enabled);
                         state.write().unwrap().eq_settings = settings.clone();
                         playback.set_eq(settings);
                     }
@@ -638,20 +640,20 @@ impl AudioEngine {
                         fade_out_ms,
                     } => {
                         info!(
-                            "Обновление настроек fade: in={}ms, out={}ms",
+                            "Updating fade settings: in={}ms, out={}ms",
                             fade_in_ms, fade_out_ms
                         );
                         playback.set_fade(fade_in_ms, fade_out_ms);
                     }
 
                     AudioCommand::Shutdown => {
-                        info!("Завершение работы аудио потока");
+                        info!("Shutting down audio thread");
                         return;
                     }
                 },
                 Err(channel::RecvTimeoutError::Timeout) => {}
                 Err(channel::RecvTimeoutError::Disconnected) => {
-                    warn!("Канал команд отключен");
+                    warn!("Command channel disconnected");
                     break;
                 }
             }
@@ -661,7 +663,7 @@ impl AudioEngine {
 
 impl Drop for AudioEngine {
     fn drop(&mut self) {
-        info!("Завершение работы аудио движка");
+        info!("Shutting down audio engine");
         let _ = self.command_tx.send(AudioCommand::Shutdown);
     }
 }

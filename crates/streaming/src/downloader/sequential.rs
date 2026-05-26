@@ -12,7 +12,7 @@ impl SequentialDownloader {
     pub fn new(url: String, buffer: Arc<ChunkedBuffer>) -> Self {
         let (tx, _rx) = bounded(10);
 
-        // TODO: Реализовать
+        // TODO: Implement
 
         Self {
             url,

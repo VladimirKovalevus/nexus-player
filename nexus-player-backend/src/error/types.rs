@@ -4,30 +4,30 @@ pub type Result<T> = anyhow::Result<T>;
 
 #[derive(Error, Debug)]
 pub enum AudioError {
-    #[error("Не удалось декодировать аудио: {0}")]
+    #[error("Failed to decode audio: {0}")]
     DecodingError(String),
 
-    #[error("Не удалось инициализировать аудио выход: {0}")]
+    #[error("Failed to initialize audio output: {0}")]
     OutputError(String),
 
-    #[error("Неподдерживаемый формат аудио")]
+    #[error("Unsupported audio format")]
     UnsupportedFormat,
 
-    #[error("Не удалось построить аудио поток: {0}")]
+    #[error("Failed to build audio stream: {0}")]
     StreamBuildError(String),
 
-    #[error("Ошибка ресемплинга: {0}")]
+    #[error("Resampling error: {0}")]
     ResamplingError(String),
 
-    #[error("Аудио поток недоступен")]
+    #[error("Audio stream unavailable")]
     StreamUnavailable,
 
-    #[error("Данные ещё не доступны")]
+    #[error("Data not available yet")]
     InProgress,
 
-    #[error("Запрашиваемая часть вне буфера")]
+    #[error("Requested part is outside the buffer")]
     OutsideOfBuffer,
 
-    #[error("Ошибка чтения аудио файла: {0}")]
+    #[error("Failed to read audio file: {0}")]
     IoError(#[from] std::io::Error),
 }

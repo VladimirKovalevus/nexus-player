@@ -4,7 +4,7 @@ use std::str::FromStr;
 use tracing::info;
 
 pub async fn create_pool(db_path: &Path) -> anyhow::Result<SqlitePool> {
-    info!("Инициализация базы данных: {:?}", db_path);
+    info!("Initializing database: {:?}", db_path);
 
     let db_url = format!("sqlite://{}", db_path.display());
 
@@ -17,11 +17,11 @@ pub async fn create_pool(db_path: &Path) -> anyhow::Result<SqlitePool> {
         .connect_with(connect_options)
         .await?;
 
-    info!("База данных подключена, запуск миграций...");
+    info!("Database connected, running migrations...");
 
     sqlx::migrate!("./src/db/migrations").run(&pool).await?;
 
-    info!("Миграции применены успешно");
+    info!("Migrations applied successfully");
 
     Ok(pool)
 }

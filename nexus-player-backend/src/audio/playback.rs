@@ -148,18 +148,16 @@ impl PlaybackEngine {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
-            .ok_or_else(|| AudioError::OutputError("Не найдено аудио устройство".to_string()))?;
+            .ok_or_else(|| AudioError::OutputError("No audio device found".to_string()))?;
 
         info!(
-            "Аудио устройство: {}",
+            "Audio device: {}",
             device.name().unwrap_or_else(|_| "Unknown".to_string())
         );
 
         let config = device
             .default_output_config()
-            .map_err(|e| {
-                AudioError::OutputError(format!("Не удалось получить конфигурацию: {}", e))
-            })?
+            .map_err(|e| AudioError::OutputError(format!("Failed to get configuration: {}", e)))?
             .into();
 
         Ok(Self {
@@ -198,7 +196,7 @@ impl PlaybackEngine {
         &mut self,
         audio_source: Box<dyn MediaSource>,
     ) -> Result<(), AudioError> {
-        info!("Загрузка аудио из AudioSource");
+        info!("Loading audio from AudioSource");
 
         let output_sample_rate = self.config.sample_rate.0;
         let decoder = AudioDecoder::from_reader(audio_source, None, output_sample_rate)?;
@@ -228,7 +226,7 @@ impl PlaybackEngine {
     }
 
     pub fn play_hls(&mut self, hls_source: HlsSource) -> Result<(), AudioError> {
-        info!("Загрузка HLS потока");
+        info!("Loading HLS stream");
 
         let output_sample_rate = self.config.sample_rate.0;
         let decoder = HlsAudioDecoder::new(hls_source, output_sample_rate)?;
@@ -258,49 +256,46 @@ impl PlaybackEngine {
     }
 
     pub fn preload_local(&mut self, path: &std::path::Path) -> Result<(), AudioError> {
-        info!(
-            "[PlaybackEngine] Начало предзагрузки локального файла: {:?}",
-            path
-        );
+        info!("[PlaybackEngine] Starting local file preload: {:?}", path);
         let output_sample_rate = self.config.sample_rate.0;
         info!(
-            "[PlaybackEngine] Инициализация декодера для локального файла, output_sample_rate: {}",
+            "[PlaybackEngine] Initializing decoder for local file, output_sample_rate: {}",
             output_sample_rate
         );
         let decoder = AudioDecoder::new(path, output_sample_rate)?;
-        info!("[PlaybackEngine] Декодер создан успешно. Сохранение в next_decoder.");
+        info!("[PlaybackEngine] Decoder created successfully. Storing in next_decoder.");
         *self.next_decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
-        info!("[PlaybackEngine] Предзагрузка локального файла завершена.");
+        info!("[PlaybackEngine] Local file preload finished.");
         Ok(())
     }
 
     pub fn preload_hls(&mut self, source: HlsSource) -> Result<(), AudioError> {
-        info!("[PlaybackEngine] Начало предзагрузки HLS потока");
+        info!("[PlaybackEngine] Starting HLS stream preload");
         let output_sample_rate = self.config.sample_rate.0;
         info!(
-            "[PlaybackEngine] Инициализация HLS декодера, output_sample_rate: {}",
+            "[PlaybackEngine] Initializing HLS decoder, output_sample_rate: {}",
             output_sample_rate
         );
         let decoder = HlsAudioDecoder::new(source, output_sample_rate)?;
-        info!("[PlaybackEngine] HLS декодер создан успешно. Сохранение в next_decoder.");
+        info!("[PlaybackEngine] HLS decoder created successfully. Storing in next_decoder.");
         *self.next_decoder.lock().unwrap() = Some(DecoderType::from_hls(decoder));
-        info!("[PlaybackEngine] Предзагрузка HLS потока завершена.");
+        info!("[PlaybackEngine] HLS stream preload finished.");
         Ok(())
     }
 
     pub fn preload_audio_source(&mut self, source: Box<dyn MediaSource>) -> Result<(), AudioError> {
-        info!("[PlaybackEngine] Начало предзагрузки из AudioSource");
+        info!("[PlaybackEngine] Starting preload from AudioSource");
         let output_sample_rate = self.config.sample_rate.0;
         info!(
-            "[PlaybackEngine] Инициализация декодера для AudioSource, output_sample_rate: {}",
+            "[PlaybackEngine] Initializing decoder for AudioSource, output_sample_rate: {}",
             output_sample_rate
         );
         let decoder = AudioDecoder::from_reader(source, None, output_sample_rate)?;
         info!(
-            "[PlaybackEngine] Декодер для AudioSource создан успешно. Сохранение в next_decoder."
+            "[PlaybackEngine] Decoder for AudioSource created successfully. Storing in next_decoder."
         );
         *self.next_decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
-        info!("[PlaybackEngine] Предзагрузка из AudioSource завершена.");
+        info!("[PlaybackEngine] Preload from AudioSource finished.");
         Ok(())
     }
 
@@ -311,7 +306,7 @@ impl PlaybackEngine {
         };
 
         if let Some(next) = next {
-            info!("[PlaybackEngine] Использование предзагруженного трека");
+            info!("[PlaybackEngine] Using preloaded track");
             let duration = next.duration().map(Duration::from_secs_f64);
             let sample_rate = next.sample_rate();
 
@@ -336,7 +331,7 @@ impl PlaybackEngine {
     }
 
     fn play_local(&mut self, path: &std::path::Path) -> Result<(), AudioError> {
-        info!("Загрузка файла: {:?}", path);
+        info!("Loading file: {:?}", path);
 
         let output_sample_rate = self.config.sample_rate.0;
         let decoder = AudioDecoder::new(path, output_sample_rate)?;
@@ -400,7 +395,7 @@ impl PlaybackEngine {
         let mut eq_proc = EqProcessor::new(&initial_eq, sample_rate, config.channels as usize);
 
         let err_fn = move |err| {
-            warn!("Ошибка стрима: {}", err);
+            warn!("Stream error: {}", err);
             needs_recreation.store(true, Ordering::SeqCst);
         };
 
@@ -436,10 +431,10 @@ impl PlaybackEngine {
                                         *buffer_position.lock().unwrap() = 0;
                                     }
                                     Ok(None) => {
-                                        // Текущий трек закончился. Проверяем наличие следующего.
+                                        // Current track ended. Checking for a next one.
                                         let mut next_guard = next_decoder.lock().unwrap();
                                         if let Some(next) = next_guard.take() {
-                                            info!("Бесшовный переход на следующий трек");
+                                            info!("Gapless transition to the next track");
                                             let next_duration =
                                                 next.duration().map(Duration::from_secs_f64);
                                             let next_sr = next.sample_rate();
@@ -450,7 +445,7 @@ impl PlaybackEngine {
                                             *sample_rate_arc.lock().unwrap() = next_sr;
                                             track_switched.store(true, Ordering::SeqCst);
                                             fade_in_remaining = fade_in_smp.load(Ordering::Relaxed);
-                                            // Продолжаем цикл для нового декодера
+                                            // Continue the loop for the new decoder
                                             continue;
                                         } else {
                                             // No more tracks, but let it fade out if still has gain
@@ -469,7 +464,7 @@ impl PlaybackEngine {
                                         return;
                                     }
                                     Err(e) => {
-                                        warn!("Ошибка декодирования: {}", e);
+                                        warn!("Decoding error: {}", e);
                                         data[output_pos..].fill(0.0);
                                         return;
                                     }
@@ -590,11 +585,11 @@ impl PlaybackEngine {
                 err_fn,
                 None,
             )
-            .map_err(|e| AudioError::OutputError(format!("Не удалось создать стрим: {}", e)))?;
+            .map_err(|e| AudioError::OutputError(format!("Failed to create stream: {}", e)))?;
 
         stream
             .play()
-            .map_err(|e| AudioError::OutputError(format!("Не удалось запустить стрим: {}", e)))?;
+            .map_err(|e| AudioError::OutputError(format!("Failed to start stream: {}", e)))?;
 
         self.stream = Some(stream);
         self.needs_recreation.store(false, Ordering::SeqCst);
@@ -611,23 +606,21 @@ impl PlaybackEngine {
     }
 
     pub fn recreate_stream(&mut self) -> Result<(), AudioError> {
-        info!("Попытка пересоздания стрима (возможно смена устройства)...");
+        info!("Trying to recreate the stream (the device may have changed)...");
 
         let host = cpal::default_host();
         let device = host
             .default_output_device()
-            .ok_or_else(|| AudioError::OutputError("Не найдено аудио устройство".to_string()))?;
+            .ok_or_else(|| AudioError::OutputError("No audio device found".to_string()))?;
 
         info!(
-            "Новое аудио устройство: {}",
+            "New audio device: {}",
             device.name().unwrap_or_else(|_| "Unknown".to_string())
         );
 
         let config = device
             .default_output_config()
-            .map_err(|e| {
-                AudioError::OutputError(format!("Не удалось получить конфигурацию: {}", e))
-            })?
+            .map_err(|e| AudioError::OutputError(format!("Failed to get configuration: {}", e)))?
             .into();
 
         self.device = device;
@@ -656,7 +649,7 @@ impl PlaybackEngine {
             }
         }
 
-        info!("Стрим успешно пересоздан");
+        info!("Stream recreated successfully");
         Ok(())
     }
 
@@ -687,7 +680,7 @@ impl PlaybackEngine {
     }
 
     pub fn seek(&mut self, position: Duration) -> Result<(), AudioError> {
-        info!("Запрос перемотки на {:?}", position);
+        info!("Seek requested to {:?}", position);
 
         let was_playing = *self.is_playing.lock().unwrap();
 
@@ -698,7 +691,7 @@ impl PlaybackEngine {
 
         let mut decoder_guard = self.decoder.lock().unwrap();
         if let Some(ref mut dec) = *decoder_guard {
-            info!("Выполнение перемотки в декодере...");
+            info!("Seeking in the decoder...");
 
             self.sample_buffer.lock().unwrap().clear();
             *self.buffer_position.lock().unwrap() = 0;
@@ -710,20 +703,17 @@ impl PlaybackEngine {
                 }
                 return Err(AudioError::OutsideOfBuffer);
             }
-            info!("Ожидание загрузки данных для новой позиции...");
+            info!("Waiting for data at the new position...");
             loop {
                 match dec.decode_next_block() {
                     Ok(Some(samples)) => {
-                        info!(
-                            "Данные получены ({} сэмплов), возобновление...",
-                            samples.len()
-                        );
+                        info!("Data received ({} samples), resuming...", samples.len());
                         *self.sample_buffer.lock().unwrap() = samples;
                         *self.buffer_position.lock().unwrap() = 0;
                         break;
                     }
                     Ok(None) => {
-                        info!("Конец потока достигнут при перемотке");
+                        info!("End of stream reached while seeking");
                         break;
                     }
                     Err(AudioError::InProgress) => {
@@ -731,7 +721,7 @@ impl PlaybackEngine {
                         continue;
                     }
                     Err(e) => {
-                        warn!("Ошибка при ожидании данных после перемотки: {}", e);
+                        warn!("Error while waiting for data after seek: {}", e);
                         return Err(e);
                     }
                 }
@@ -748,7 +738,7 @@ impl PlaybackEngine {
             *self.is_playing.lock().unwrap() = true;
         }
 
-        info!("Перемотка завершена");
+        info!("Seek finished");
         Ok(())
     }
 

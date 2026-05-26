@@ -15,6 +15,8 @@ pub struct EqSettings {
     pub preset_name: Option<String>,
 }
 
+// Preset names stay in Russian: they are persisted in user config and compared by the
+// frontend (stores/eq.ts, EqPanel.vue). Change them together with the frontend phase.
 impl Default for EqSettings {
     fn default() -> Self {
         Self {
@@ -25,6 +27,7 @@ impl Default for EqSettings {
     }
 }
 
+// Russian names are persisted and matched by the frontend; see the note above.
 pub fn builtin_presets() -> Vec<(&'static str, [f32; 10])> {
     vec![
         (

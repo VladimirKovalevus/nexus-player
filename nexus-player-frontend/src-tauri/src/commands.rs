@@ -197,7 +197,7 @@ pub async fn add_music_source(
     _app: AppHandle,
     _state: State<'_, Arc<AppState>>,
 ) -> Result<Option<MusicSource>> {
-    Err("Дополнительные папки на Android управляются через MediaStore".into())
+    Err("Extra folders on Android are managed through MediaStore".into())
 }
 
 #[tauri::command]
@@ -1624,7 +1624,7 @@ pub async fn telegram_push(
     let path = telegram_config_path(&app)?;
     let mut tg = TelegramSync::load(&path)
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Telegram не настроен".to_string())?;
+        .ok_or_else(|| "Telegram is not configured".to_string())?;
 
     let builder = SyncBuilder::new(state.library());
     let file = match sync_type {
@@ -1641,7 +1641,7 @@ pub async fn telegram_pull(app: AppHandle, state: State<'_, Arc<AppState>>) -> R
     let path = telegram_config_path(&app)?;
     let tg = TelegramSync::load(&path)
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Telegram не настроен".to_string())?;
+        .ok_or_else(|| "Telegram is not configured".to_string())?;
 
     let file = tg.pull().await.map_err(|e| e.to_string())?;
     let applier = SyncApplier::new(state.library());
