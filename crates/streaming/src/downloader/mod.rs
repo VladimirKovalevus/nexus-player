@@ -1,12 +1,9 @@
 use std::sync::Arc;
 
-use crate::downloader::{
-    hls::HlsDownloader, range::RangeDownloader, sequential::SequentialDownloader,
-};
+use crate::downloader::{hls::HlsDownloader, range::RangeDownloader};
 
 pub mod hls;
 pub mod range;
-pub mod sequential;
 
 pub trait Downloader: Send + Sync {
     fn start(&self);
@@ -29,7 +26,6 @@ const MAX_RETRIES: usize = 3;
 pub enum DownloaderHandle {
     Range(Arc<RangeDownloader>),
     Hls(Arc<HlsDownloader>),
-    Sequential(Arc<SequentialDownloader>),
 }
 
 impl DownloaderHandle {
@@ -37,7 +33,6 @@ impl DownloaderHandle {
         match self {
             Self::Range(d) => d.start(),
             Self::Hls(d) => d.start(),
-            Self::Sequential(d) => d.start(),
         }
     }
 
@@ -45,7 +40,6 @@ impl DownloaderHandle {
         match self {
             Self::Range(d) => d.pause(),
             Self::Hls(d) => d.pause(),
-            Self::Sequential(d) => d.pause(),
         }
     }
 
@@ -53,7 +47,6 @@ impl DownloaderHandle {
         match self {
             Self::Range(d) => d.seek_to(offset),
             Self::Hls(d) => d.seek_to(offset),
-            Self::Sequential(d) => d.seek_to(offset),
         }
     }
 
@@ -61,7 +54,6 @@ impl DownloaderHandle {
         match self {
             Self::Range(d) => d.stop(),
             Self::Hls(d) => d.stop(),
-            Self::Sequential(d) => d.stop(),
         }
     }
 }

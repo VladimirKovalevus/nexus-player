@@ -4,7 +4,6 @@ use crate::{audio::types::Track, library};
 
 #[derive(Debug, Clone)]
 pub struct Playlist {
-    //#TODO METADATA
     pub title: String,
     pub description: Option<String>,
     pub artwork: Option<String>,

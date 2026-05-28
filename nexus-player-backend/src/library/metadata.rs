@@ -55,7 +55,6 @@ pub fn parse_from_path(path: &Path) -> Result<ParsedMetadata> {
         result.genre = tags.genre().map(|s| s.to_string());
         if let Some(picture) = tags.pictures().first() {
             result.artwork_data = Some(picture.data().to_vec());
-            // TODO parse mime
             // picture
             //     .mime_type()
             //     .map(|m| m.to_string())
@@ -111,7 +110,6 @@ pub fn parse_from_buffer(buffer: &[u8], file_extension: &str) -> Result<ParsedMe
         result.genre = tags.genre().map(|s| s.to_string());
         if let Some(picture) = tags.pictures().first() {
             result.artwork_data = Some(picture.data().to_vec());
-            // TODO parse mime
             // picture
             //     .mime_type()
             //     .map(|m| m.to_string())

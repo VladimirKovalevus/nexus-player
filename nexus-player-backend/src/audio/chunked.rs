@@ -197,21 +197,6 @@ impl ChunkedMediaSource {
             }
         }
     }
-
-    // TODO(human): Add methods to save downloaded chunks to local file
-    // This will allow:
-    // 1. Avoiding re-downloads when cloning ChunkedMediaSource
-    // 2. Progressive caching - save chunks as they download
-    // 3. Resume playback from cached data
-    //
-    // Suggested methods:
-    // - pub fn save_to_file(&self, path: impl AsRef<Path>) -> std::io::Result<()>
-    // - pub fn load_from_file(url: String, path: impl AsRef<Path>) -> std::io::Result<Self>
-    //
-    // Consider:
-    // - File format: simple sequential write of all chunks, or indexed format?
-    // - When to save: after each chunk, on drop, or explicitly?
-    // - How to validate cached data matches the URL/content
 }
 
 impl Read for ChunkedMediaSource {
