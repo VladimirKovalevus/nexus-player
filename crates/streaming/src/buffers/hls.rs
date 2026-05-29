@@ -1,3 +1,4 @@
+use super::sync::lock_recover;
 use std::fs::{self, File};
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -94,7 +95,7 @@ impl Read for HlsSequentialReader {
             return Ok(0);
         }
 
-        let inner = self.buffer.inner.lock().unwrap();
+        let inner = lock_recover(&self.buffer.inner);
 
         // Skip init segment if reading sequentially for OGG (usually OGG HLS doesn't have one,
         // or it's part of the first segment).
@@ -195,7 +196,7 @@ impl HlsBuffer {
     }
 
     pub fn get_waveforms(&self) -> Vec<crate::state::types::Waveform> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         inner
             .segments
             .iter()
@@ -204,7 +205,7 @@ impl HlsBuffer {
     }
 
     pub fn byte_size(&self) -> u64 {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         inner
             .segments
             .iter()
@@ -214,7 +215,7 @@ impl HlsBuffer {
     }
 
     pub fn set_segment_waveform(&self, index: usize, waveform: crate::state::types::Waveform) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_recover(&self.inner);
         let init_offset = if inner.has_init_segment { 1 } else { 0 };
         let real_index = index + init_offset;
 
@@ -223,7 +224,7 @@ impl HlsBuffer {
         }
     }
     pub fn init(&self, segment_count: usize, durations: Vec<f64>, init_segment: Option<Vec<u8>>) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_recover(&self.inner);
 
         match init_segment {
             Some(data) => {
@@ -241,22 +242,22 @@ impl HlsBuffer {
         inner.durations = durations;
     }
     pub fn set_bitrate(&self, bitrate: u64) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_recover(&self.inner);
         inner.bitrate = bitrate;
     }
 
     pub fn set_container(&self, container: String) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_recover(&self.inner);
         inner.container = Some(container);
     }
 
     pub fn container(&self) -> Option<String> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         inner.container.clone()
     }
 
     pub fn write_chunk(&self, index: u64, data: Vec<u8>) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = lock_recover(&self.inner);
         let index = index + if inner.has_init_segment { 1 } else { 0 };
 
         if let Some(slot) = inner.segments.get_mut(index as usize) {
@@ -275,7 +276,7 @@ impl HlsBuffer {
     }
 
     pub fn write_to<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         for segment_opt in &inner.segments {
             if let Some(segment) = segment_opt {
                 writer.write_all(&segment.data)?;
@@ -285,12 +286,12 @@ impl HlsBuffer {
     }
 
     pub fn is_complete(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         !inner.segments.is_empty() && inner.segments.iter().all(|s| s.is_some())
     }
 
     pub fn get_all_chunks(&self) -> Vec<(u64, Vec<u8>)> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         inner
             .segments
             .iter()
@@ -304,7 +305,7 @@ impl HlsBuffer {
     }
 
     pub fn read_at(&self, offset: u64, buf: &mut [u8]) -> Option<usize> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
 
         if inner.segments.is_empty() {
             return None;
@@ -401,7 +402,7 @@ impl HlsBuffer {
     }
 
     pub fn bitrate(&self) -> u64 {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         if inner.bitrate > 0 {
             inner.bitrate
         } else {
@@ -415,7 +416,7 @@ impl HlsBuffer {
     }
 
     pub fn total_size(&self) -> Option<u64> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
 
         if inner.durations.is_empty() {
             return None;
@@ -440,7 +441,7 @@ impl HlsBuffer {
     }
 
     pub fn progress(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         if inner.segments.is_empty() {
             return 0.0;
         }
@@ -449,7 +450,7 @@ impl HlsBuffer {
     }
 
     pub fn first_not_ready_segment(&self, byte_offset: Option<u64>) -> Option<usize> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
 
         let start_index = if let Some(offset) = byte_offset {
             if inner.bitrate == 0 || inner.durations.is_empty() {
@@ -508,7 +509,7 @@ impl HlsBuffer {
     }
 
     pub fn first_not_ready_segment_ms(&self, ms_offset: Option<u64>) -> Option<usize> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
 
         let start_index = if let Some(ms) = ms_offset {
             if inner.durations.is_empty() {
@@ -565,11 +566,11 @@ impl HlsBuffer {
     }
 
     pub fn segment_count(&self) -> usize {
-        self.inner.lock().unwrap().durations.len()
+        lock_recover(&self.inner).durations.len()
     }
 
     pub fn has_segment(&self, index: usize) -> bool {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         let init_offset = if inner.has_init_segment { 1 } else { 0 };
         let real_index = index + init_offset;
 
@@ -581,12 +582,12 @@ impl HlsBuffer {
     }
 
     pub fn durations(&self) -> Vec<f64> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         inner.durations.clone()
     }
 
     pub fn get_buffered_ranges(&self) -> Vec<(f64, f64)> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         let mut ranges = Vec::new();
         let mut current_range: Option<(f64, f64)> = None;
         let mut accumulated_time = 0.0;
@@ -627,7 +628,7 @@ impl HlsBuffer {
 
     //Already concatenated with init if exist
     pub fn get_segment(&self, index: usize) -> Option<(Vec<u8>, f64)> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
         let init_offset = if inner.has_init_segment { 1 } else { 0 };
         let real_index = index + init_offset;
 
@@ -650,7 +651,7 @@ impl HlsBuffer {
     }
 
     pub fn offset_to_segment_index(&self, byte_offset: u64) -> Option<usize> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
 
         if inner.bitrate == 0 || inner.durations.is_empty() {
             return None;
@@ -672,7 +673,7 @@ impl HlsBuffer {
     }
 
     pub fn has_offset(&self, byte_offset: u64) -> bool {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
 
         if inner.bitrate == 0 {
             // If bitrate is unknown, we can't reliably map offset to segment.
@@ -703,7 +704,7 @@ impl HlsBuffer {
     }
 
     pub fn profile(&self) {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
 
         let total_segments = inner.segments.len();
         let filled_segments = inner.segments.iter().filter(|s| s.is_some()).count();
@@ -812,7 +813,7 @@ impl HlsBuffer {
     }
 
     pub fn save_to_folder<P: AsRef<Path>>(&self, folder_path: P) -> std::io::Result<()> {
-        let inner = self.inner.lock().unwrap();
+        let inner = lock_recover(&self.inner);
 
         fs::create_dir_all(&folder_path)?;
 

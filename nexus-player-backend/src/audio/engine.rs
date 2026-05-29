@@ -1,5 +1,6 @@
 use super::eq::EqSettings;
 use super::playback::PlaybackEngine;
+use super::sync::{lock_recover, read_recover, write_recover};
 use super::types::{
     AudioCommand, AudioEvent, AudioState, BufferedRange, PlaybackState, Track, TrackSource,
 };
@@ -119,11 +120,11 @@ impl AudioEngine {
     }
 
     pub fn get_eq(&self) -> EqSettings {
-        self.state.read().unwrap().eq_settings.clone()
+        read_recover(&self.state).eq_settings.clone()
     }
 
     pub fn state(&self) -> AudioState {
-        self.state.read().unwrap().clone()
+        read_recover(&self.state).clone()
     }
 
     pub fn poll_event(&self) -> Option<AudioEvent> {
@@ -188,7 +189,7 @@ impl AudioEngine {
 
             if playback.track_switched() {
                 info!("Detected gapless track switch in the audio stream");
-                let mut s = state.write().unwrap();
+                let mut s = write_recover(&state);
                 let next_track = s.next_track.take();
                 if let Some(track) = next_track {
                     s.current_track = Some(track.clone());
@@ -217,9 +218,7 @@ impl AudioEngine {
                         let remaining = duration.saturating_sub(position);
                         if remaining <= Duration::from_secs(10) {
                             preload_triggered = true;
-                            let current_track_id = state
-                                .read()
-                                .unwrap()
+                            let current_track_id = read_recover(&state)
                                 .current_track
                                 .as_ref()
                                 .map(|t| t.id)
@@ -270,7 +269,7 @@ impl AudioEngine {
                     }
 
                     {
-                        let mut s = state.write().unwrap();
+                        let mut s = write_recover(&state);
                         s.position = position;
 
                         if s.buffered_ranges != buffered_ranges {
@@ -300,11 +299,11 @@ impl AudioEngine {
                             // If the next track is already preloaded, let the gapless decoder
                             // swap happen naturally inside the audio callback instead of killing
                             // the stream early.
-                            let has_next = state.read().unwrap().next_track.is_some();
+                            let has_next = read_recover(&state).next_track.is_some();
                             if !has_next {
                                 info!("Track finished");
                                 let _ = event_tx.send(AudioEvent::TrackFinished);
-                                state.write().unwrap().playback_state = PlaybackState::Stopped;
+                                write_recover(&state).playback_state = PlaybackState::Stopped;
                                 playback.stop();
                             }
                         }
@@ -321,7 +320,7 @@ impl AudioEngine {
                                 if let Err(e) = playback.preload_local(p) {
                                     warn!("Preload error: {}", e);
                                 } else {
-                                    state.write().unwrap().next_track = Some(track);
+                                    write_recover(&state).next_track = Some(track);
                                 }
                             }
                             _ => {
@@ -334,7 +333,7 @@ impl AudioEngine {
                         if let Err(e) = playback.preload_hls(source) {
                             warn!("HLS preload error: {}", e);
                         } else {
-                            state.write().unwrap().next_track = Some(track);
+                            write_recover(&state).next_track = Some(track);
                         }
                     }
                     AudioCommand::PreloadSource { track, source } => {
@@ -342,7 +341,7 @@ impl AudioEngine {
                         if let Err(e) = playback.preload_audio_source(source) {
                             warn!("Source preload error: {}", e);
                         } else {
-                            state.write().unwrap().next_track = Some(track);
+                            write_recover(&state).next_track = Some(track);
                         }
                     }
                     AudioCommand::PlayHLS { track, source } => {
@@ -350,18 +349,18 @@ impl AudioEngine {
                         preload_triggered = false;
 
                         let use_preloaded = {
-                            let s = state.read().unwrap();
+                            let s = read_recover(&state);
                             s.next_track.as_ref().map(|t| t.id) == Some(track.id)
                         };
 
                         let result = if use_preloaded {
                             info!("Using preloaded HLS track {}", track.id);
                             let ok = playback.use_preloaded();
-                            state.write().unwrap().next_track = None;
+                            write_recover(&state).next_track = None;
                             ok
                         } else {
                             {
-                                let mut s = state.write().unwrap();
+                                let mut s = write_recover(&state);
                                 s.playback_state = PlaybackState::Loading;
                                 s.position = Duration::ZERO;
                                 s.duration = Duration::ZERO;
@@ -382,7 +381,7 @@ impl AudioEngine {
                                 let duration = playback.duration().unwrap_or(Duration::ZERO);
 
                                 {
-                                    let mut s = state.write().unwrap();
+                                    let mut s = write_recover(&state);
                                     s.playback_state = PlaybackState::Playing;
                                     s.position = Duration::ZERO;
                                     s.duration = duration;
@@ -402,7 +401,7 @@ impl AudioEngine {
                             Err(e) => {
                                 warn!("HLS playback error: {}", e);
                                 {
-                                    let mut s = state.write().unwrap();
+                                    let mut s = write_recover(&state);
                                     s.playback_state = PlaybackState::Stopped;
                                 }
                                 let _ = event_tx.send(AudioEvent::Error {
@@ -416,7 +415,7 @@ impl AudioEngine {
                         preload_triggered = false;
 
                         let use_preloaded = {
-                            let s = state.read().unwrap();
+                            let s = read_recover(&state);
                             s.next_track.as_ref().map(|t| t.id) == Some(track.id)
                         };
 
@@ -425,7 +424,7 @@ impl AudioEngine {
                             playback.use_preloaded()
                         } else {
                             {
-                                let mut s = state.write().unwrap();
+                                let mut s = write_recover(&state);
                                 s.playback_state = PlaybackState::Loading;
                                 s.position = Duration::ZERO;
                                 s.duration = Duration::ZERO;
@@ -446,7 +445,7 @@ impl AudioEngine {
                                 let duration = playback.duration().unwrap_or(Duration::ZERO);
 
                                 {
-                                    let mut s = state.write().unwrap();
+                                    let mut s = write_recover(&state);
                                     s.playback_state = PlaybackState::Playing;
                                     s.position = Duration::ZERO;
                                     s.duration = duration;
@@ -466,7 +465,7 @@ impl AudioEngine {
                             Err(e) => {
                                 warn!("Playback error: {}", e);
                                 {
-                                    let mut s = state.write().unwrap();
+                                    let mut s = write_recover(&state);
                                     s.playback_state = PlaybackState::Stopped;
                                 }
                                 let _ = event_tx.send(AudioEvent::Error {
@@ -480,7 +479,7 @@ impl AudioEngine {
                         preload_triggered = false;
 
                         let use_preloaded = {
-                            let s = state.read().unwrap();
+                            let s = read_recover(&state);
                             s.next_track.as_ref().map(|t| t.id) == Some(track.id)
                         };
 
@@ -489,7 +488,7 @@ impl AudioEngine {
                             playback.use_preloaded()
                         } else {
                             {
-                                let mut s = state.write().unwrap();
+                                let mut s = write_recover(&state);
                                 s.playback_state = PlaybackState::Loading;
                                 s.position = Duration::ZERO;
                                 s.duration = Duration::ZERO;
@@ -510,7 +509,7 @@ impl AudioEngine {
                                 let duration = playback.duration().unwrap_or(Duration::ZERO);
 
                                 {
-                                    let mut s = state.write().unwrap();
+                                    let mut s = write_recover(&state);
                                     s.playback_state = PlaybackState::Playing;
                                     s.position = Duration::ZERO;
                                     s.duration = duration;
@@ -530,7 +529,7 @@ impl AudioEngine {
                             Err(e) => {
                                 warn!("Playback error: {}", e);
                                 {
-                                    let mut s = state.write().unwrap();
+                                    let mut s = write_recover(&state);
                                     s.playback_state = PlaybackState::Stopped;
                                 }
                                 let _ = event_tx.send(AudioEvent::Error {
@@ -544,7 +543,7 @@ impl AudioEngine {
                         info!("SetLoading command");
                         playback.stop();
                         {
-                            let mut s = state.write().unwrap();
+                            let mut s = write_recover(&state);
                             s.playback_state = PlaybackState::Loading;
                             s.position = Duration::ZERO;
                             s.duration = Duration::ZERO;
@@ -560,14 +559,14 @@ impl AudioEngine {
                     AudioCommand::Pause => {
                         info!("Pause");
                         playback.pause();
-                        state.write().unwrap().playback_state = PlaybackState::Paused;
+                        write_recover(&state).playback_state = PlaybackState::Paused;
                         let _ = event_tx.send(AudioEvent::PlaybackPaused);
                     }
 
                     AudioCommand::Resume => {
                         info!("Resume");
                         playback.resume();
-                        state.write().unwrap().playback_state = PlaybackState::Playing;
+                        write_recover(&state).playback_state = PlaybackState::Playing;
 
                         let _ = event_tx.send(AudioEvent::PlaybackResumed);
                     }
@@ -577,7 +576,7 @@ impl AudioEngine {
                         playback.stop();
 
                         {
-                            let mut s = state.write().unwrap();
+                            let mut s = write_recover(&state);
                             s.playback_state = PlaybackState::Stopped;
                             s.position = Duration::ZERO;
                             s.current_track = None;
@@ -592,7 +591,7 @@ impl AudioEngine {
 
                         match playback.seek(position) {
                             Ok(_) => {
-                                state.write().unwrap().position = position;
+                                write_recover(&state).position = position;
                                 let _ = event_tx.send(AudioEvent::PositionUpdated {
                                     position,
                                     fft: None,
@@ -601,7 +600,7 @@ impl AudioEngine {
                             }
                             Err(AudioError::InProgress) => {
                                 info!("INPROGRESS error:");
-                                state.write().unwrap().position = position;
+                                write_recover(&state).position = position;
                                 let _ = event_tx.send(AudioEvent::PositionUpdated {
                                     position,
                                     fft: None,
@@ -624,14 +623,14 @@ impl AudioEngine {
 
                     AudioCommand::SetVolume(volume) => {
                         info!("Setting volume: {}", volume);
-                        state.write().unwrap().volume = volume;
+                        write_recover(&state).volume = volume;
                         playback.set_volume(volume);
                         let _ = event_tx.send(AudioEvent::VolumeChanged { volume });
                     }
 
                     AudioCommand::SetEq(settings) => {
                         info!("Updating EQ settings, enabled={}", settings.enabled);
-                        state.write().unwrap().eq_settings = settings.clone();
+                        write_recover(&state).eq_settings = settings.clone();
                         playback.set_eq(settings);
                     }
 

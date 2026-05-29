@@ -1,5 +1,9 @@
 pub mod chunked;
 pub mod hls;
+pub mod sync;
+
+#[cfg(test)]
+mod poison_recovery_tests;
 
 pub trait Buffer: Send + Sync + std::fmt::Debug {
     fn is_complete(&self) -> bool;

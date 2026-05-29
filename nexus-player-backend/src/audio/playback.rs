@@ -1,6 +1,7 @@
 use super::decoder::{AudioDecoder, DecoderType};
 use super::eq::{EqProcessor, EqSettings};
 use super::hls_decoder::HlsAudioDecoder;
+use super::sync::lock_recover;
 use crate::audio::types::{AudioSource, MediaSource, SampleRate as MSR, TrackSource};
 use crate::error::AudioError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -209,16 +210,16 @@ impl PlaybackEngine {
             sample_rate, channels, duration
         );
 
-        *self.duration.lock().unwrap() = duration;
-        *self.decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
-        *self.is_playing.lock().unwrap() = true;
-        *self.current_position.lock().unwrap() = Duration::ZERO;
-        *self.sample_rate.lock().unwrap() = sample_rate;
-        *self.samples_played.lock().unwrap() = 0;
+        *lock_recover(&self.duration) = duration;
+        *lock_recover(&self.decoder) = Some(DecoderType::from_standard(decoder));
+        *lock_recover(&self.is_playing) = true;
+        *lock_recover(&self.current_position) = Duration::ZERO;
+        *lock_recover(&self.sample_rate) = sample_rate;
+        *lock_recover(&self.samples_played) = 0;
         self.fade_in_pending.store(true, Ordering::Relaxed);
 
-        self.sample_buffer.lock().unwrap().clear();
-        *self.buffer_position.lock().unwrap() = 0;
+        lock_recover(&self.sample_buffer).clear();
+        *lock_recover(&self.buffer_position) = 0;
 
         self.create_stream()?;
 
@@ -239,16 +240,16 @@ impl PlaybackEngine {
             sample_rate, channels, duration
         );
 
-        *self.duration.lock().unwrap() = duration;
-        *self.decoder.lock().unwrap() = Some(DecoderType::from_hls(decoder));
-        *self.is_playing.lock().unwrap() = true;
-        *self.current_position.lock().unwrap() = Duration::ZERO;
-        *self.sample_rate.lock().unwrap() = sample_rate;
-        *self.samples_played.lock().unwrap() = 0;
+        *lock_recover(&self.duration) = duration;
+        *lock_recover(&self.decoder) = Some(DecoderType::from_hls(decoder));
+        *lock_recover(&self.is_playing) = true;
+        *lock_recover(&self.current_position) = Duration::ZERO;
+        *lock_recover(&self.sample_rate) = sample_rate;
+        *lock_recover(&self.samples_played) = 0;
         self.fade_in_pending.store(true, Ordering::Relaxed);
 
-        self.sample_buffer.lock().unwrap().clear();
-        *self.buffer_position.lock().unwrap() = 0;
+        lock_recover(&self.sample_buffer).clear();
+        *lock_recover(&self.buffer_position) = 0;
 
         self.create_stream()?;
 
@@ -264,7 +265,7 @@ impl PlaybackEngine {
         );
         let decoder = AudioDecoder::new(path, output_sample_rate)?;
         info!("[PlaybackEngine] Decoder created successfully. Storing in next_decoder.");
-        *self.next_decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
+        *lock_recover(&self.next_decoder) = Some(DecoderType::from_standard(decoder));
         info!("[PlaybackEngine] Local file preload finished.");
         Ok(())
     }
@@ -278,7 +279,7 @@ impl PlaybackEngine {
         );
         let decoder = HlsAudioDecoder::new(source, output_sample_rate)?;
         info!("[PlaybackEngine] HLS decoder created successfully. Storing in next_decoder.");
-        *self.next_decoder.lock().unwrap() = Some(DecoderType::from_hls(decoder));
+        *lock_recover(&self.next_decoder) = Some(DecoderType::from_hls(decoder));
         info!("[PlaybackEngine] HLS stream preload finished.");
         Ok(())
     }
@@ -294,14 +295,14 @@ impl PlaybackEngine {
         info!(
             "[PlaybackEngine] Decoder for AudioSource created successfully. Storing in next_decoder."
         );
-        *self.next_decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
+        *lock_recover(&self.next_decoder) = Some(DecoderType::from_standard(decoder));
         info!("[PlaybackEngine] Preload from AudioSource finished.");
         Ok(())
     }
 
     pub fn use_preloaded(&mut self) -> Result<(), AudioError> {
         let next = {
-            let mut next_guard = self.next_decoder.lock().unwrap();
+            let mut next_guard = lock_recover(&self.next_decoder);
             next_guard.take()
         };
 
@@ -310,16 +311,16 @@ impl PlaybackEngine {
             let duration = next.duration().map(Duration::from_secs_f64);
             let sample_rate = next.sample_rate();
 
-            *self.duration.lock().unwrap() = duration;
-            *self.decoder.lock().unwrap() = Some(next);
-            *self.is_playing.lock().unwrap() = true;
-            *self.current_position.lock().unwrap() = Duration::ZERO;
-            *self.sample_rate.lock().unwrap() = sample_rate;
-            *self.samples_played.lock().unwrap() = 0;
+            *lock_recover(&self.duration) = duration;
+            *lock_recover(&self.decoder) = Some(next);
+            *lock_recover(&self.is_playing) = true;
+            *lock_recover(&self.current_position) = Duration::ZERO;
+            *lock_recover(&self.sample_rate) = sample_rate;
+            *lock_recover(&self.samples_played) = 0;
             self.fade_in_pending.store(true, Ordering::Relaxed);
 
-            self.sample_buffer.lock().unwrap().clear();
-            *self.buffer_position.lock().unwrap() = 0;
+            lock_recover(&self.sample_buffer).clear();
+            *lock_recover(&self.buffer_position) = 0;
 
             self.create_stream()?;
             Ok(())
@@ -344,16 +345,16 @@ impl PlaybackEngine {
             sample_rate, channels, duration
         );
 
-        *self.duration.lock().unwrap() = duration;
-        *self.decoder.lock().unwrap() = Some(DecoderType::from_standard(decoder));
-        *self.is_playing.lock().unwrap() = true;
-        *self.current_position.lock().unwrap() = Duration::ZERO;
-        *self.sample_rate.lock().unwrap() = sample_rate;
-        *self.samples_played.lock().unwrap() = 0;
+        *lock_recover(&self.duration) = duration;
+        *lock_recover(&self.decoder) = Some(DecoderType::from_standard(decoder));
+        *lock_recover(&self.is_playing) = true;
+        *lock_recover(&self.current_position) = Duration::ZERO;
+        *lock_recover(&self.sample_rate) = sample_rate;
+        *lock_recover(&self.samples_played) = 0;
         self.fade_in_pending.store(true, Ordering::Relaxed);
 
-        self.sample_buffer.lock().unwrap().clear();
-        *self.buffer_position.lock().unwrap() = 0;
+        lock_recover(&self.sample_buffer).clear();
+        *lock_recover(&self.buffer_position) = 0;
 
         self.create_stream()?;
 
@@ -391,7 +392,7 @@ impl PlaybackEngine {
         let ramp_step = 1.0 / (sample_rate as f32 * 0.01);
         let mut fade_in_remaining: u64 = 0;
         // EQ processor lives entirely inside this closure; state (z1/z2) is never shared.
-        let initial_eq = eq_settings.lock().unwrap().clone();
+        let initial_eq = lock_recover(&eq_settings).clone();
         let mut eq_proc = EqProcessor::new(&initial_eq, sample_rate, config.channels as usize);
 
         let err_fn = move |err| {
@@ -404,7 +405,7 @@ impl PlaybackEngine {
             .build_output_stream(
                 &config,
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    let playing = *is_playing.lock().unwrap();
+                    let playing = *lock_recover(&is_playing);
 
                     // If not playing and already faded out, just fill with silence
                     if !playing && current_ramp_gain <= 0.0 {
@@ -416,23 +417,23 @@ impl PlaybackEngine {
                     let channels = config.channels as usize;
 
                     while output_pos < data.len() {
-                        let mut buffer = sample_buffer.lock().unwrap();
-                        let mut buf_pos = buffer_position.lock().unwrap();
+                        let mut buffer = lock_recover(&sample_buffer);
+                        let mut buf_pos = lock_recover(&buffer_position);
 
                         if *buf_pos >= buffer.len() {
                             drop(buf_pos);
                             drop(buffer);
 
-                            let mut decoder_guard = decoder.lock().unwrap();
+                            let mut decoder_guard = lock_recover(&decoder);
                             if let Some(ref mut dec) = *decoder_guard {
                                 match dec.decode_next_block() {
                                     Ok(Some(samples)) => {
-                                        *sample_buffer.lock().unwrap() = samples;
-                                        *buffer_position.lock().unwrap() = 0;
+                                        *lock_recover(&sample_buffer) = samples;
+                                        *lock_recover(&buffer_position) = 0;
                                     }
                                     Ok(None) => {
                                         // Current track ended. Checking for a next one.
-                                        let mut next_guard = next_decoder.lock().unwrap();
+                                        let mut next_guard = lock_recover(&next_decoder);
                                         if let Some(next) = next_guard.take() {
                                             info!("Gapless transition to the next track");
                                             let next_duration =
@@ -440,9 +441,9 @@ impl PlaybackEngine {
                                             let next_sr = next.sample_rate();
 
                                             *dec = next;
-                                            *duration_arc.lock().unwrap() = next_duration;
-                                            *samples_played.lock().unwrap() = 0;
-                                            *sample_rate_arc.lock().unwrap() = next_sr;
+                                            *lock_recover(&duration_arc) = next_duration;
+                                            *lock_recover(&samples_played) = 0;
+                                            *lock_recover(&sample_rate_arc) = next_sr;
                                             track_switched.store(true, Ordering::SeqCst);
                                             fade_in_remaining = fade_in_smp.load(Ordering::Relaxed);
                                             // Continue the loop for the new decoder
@@ -454,7 +455,7 @@ impl PlaybackEngine {
                                                 data[output_pos..].fill(0.0);
                                             } else {
                                                 data[output_pos..].fill(0.0);
-                                                *is_playing.lock().unwrap() = false;
+                                                *lock_recover(&is_playing) = false;
                                             }
                                             break;
                                         }
@@ -474,8 +475,8 @@ impl PlaybackEngine {
                                 return;
                             }
 
-                            buffer = sample_buffer.lock().unwrap();
-                            buf_pos = buffer_position.lock().unwrap();
+                            buffer = lock_recover(&sample_buffer);
+                            buf_pos = lock_recover(&buffer_position);
                         }
 
                         let available = buffer.len() - *buf_pos;
@@ -491,11 +492,11 @@ impl PlaybackEngine {
                         output_pos += to_copy;
 
                         let num_frames = to_copy / channels;
-                        *samples_played.lock().unwrap() += num_frames as u64;
-                        let sr = *sample_rate_arc.lock().unwrap();
+                        *lock_recover(&samples_played) += num_frames as u64;
+                        let sr = *lock_recover(&sample_rate_arc);
                         let position_secs =
-                            *samples_played.lock().unwrap() as f64 / config.sample_rate.0 as f64;
-                        *current_position.lock().unwrap() = Duration::from_secs_f64(position_secs);
+                            *lock_recover(&samples_played) as f64 / config.sample_rate.0 as f64;
+                        *lock_recover(&current_position) = Duration::from_secs_f64(position_secs);
                     }
 
                     // Rebuild EQ filters when settings changed from the command channel.
@@ -507,7 +508,7 @@ impl PlaybackEngine {
                     }
 
                     // Apply volume ramp and master volume (per-frame to support fade)
-                    let vol = *volume.lock().unwrap();
+                    let vol = *lock_recover(&volume);
                     let channels = config.channels as usize;
                     let num_frames = data.len() / channels;
 
@@ -523,13 +524,9 @@ impl PlaybackEngine {
                     let fin_total = fade_in_smp.load(Ordering::Relaxed);
                     let fout_total = fade_out_smp.load(Ordering::Relaxed);
                     // frames_so_far already includes this block; subtract to get block start.
-                    let block_start = samples_played
-                        .lock()
-                        .unwrap()
-                        .saturating_sub(num_frames as u64);
-                    let dur_frames = duration_arc
-                        .lock()
-                        .unwrap()
+                    let block_start =
+                        lock_recover(&samples_played).saturating_sub(num_frames as u64);
+                    let dur_frames = lock_recover(&duration_arc)
                         .map(|d| (d.as_secs_f64() * sample_rate as f64) as u64);
 
                     for frame_idx in 0..num_frames {
@@ -629,13 +626,13 @@ impl PlaybackEngine {
 
         let output_sample_rate = self.config.sample_rate.0;
         {
-            let mut decoder_guard = self.decoder.lock().unwrap();
+            let mut decoder_guard = lock_recover(&self.decoder);
             if let Some(ref mut dec) = *decoder_guard {
                 dec.set_output_sample_rate(output_sample_rate);
             }
         }
         {
-            let mut next_guard = self.next_decoder.lock().unwrap();
+            let mut next_guard = lock_recover(&self.next_decoder);
             if let Some(ref mut dec) = *next_guard {
                 dec.set_output_sample_rate(output_sample_rate);
             }
@@ -643,7 +640,7 @@ impl PlaybackEngine {
 
         self.create_stream()?;
 
-        if *self.is_playing.lock().unwrap() {
+        if *lock_recover(&self.is_playing) {
             if let Some(ref stream) = self.stream {
                 let _ = stream.play();
             }
@@ -654,52 +651,52 @@ impl PlaybackEngine {
     }
 
     pub fn pause(&mut self) {
-        *self.is_playing.lock().unwrap() = false;
+        *lock_recover(&self.is_playing) = false;
         if let Some(ref stream) = self.stream {
             let _ = stream.pause();
         }
     }
 
     pub fn resume(&mut self) {
-        *self.is_playing.lock().unwrap() = true;
+        *lock_recover(&self.is_playing) = true;
         if let Some(ref stream) = self.stream {
             let _ = stream.play();
         }
     }
 
     pub fn stop(&mut self) {
-        *self.is_playing.lock().unwrap() = false;
+        *lock_recover(&self.is_playing) = false;
 
         self.stream = None;
-        *self.decoder.lock().unwrap() = None;
-        *self.next_decoder.lock().unwrap() = None;
-        *self.current_position.lock().unwrap() = Duration::ZERO;
-        *self.samples_played.lock().unwrap() = 0;
-        self.sample_buffer.lock().unwrap().clear();
-        *self.buffer_position.lock().unwrap() = 0;
+        *lock_recover(&self.decoder) = None;
+        *lock_recover(&self.next_decoder) = None;
+        *lock_recover(&self.current_position) = Duration::ZERO;
+        *lock_recover(&self.samples_played) = 0;
+        lock_recover(&self.sample_buffer).clear();
+        *lock_recover(&self.buffer_position) = 0;
     }
 
     pub fn seek(&mut self, position: Duration) -> Result<(), AudioError> {
         info!("Seek requested to {:?}", position);
 
-        let was_playing = *self.is_playing.lock().unwrap();
+        let was_playing = *lock_recover(&self.is_playing);
 
         if was_playing {
             // Start fade out in callback (it will happen as long as stream is not paused)
-            *self.is_playing.lock().unwrap() = false;
+            *lock_recover(&self.is_playing) = false;
         }
 
-        let mut decoder_guard = self.decoder.lock().unwrap();
+        let mut decoder_guard = lock_recover(&self.decoder);
         if let Some(ref mut dec) = *decoder_guard {
             info!("Seeking in the decoder...");
 
-            self.sample_buffer.lock().unwrap().clear();
-            *self.buffer_position.lock().unwrap() = 0;
+            lock_recover(&self.sample_buffer).clear();
+            *lock_recover(&self.buffer_position) = 0;
 
             let res = dec.seek(position.as_secs_f64());
             if let Err(AudioError::OutsideOfBuffer) = res {
                 if was_playing {
-                    *self.is_playing.lock().unwrap() = true;
+                    *lock_recover(&self.is_playing) = true;
                 }
                 return Err(AudioError::OutsideOfBuffer);
             }
@@ -708,8 +705,8 @@ impl PlaybackEngine {
                 match dec.decode_next_block() {
                     Ok(Some(samples)) => {
                         info!("Data received ({} samples), resuming...", samples.len());
-                        *self.sample_buffer.lock().unwrap() = samples;
-                        *self.buffer_position.lock().unwrap() = 0;
+                        *lock_recover(&self.sample_buffer) = samples;
+                        *lock_recover(&self.buffer_position) = 0;
                         break;
                     }
                     Ok(None) => {
@@ -727,15 +724,15 @@ impl PlaybackEngine {
                 }
             }
 
-            *self.current_position.lock().unwrap() = position;
+            *lock_recover(&self.current_position) = position;
             let sr = self.config.sample_rate.0;
             let new_samples = (position.as_secs_f64() * sr as f64) as u64;
-            *self.samples_played.lock().unwrap() = new_samples;
+            *lock_recover(&self.samples_played) = new_samples;
         }
 
         if was_playing {
             // Start fade in
-            *self.is_playing.lock().unwrap() = true;
+            *lock_recover(&self.is_playing) = true;
         }
 
         info!("Seek finished");
@@ -743,7 +740,7 @@ impl PlaybackEngine {
     }
 
     pub fn get_recent_samples(&self) -> Vec<f32> {
-        self.recent_samples.lock().unwrap().clone()
+        lock_recover(&self.recent_samples).clone()
     }
 
     pub fn channels(&self) -> usize {
@@ -751,15 +748,15 @@ impl PlaybackEngine {
     }
 
     pub fn position(&self) -> Duration {
-        *self.current_position.lock().unwrap()
+        *lock_recover(&self.current_position)
     }
 
     pub fn duration(&self) -> Option<Duration> {
-        *self.duration.lock().unwrap()
+        *lock_recover(&self.duration)
     }
 
     pub fn buffered_ranges(&self) -> Vec<(f64, f64)> {
-        let decoder_guard = self.decoder.lock().unwrap();
+        let decoder_guard = lock_recover(&self.decoder);
         if let Some(ref dec) = *decoder_guard {
             dec.buffered_ranges()
         } else {
@@ -768,7 +765,7 @@ impl PlaybackEngine {
     }
 
     pub fn waveforms(&self) -> Vec<crate::audio::types::Waveform> {
-        let decoder_guard = self.decoder.lock().unwrap();
+        let decoder_guard = lock_recover(&self.decoder);
         if let Some(ref dec) = *decoder_guard {
             dec.waveforms()
         } else {
@@ -777,16 +774,16 @@ impl PlaybackEngine {
     }
 
     pub fn is_playing(&self) -> bool {
-        *self.is_playing.lock().unwrap()
+        *lock_recover(&self.is_playing)
     }
 
     pub fn set_volume(&mut self, volume: f32) {
         let clamped = volume.clamp(0.0, 1.0);
-        *self.volume.lock().unwrap() = clamped;
+        *lock_recover(&self.volume) = clamped;
     }
 
     pub fn volume(&self) -> f32 {
-        *self.volume.lock().unwrap()
+        *lock_recover(&self.volume)
     }
 
     pub fn set_fade(&self, fade_in_ms: u32, fade_out_ms: u32) {
@@ -802,12 +799,12 @@ impl PlaybackEngine {
     }
 
     pub fn set_eq(&self, settings: EqSettings) {
-        *self.eq_settings.lock().unwrap() = settings;
+        *lock_recover(&self.eq_settings) = settings;
         self.eq_dirty.store(true, Ordering::SeqCst);
     }
 
     pub fn get_eq(&self) -> EqSettings {
-        self.eq_settings.lock().unwrap().clone()
+        lock_recover(&self.eq_settings).clone()
     }
 
     pub fn current_output_sample_rate(&self) -> u32 {
