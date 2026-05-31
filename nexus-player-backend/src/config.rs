@@ -158,11 +158,14 @@ impl ConfigManager {
     }
 
     pub fn get(&self) -> AppConfig {
-        self.config.read().unwrap().clone()
+        self.config
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     pub fn update(&self, new_config: AppConfig) -> Result<(), ConfigError> {
-        let mut config = self.config.write().unwrap();
+        let mut config = self.config.write().unwrap_or_else(|e| e.into_inner());
         // Preserve the path which is skipped in serialization
         let path = config.config_path.clone();
         *config = new_config;

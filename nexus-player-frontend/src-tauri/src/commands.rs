@@ -1252,15 +1252,14 @@ pub async fn open_challenge_window(
             let _ = win.close();
         }
 
-        tauri::WebviewWindowBuilder::new(
-            &app,
-            &label,
-            tauri::WebviewUrl::External(url.parse().unwrap()),
-        )
-        .initialization_script(&script)
-        .visible(false)
-        .build()
-        .map_err(|e: tauri::Error| e.to_string())?;
+        let parsed_url = url
+            .parse()
+            .map_err(|e| format!("Invalid challenge URL: {}", e))?;
+        tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(parsed_url))
+            .initialization_script(&script)
+            .visible(false)
+            .build()
+            .map_err(|e: tauri::Error| e.to_string())?;
     }
 
     // On Android the native SoundCloudChallengePlugin handles this:

@@ -51,7 +51,10 @@ impl AppState {
         let library = LibraryService::new(db_path).await?;
         let library = Arc::new(library);
 
-        let config_path = db_path.parent().unwrap().join("config.json");
+        let config_path = db_path
+            .parent()
+            .unwrap_or_else(|| Path::new(""))
+            .join("config.json");
         let config_manager = ConfigManager::new(config_path)
             .map_err(|e| anyhow::anyhow!("Failed to load configuration: {}", e))?;
 
@@ -67,7 +70,10 @@ impl AppState {
             audio_engine.set_fade(fin, fout);
         }
 
-        let cache_dir = db_path.parent().unwrap().join("cache");
+        let cache_dir = db_path
+            .parent()
+            .unwrap_or_else(|| Path::new(""))
+            .join("cache");
         let artwork = Arc::new(ArtworkCache::new(cache_dir.join("artwork")));
 
         let streaming = StreamingService::new(

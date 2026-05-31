@@ -858,10 +858,9 @@ impl HlsBuffer {
             if segment_path.exists() {
                 let data = fs::read(&segment_path)?;
 
-                let actual_data = if init_path.exists() {
-                    [init_segment.clone().unwrap(), data.clone()].concat()
-                } else {
-                    data.clone()
+                let actual_data = match &init_segment {
+                    Some(init) => [init.as_slice(), data.as_slice()].concat(),
+                    None => data.clone(),
                 };
 
                 if let Some(duration) = Self::extract_duration(&actual_data) {

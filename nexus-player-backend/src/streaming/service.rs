@@ -161,7 +161,7 @@ impl StreamingService {
     ) -> StreamResult<Vec<SearchResult>> {
         // Check if provider is enabled
         {
-            let config = self.config.read().unwrap();
+            let config = self.config.read().unwrap_or_else(|e| e.into_inner());
             let enabled = match provider_name {
                 "soundcloud" => config.soundcloud.enabled,
                 "bandcamp" => config.bandcamp.enabled,

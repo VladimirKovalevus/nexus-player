@@ -19,7 +19,13 @@ impl RangeDownloader {
         let (tx, rx) = bounded(DEFAULT_CAPACITY);
 
         let thread = thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    tracing::error!("Failed to create tokio runtime: {}", e);
+                    return;
+                }
+            };
 
             rt.block_on(RangeDownloader::download_loop(url, buffer, rx))
         });
@@ -73,11 +79,17 @@ impl RangeDownloader {
         buffer: Arc<ChunkedBuffer>,
         command_rx: Receiver<DownloadCommand>,
     ) {
-        let client = Client::builder()
+        let client = match Client::builder()
             .timeout(Duration::from_secs(30))
             .user_agent(DEFAULT_USER_AGENT)
             .build()
-            .unwrap();
+        {
+            Ok(client) => client,
+            Err(e) => {
+                tracing::error!("Failed to build HTTP client: {}", e);
+                return;
+            }
+        };
 
         let head = match client.head(&url).send().await {
             Ok(response) => {

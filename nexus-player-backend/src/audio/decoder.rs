@@ -260,12 +260,11 @@ impl AudioDecoder {
                 if let Some(total_bytes) = reader.byte_len() {
                     if total_bytes > 0 {
                         for w in waveforms.iter_mut() {
-                            if w.end_time == 0.0 && w.byte_end.is_some() {
+                            if let (0.0, Some(byte_end)) = (w.end_time, w.byte_end) {
                                 w.start_time = (w.byte_start.unwrap_or(0) as f64
                                     / total_bytes as f64)
                                     * duration;
-                                w.end_time =
-                                    (w.byte_end.unwrap() as f64 / total_bytes as f64) * duration;
+                                w.end_time = (byte_end as f64 / total_bytes as f64) * duration;
                             }
                         }
                     }

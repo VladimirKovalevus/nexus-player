@@ -66,12 +66,14 @@ impl CursorQueue {
                 // Pick a random track from manual queue
                 let mut rng = thread_rng();
                 let idx = rng.gen_range(0..self.manual_queue.len());
-                self.manual_queue.remove(idx).unwrap()
+                self.manual_queue.remove(idx)
             } else {
-                self.manual_queue.pop_front().unwrap()
+                self.manual_queue.pop_front()
             };
-            self.current_track = Some(track.clone());
-            return Ok(Some(track));
+            if let Some(track) = track {
+                self.current_track = Some(track.clone());
+                return Ok(Some(track));
+            }
         }
 
         // 3. Fetch from cursor if available
@@ -83,9 +85,10 @@ impl CursorQueue {
                 if !self.manual_queue.is_empty() {
                     let mut rng = thread_rng();
                     let idx = rng.gen_range(0..self.manual_queue.len());
-                    let track = self.manual_queue.remove(idx).unwrap();
-                    self.current_track = Some(track.clone());
-                    return Ok(Some(track));
+                    if let Some(track) = self.manual_queue.remove(idx) {
+                        self.current_track = Some(track.clone());
+                        return Ok(Some(track));
+                    }
                 }
             }
 

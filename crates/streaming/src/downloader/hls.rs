@@ -28,7 +28,13 @@ impl HlsDownloader {
         let buffer_clone = buffer.clone();
 
         let thread = std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    tracing::error!("Failed to create tokio runtime: {}", e);
+                    return;
+                }
+            };
             rt.block_on(Self::download_loop(
                 url_clone,
                 buffer_clone,
@@ -68,11 +74,17 @@ impl HlsDownloader {
         command_rx: Receiver<DownloadCommand>,
         bandwidth_bps: u64,
     ) {
-        let client = Client::builder()
+        let client = match Client::builder()
             .timeout(Duration::from_secs(30))
             .user_agent(DEFAULT_USER_AGENT)
             .build()
-            .unwrap();
+        {
+            Ok(client) => client,
+            Err(e) => {
+                tracing::error!("Failed to build HTTP client: {}", e);
+                return;
+            }
+        };
 
         let mut playlist_type = match Self::fetch_and_parse(&client, &playlist_url).await {
             Ok(p) => p,

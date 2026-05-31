@@ -96,7 +96,13 @@ impl DownloadManager {
         let config = Arc::new(RwLock::new(config));
         let v6 = config.clone();
         let handle = std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    tracing::error!("Failed to create tokio runtime: {}", e);
+                    return;
+                }
+            };
             rt.block_on(Self::event_loop(rx, v1, v2, v3, v4, v5, v6));
         });
 
@@ -309,7 +315,7 @@ impl DownloadManager {
             for id in &tasks_to_remove {
                 q.remove(id);
             }
-            let task_to_process = target_id.and_then(|id| q.remove(&id));
+            let task_to_process = target_id.and_then(|id| q.remove(&id).map(|task| (id, task)));
             drop(q);
 
             if !lru_completed.is_empty() {
@@ -320,8 +326,7 @@ impl DownloadManager {
                 }
             }
 
-            if let Some(mut task) = task_to_process {
-                let id = target_id.unwrap();
+            if let Some((id, mut task)) = task_to_process {
                 let mut finished = false;
 
                 tokio::select! {

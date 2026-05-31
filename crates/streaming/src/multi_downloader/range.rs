@@ -115,11 +115,16 @@ impl RangeDownloader {
             self.position += self.buffer.chunk_size();
         }
         let url = &self.url;
+        let client = self
+            .client
+            .as_ref()
+            .ok_or_else(|| StreamingError::Http("HTTP client is not initialised".to_string()))?
+            .clone();
         let current_offset = offset;
         let mut retries = 0;
         loop {
             let result = RangeDownloader::download_chunk(
-                self.client.as_ref().unwrap(),
+                &client,
                 &url,
                 current_offset,
                 current_offset + self.buffer.chunk_size() - 1,

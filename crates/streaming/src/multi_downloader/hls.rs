@@ -58,7 +58,9 @@ impl HlsDownloader {
             .unwrap_or_else(|| DEFAULT_USER_AGENT.to_string());
         client_builder = client_builder.user_agent(ua);
 
-        let client = client_builder.build().unwrap();
+        let client = client_builder
+            .build()
+            .map_err(|e| InitializationError::Error(e.to_string()))?;
 
         let playlist = match self.playlist.take() {
             Some(playlist) => playlist,

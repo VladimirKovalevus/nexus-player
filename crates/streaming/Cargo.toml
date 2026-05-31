@@ -28,3 +28,6 @@ bandcamp = "0.3.4"
 
 [features]
 default = []
+
+[lints.clippy]
+unwrap_used = "deny"

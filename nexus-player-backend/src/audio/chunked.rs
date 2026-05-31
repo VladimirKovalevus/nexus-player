@@ -97,7 +97,9 @@ impl ChunkedMediaSource {
 
     fn download_chunk(&mut self, chunk_index: u64) -> std::io::Result<()> {
         if self.chunks.contains_key(&chunk_index) {
-            self.chunks.get_mut(&chunk_index).unwrap().last_accessed = Instant::now();
+            if let Some(chunk) = self.chunks.get_mut(&chunk_index) {
+                chunk.last_accessed = Instant::now();
+            }
             return Ok(());
         }
 
@@ -143,7 +145,9 @@ impl ChunkedMediaSource {
             self.download_chunk(chunk_index)?;
         }
 
-        let chunk = self.chunks.get_mut(&chunk_index).unwrap();
+        let chunk = self.chunks.get_mut(&chunk_index).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "chunk missing after download")
+        })?;
         chunk.last_accessed = Instant::now();
         Ok(&chunk.data)
     }
@@ -216,7 +220,13 @@ impl Read for ChunkedMediaSource {
 
         self.get_chunk(chunk_index)?;
 
-        let chunk_data = &self.chunks.get(&chunk_index).unwrap().data;
+        let chunk_data = &self
+            .chunks
+            .get(&chunk_index)
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "chunk missing after download")
+            })?
+            .data;
         let offset_in_chunk = (self.position - chunk_start) as usize;
         let available_in_chunk = chunk_data.len() - offset_in_chunk;
 

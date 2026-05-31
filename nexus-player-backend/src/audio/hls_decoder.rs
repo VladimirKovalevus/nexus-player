@@ -188,7 +188,11 @@ impl HlsAudioDecoder {
 
     fn decode_continuous(&mut self) -> Result<Option<Vec<f32>>, AudioError> {
         loop {
-            let format_reader = self.continuous_reader.as_mut().unwrap();
+            let Some(format_reader) = self.continuous_reader.as_mut() else {
+                return Err(AudioError::DecodingError(
+                    "HLS continuous reader is not initialised".to_string(),
+                ));
+            };
 
             match format_reader.next_packet() {
                 Ok(packet) => {
@@ -348,7 +352,11 @@ impl HlsAudioDecoder {
                 .seek((time_secs * 1000.0) as u64)
                 .map_err(|e| AudioError::DecodingError(format!("HLS source seek failed: {}", e)))?;
 
-            let reader = self.continuous_reader.as_mut().unwrap();
+            let Some(reader) = self.continuous_reader.as_mut() else {
+                return Err(AudioError::DecodingError(
+                    "HLS continuous reader is not initialised".to_string(),
+                ));
+            };
             let ts = Time::from(time_secs);
             let seeked_to = reader
                 .seek(

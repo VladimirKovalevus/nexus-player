@@ -143,7 +143,9 @@ impl CursorSource for ProviderCursor {
     async fn next_batch(&mut self, limit: usize) -> Result<Vec<CursorItem>> {
         self.ensure_loaded().await?;
 
-        let items = self.items.as_ref().unwrap();
+        let Some(items) = self.items.as_ref() else {
+            return Ok(Vec::new());
+        };
         if self.index >= items.len() {
             return Ok(Vec::new());
         }

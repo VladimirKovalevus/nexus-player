@@ -105,10 +105,9 @@ pub fn parse_media_playlist(content: &str, url: &str) -> Result<HlsPlaylist, Str
 
             sequence += 1;
             // Only update fake byte_offset if we don't have real byte ranges
-            if current_range_length.is_none() {
-                byte_offset += (current_duration * 20_000.0) as u64;
-            } else {
-                byte_offset += current_range_length.unwrap();
+            match current_range_length {
+                Some(length) => byte_offset += length,
+                None => byte_offset += (current_duration * 20_000.0) as u64,
             }
 
             current_duration = 0.0;
