@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     sea_query, ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, TransactionTrait,
+    QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
 };
 
 use crate::library::entities_v2::{artwork, playlist_item, track};

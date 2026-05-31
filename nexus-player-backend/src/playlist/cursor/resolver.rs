@@ -78,7 +78,7 @@ impl CursorResolver for AppCursorResolver {
                 )))
             }
 
-            ContainerContext::LocalAlbum(id) => {
+            ContainerContext::LocalAlbum(_id) => {
                 // Assuming we can find tracks by album ID or name.
                 // For now, let's say we have a method in library or use a placeholder.
                 let tracks = self.library.get_all_tracks(TrackOrder::default()).await?; // Temporary: should be filtered by album

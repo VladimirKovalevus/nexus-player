@@ -18,11 +18,3 @@ pub async fn establish_connection(database_url: &str) -> Result<DatabaseConnecti
 
     Ok(db)
 }
-
-pub async fn establish_connection_with_migrations(
-    database_url: &str,
-) -> Result<DatabaseConnection> {
-    let db = establish_connection(database_url).await?;
-
-    Ok(db)
-}

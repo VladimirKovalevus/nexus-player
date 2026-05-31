@@ -2,8 +2,6 @@ use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom};
 use std::time::Instant;
 
-use symphonia::core::io::MediaSourceStream;
-
 const DEFAULT_CHUNK_SIZE: usize = 1024 * 1024; // 1MB
 const DEFAULT_MAX_CACHED_CHUNKS: usize = 10; // 10MB total cache
 
@@ -43,7 +41,7 @@ impl ChunkedMediaSource {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(std::io::Error::other)?;
 
         let total_size = Self::fetch_content_length(&client, &url)?;
 
@@ -66,10 +64,7 @@ impl ChunkedMediaSource {
         client: &reqwest::blocking::Client,
         url: &str,
     ) -> std::io::Result<Option<u64>> {
-        let response = client
-            .head(url)
-            .send()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let response = client.head(url).send().map_err(std::io::Error::other)?;
 
         Ok(response
             .headers()
@@ -113,19 +108,16 @@ impl ChunkedMediaSource {
             .get(&self.url)
             .header(reqwest::header::RANGE, range_header)
             .send()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(std::io::Error::other)?;
 
         if !response.status().is_success() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("HTTP error: {}", response.status()),
-            ));
+            return Err(std::io::Error::other(format!(
+                "HTTP error: {}",
+                response.status()
+            )));
         }
 
-        let data = response
-            .bytes()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
-            .to_vec();
+        let data = response.bytes().map_err(std::io::Error::other)?.to_vec();
 
         self.chunks.insert(
             chunk_index,
@@ -163,11 +155,7 @@ impl ChunkedMediaSource {
             .chunks
             .iter()
             .filter(|(idx, _)| {
-                let distance = if **idx > current_chunk {
-                    **idx - current_chunk
-                } else {
-                    current_chunk - **idx
-                };
+                let distance = (**idx).abs_diff(current_chunk);
                 distance > 2
             })
             .map(|(idx, chunk)| (*idx, chunk.last_accessed))

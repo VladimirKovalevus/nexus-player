@@ -1,7 +1,7 @@
 pub mod client;
 pub mod config;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
 

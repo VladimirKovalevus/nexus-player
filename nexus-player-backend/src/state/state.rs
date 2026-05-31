@@ -216,11 +216,7 @@ impl AppState {
         let liked_sources = self.library.find_liked_by_sources(&sources).await?;
 
         for track in &mut tracks {
-            if liked_sources.contains(&track.source) {
-                track.liked = true;
-            } else {
-                track.liked = false;
-            }
+            track.liked = liked_sources.contains(&track.source);
         }
         Ok(tracks)
     }
@@ -265,7 +261,7 @@ impl AppState {
                             NextResult::End
                         }
                     },
-                    ActiveQueue::Search(sq) => sq.next(),
+                    ActiveQueue::Search(sq) => sq.advance(),
                 }
             };
 
@@ -297,7 +293,7 @@ impl AppState {
                         self.play_cancellable(None, cancel).await;
                         return;
                     }
-                    // Loop again — sq.next() will now find the newly loaded item at current+1
+                    // Loop again — sq.advance() will now find the newly loaded item at current+1
                 }
                 NextResult::End => {
                     let (repeat_mode, context, is_search) = {
@@ -390,44 +386,39 @@ impl AppState {
 
     pub async fn play_previous(&self) {
         let cancel = self.begin_exclusive_op().await;
-        loop {
-            let result = {
-                let mut queue = self.queue.lock().await;
-                match &mut *queue {
-                    ActiveQueue::Cursor(cq) => match cq.previous() {
-                        Some(track) => NextResult::Track(track),
-                        None => NextResult::End,
-                    },
-                    ActiveQueue::Search(sq) => sq.previous(),
-                }
-            };
+        let result = {
+            let mut queue = self.queue.lock().await;
+            match &mut *queue {
+                ActiveQueue::Cursor(cq) => match cq.previous() {
+                    Some(track) => NextResult::Track(track),
+                    None => NextResult::End,
+                },
+                ActiveQueue::Search(sq) => sq.previous(),
+            }
+        };
 
-            match result {
-                NextResult::Track(track) => {
-                    tracing::info!("Previous track: {}", track.id);
-                    self.play_cancellable(Some(track), cancel).await;
-                    return;
-                }
-                NextResult::NeedExpand(idx) => {
-                    if let Err(e) = self.expand_search_container(idx).await {
-                        tracing::error!("Failed to expand container {}: {}", idx, e);
-                        self.play_cancellable(None, cancel).await;
-                        return;
-                    }
-                    let track = {
-                        let queue = self.queue.lock().await;
-                        match &*queue {
-                            ActiveQueue::Search(sq) => sq.current_track(),
-                            _ => None,
-                        }
-                    };
-                    self.play_cancellable(track, cancel).await;
-                    return;
-                }
-                _ => {
+        match result {
+            NextResult::Track(track) => {
+                tracing::info!("Previous track: {}", track.id);
+                self.play_cancellable(Some(track), cancel).await;
+            }
+            NextResult::NeedExpand(idx) => {
+                if let Err(e) = self.expand_search_container(idx).await {
+                    tracing::error!("Failed to expand container {}: {}", idx, e);
                     self.play_cancellable(None, cancel).await;
                     return;
                 }
+                let track = {
+                    let queue = self.queue.lock().await;
+                    match &*queue {
+                        ActiveQueue::Search(sq) => sq.current_track(),
+                        _ => None,
+                    }
+                };
+                self.play_cancellable(track, cancel).await;
+            }
+            _ => {
+                self.play_cancellable(None, cancel).await;
             }
         }
     }
@@ -463,22 +454,15 @@ impl AppState {
                 let streaming = self.streaming.clone();
                 let engine = self.audio_engine.clone();
                 tokio::spawn(async move {
-                    match streaming
+                    if let Ok(wrapper) = streaming
                         .resolve(next.source.clone(), next.id as u64, None)
                         .await
                     {
-                        Ok(wrapper) => {
-                            if let Err(e) = wrapper.prepare().await {
-                                tracing::warn!(
-                                    "Preload prepare failed for track {}: {}",
-                                    next.id,
-                                    e
-                                );
-                                return;
-                            }
-                            wrapper.preload(&engine, next);
+                        if let Err(e) = wrapper.prepare().await {
+                            tracing::warn!("Preload prepare failed for track {}: {}", next.id, e);
+                            return;
                         }
-                        Err(_) => {}
+                        wrapper.preload(&engine, next);
                     }
                 });
             }
@@ -536,7 +520,6 @@ impl AppState {
                         });
                     }
                     self.audio_engine().stop();
-                    return;
                 }
             }
         } else {
@@ -568,7 +551,7 @@ impl AppState {
                 // Switch to cursor queue when manually adding
                 let mut cq = CursorQueue::new();
                 cq.add_track(audio_track);
-                *queue = ActiveQueue::Cursor(cq);
+                *queue = ActiveQueue::Cursor(Box::new(cq));
             }
         }
 
@@ -614,7 +597,7 @@ impl AppState {
 
         self.fill_cursor_queue(audio_tracks).await;
 
-        let total_pages = (total + page_size - 1) / page_size;
+        let total_pages = total.div_ceil(page_size);
         Ok((page, total_pages, track_index_in_page))
     }
 
@@ -637,7 +620,7 @@ impl AppState {
 
         self.fill_cursor_queue(audio_tracks).await;
 
-        let total_pages = (total + page_size - 1) / page_size;
+        let total_pages = total.div_ceil(page_size);
         Ok(total_pages)
     }
 
@@ -732,25 +715,22 @@ impl AppState {
                     if preload_cancel.is_cancelled() {
                         return;
                     }
-                    match streaming
+                    if let Ok(wrapper) = streaming
                         .resolve(next.source.clone(), next.id as u64, None)
                         .await
                     {
-                        Ok(wrapper) => {
-                            if let Err(e) = wrapper.prepare().await {
-                                tracing::warn!(
-                                    "play_cancellable[preload]: prepare failed for track {}: {}",
-                                    next.id,
-                                    e
-                                );
-                                return;
-                            }
-                            if preload_cancel.is_cancelled() {
-                                return;
-                            }
-                            wrapper.preload(&engine, next);
+                        if let Err(e) = wrapper.prepare().await {
+                            tracing::warn!(
+                                "play_cancellable[preload]: prepare failed for track {}: {}",
+                                next.id,
+                                e
+                            );
+                            return;
                         }
-                        Err(_) => {}
+                        if preload_cancel.is_cancelled() {
+                            return;
+                        }
+                        wrapper.preload(&engine, next);
                     }
                 });
             }
@@ -876,7 +856,6 @@ impl AppState {
                         });
                     }
                     self.audio_engine().stop();
-                    return;
                 }
             }
         } else {
@@ -910,7 +889,7 @@ impl AppState {
             .map(|t| t.clone().into())
             .collect();
 
-        let total_pages = (total + page_size - 1) / page_size;
+        let total_pages = total.div_ceil(page_size);
 
         if cancel.is_cancelled() {
             return Ok((page, total_pages, track_index_in_page));
@@ -954,7 +933,7 @@ impl AppState {
             .map(|t| t.clone().into())
             .collect();
 
-        let total_pages = (total + page_size - 1) / page_size;
+        let total_pages = total.div_ceil(page_size);
 
         if cancel.is_cancelled() {
             return Ok(total_pages);
@@ -1166,7 +1145,7 @@ impl AppState {
             let mut cq = CursorQueue::new();
             cq.add_track(track.clone());
             cq.jump_to(0);
-            *queue = ActiveQueue::Cursor(cq);
+            *queue = ActiveQueue::Cursor(Box::new(cq));
         }
         if cancel.is_cancelled() {
             return Ok(());
@@ -1188,7 +1167,7 @@ impl AppState {
             let mut cq = CursorQueue::new();
             cq.add_track(track.clone());
             cq.jump_to(0);
-            *queue = ActiveQueue::Cursor(cq);
+            *queue = ActiveQueue::Cursor(Box::new(cq));
         }
         if cancel.is_cancelled() {
             return Ok(());
@@ -1274,7 +1253,7 @@ impl AppState {
         offset: usize,
         selected_index: usize,
     ) -> Result<()> {
-        use crate::streaming::types::{ContentType, SearchResult as SR};
+        use crate::streaming::types::SearchResult as SR;
 
         tracing::info!(
             "Loading search queue: '{}' from {} (offset: {}, limit: {})",
@@ -1318,11 +1297,7 @@ impl AppState {
                         track_count: playlist.track_count,
                         thumbnail: playlist.thumbnail,
                     },
-                    expanded_tracks: if playlist.tracks.is_empty() {
-                        None
-                    } else {
-                        None
-                    },
+                    expanded_tracks: None,
                     play_index: 0,
                 },
                 SR::Channel(_) => {
@@ -1381,7 +1356,7 @@ impl AppState {
         offset: usize,
         selected_index: usize,
     ) -> Result<()> {
-        use crate::streaming::types::{ContentType, SearchResult as SR};
+        use crate::streaming::types::SearchResult as SR;
 
         let cancel = self.begin_exclusive_op().await;
 
@@ -2028,7 +2003,6 @@ impl AppState {
         match result {
             NextResult::Track(track) => {
                 self.play(Some(track)).await;
-                return;
             }
             NextResult::NeedExpand(idx) => {
                 if let Err(e) = self.expand_search_container(idx).await {
@@ -2044,9 +2018,8 @@ impl AppState {
                     }
                 };
                 self.play(track).await;
-                return;
             }
-            _ => return,
+            _ => (),
         }
     }
 }

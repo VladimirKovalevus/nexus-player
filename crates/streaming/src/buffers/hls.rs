@@ -1,6 +1,6 @@
 use super::sync::lock_recover;
 use std::fs::{self, File};
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -38,7 +38,7 @@ impl Seek for HlsBufferReader {
         let size = self
             .buffer
             .total_size()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Unknown size"))?;
+            .ok_or_else(|| std::io::Error::other("Unknown size"))?;
 
         let new_pos = match pos {
             SeekFrom::Start(p) => p,
@@ -46,14 +46,14 @@ impl Seek for HlsBufferReader {
                 if p >= 0 {
                     size + p as u64
                 } else {
-                    size.saturating_sub(p.abs() as u64)
+                    size.saturating_sub(p.unsigned_abs())
                 }
             }
             SeekFrom::Current(p) => {
                 if p >= 0 {
                     self.position + p as u64
                 } else {
-                    self.position.saturating_sub(p.abs() as u64)
+                    self.position.saturating_sub(p.unsigned_abs())
                 }
             }
         };
@@ -133,8 +133,7 @@ impl Seek for HlsSequentialReader {
     fn seek(&mut self, _pos: SeekFrom) -> std::io::Result<u64> {
         // Sequential reader for waveform doesn't really need seeking,
         // but symphonia might call it. We can return error or current pos.
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        Err(std::io::Error::other(
             "Seek not implemented for HlsSequentialReader",
         ))
     }
@@ -277,10 +276,8 @@ impl HlsBuffer {
 
     pub fn write_to<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let inner = lock_recover(&self.inner);
-        for segment_opt in &inner.segments {
-            if let Some(segment) = segment_opt {
-                writer.write_all(&segment.data)?;
-            }
+        for segment in inner.segments.iter().flatten() {
+            writer.write_all(&segment.data)?;
         }
         Ok(())
     }
@@ -346,7 +343,6 @@ impl HlsBuffer {
             128_000
         }; // Fallback to 128kbps
 
-        let mut accumulated_time = 0.0;
         let mut accumulated_bytes = 0u64;
         let init_offset = if inner.has_init_segment { 1 } else { 0 };
 
@@ -390,7 +386,6 @@ impl HlsBuffer {
             }
 
             accumulated_bytes = seg_end;
-            accumulated_time += duration;
         }
 
         // If we reached here, the offset is beyond the last segment

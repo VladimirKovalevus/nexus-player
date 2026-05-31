@@ -1,11 +1,8 @@
-use std::io::{self, SeekFrom};
-use std::path::Path;
+use std::io::{self};
 use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::buffers::hls::HlsBuffer;
 use crate::error::StreamingError;
-use crate::multi_downloader::SeekPos;
 use crate::state::types::ManagerCommand;
 
 pub struct HlsSource {
@@ -106,7 +103,7 @@ impl HlsSource {
                 let durations = self.buffer.durations();
                 let current_accumulated_time: f64 =
                     durations.iter().take(self.read_segment_idx).sum();
-                let target_ms = (current_accumulated_time * 1000.0) as u64;
+                let _target_ms = (current_accumulated_time * 1000.0) as u64;
 
                 // We ignore the error here because if we can't send, we just return WouldBlock anyway.
                 if !self.seek_lock {
@@ -126,9 +123,9 @@ impl HlsSource {
 
     // Kept for compatibility but deprecated for this use case
     pub fn read_at(&self, offset: u64, buf: &mut [u8]) -> std::io::Result<usize> {
-        let mut retries = 0;
+        let _retries = 0;
         match self.buffer.read_at(offset, buf) {
-            Some(n) => return Ok(n),
+            Some(n) => Ok(n),
             None => {
                 if self.buffer.is_complete() {
                     return Ok(0);

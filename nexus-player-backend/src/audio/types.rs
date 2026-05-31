@@ -192,8 +192,9 @@ impl Default for AudioState {
         }
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PlaybackState {
+    #[default]
     Stopped,
 
     Playing,
@@ -203,12 +204,6 @@ pub enum PlaybackState {
     Buffering,
 
     Loading,
-}
-
-impl Default for PlaybackState {
-    fn default() -> Self {
-        Self::Stopped
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -328,7 +323,7 @@ impl From<crate::library::models::Track> for Track {
             duration: track
                 .audio_info
                 .as_ref()
-                .and_then(|info| info.duration_secs.map(|secs| Duration::from_secs_f64(secs))),
+                .and_then(|info| info.duration_secs.map(Duration::from_secs_f64)),
             artwork_url: track
                 .metadata
                 .artwork

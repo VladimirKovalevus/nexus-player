@@ -30,17 +30,12 @@ pub struct Artwork {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum DownloadStrategy {
     Stream,
+    #[default]
     Cache,
     Progressive,
-}
-
-impl Default for DownloadStrategy {
-    fn default() -> Self {
-        Self::Cache
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,7 +86,7 @@ impl Default for TrackOrder {
 }
 
 impl CodecFormat {
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "mp3" => Self::Mp3,
             "flac" => Self::Flac,

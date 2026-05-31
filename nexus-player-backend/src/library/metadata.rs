@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use lofty::file::{AudioFile, TaggedFileExt};
-use lofty::mp4;
 use lofty::probe::Probe;
 use lofty::tag::Accessor;
 use std::path::Path;
@@ -41,7 +40,7 @@ pub fn parse_from_path(path: &Path) -> Result<ParsedMetadata> {
         audio_info: None,
         artwork_data: None,
     };
-    let properties = tagged_file.properties();
+    let _properties = tagged_file.properties();
     if let Some(tags) = tag {
         result.title = tags
             .title()
@@ -74,7 +73,7 @@ pub fn parse_from_path(path: &Path) -> Result<ParsedMetadata> {
     Ok(result)
 }
 
-pub fn parse_from_buffer(buffer: &[u8], file_extension: &str) -> Result<ParsedMetadata> {
+pub fn parse_from_buffer(buffer: &[u8], _file_extension: &str) -> Result<ParsedMetadata> {
     let tagged_file = Probe::new(std::io::Cursor::new(buffer))
         .guess_file_type()
         .context("Failed to guess file type from buffer")?
@@ -96,7 +95,7 @@ pub fn parse_from_buffer(buffer: &[u8], file_extension: &str) -> Result<ParsedMe
         audio_info: None,
         artwork_data: None,
     };
-    let properties = tagged_file.properties();
+    let _properties = tagged_file.properties();
     if let Some(tags) = tag {
         result.title = tags
             .title()

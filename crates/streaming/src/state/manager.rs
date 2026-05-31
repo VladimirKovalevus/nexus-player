@@ -8,7 +8,6 @@ use std::{
 };
 
 use crate::{
-    buffers::chunked::ChunkedBuffer,
     detection::detect_stream_type,
     error::StreamingError,
     multi_downloader::{source::Source, TaskDownloader},
@@ -18,11 +17,17 @@ use crate::{
     },
 };
 
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{Mutex, RwLock};
 
 pub struct BandwidthMonitor {
     bps: AtomicU64,
+}
+
+impl Default for BandwidthMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BandwidthMonitor {
@@ -52,19 +57,11 @@ impl BandwidthMonitor {
     }
 }
 
+#[derive(Default)]
 pub struct PlaybackContext {
     pub current: Option<TrackId>,
     pub active_ids: Vec<TrackId>,
     pub low_priority_queue: Vec<TrackId>,
-}
-impl Default for PlaybackContext {
-    fn default() -> Self {
-        Self {
-            current: None,
-            active_ids: Vec::new(),
-            low_priority_queue: Vec::new(),
-        }
-    }
 }
 
 pub struct DownloadManager {
@@ -871,7 +868,7 @@ impl DownloadManager {
         let bandwidth_bps = self.bandwidth_monitor.get_bps();
         let (loader, buffer) = {
             let cfg = self.config.read().await;
-            TaskDownloader::new(
+            TaskDownloader::create(
                 stream_type,
                 bandwidth_bps,
                 user_agent,

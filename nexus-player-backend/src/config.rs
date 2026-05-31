@@ -31,18 +31,10 @@ impl Default for ProviderSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
+#[derive(Default)]
 pub struct ProviderConfig {
     pub soundcloud: ProviderSettings,
     pub bandcamp: ProviderSettings,
-}
-
-impl Default for ProviderConfig {
-    fn default() -> Self {
-        Self {
-            soundcloud: ProviderSettings::default(),
-            bandcamp: ProviderSettings::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,6 +87,7 @@ impl Default for NetworkConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
+#[derive(Default)]
 pub struct AppConfig {
     pub providers: ProviderConfig,
     pub audio: AudioConfig,
@@ -102,18 +95,6 @@ pub struct AppConfig {
     pub eq: EqSettings,
     #[serde(skip)]
     config_path: Option<PathBuf>,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            providers: ProviderConfig::default(),
-            audio: AudioConfig::default(),
-            network: NetworkConfig::default(),
-            eq: EqSettings::default(),
-            config_path: None,
-        }
-    }
 }
 
 impl AppConfig {

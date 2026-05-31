@@ -14,7 +14,6 @@ use super::{
     SeaOrmTrackRepository, TrackId, TrackRepositoryV2,
 };
 use crate::db;
-use crate::library::models::Track;
 use crate::library::repository_v2::PlayHistoryRepository;
 use crate::library::TrackSource;
 use chrono::Utc;
@@ -309,7 +308,7 @@ impl LibraryService {
         self.add_track(track).await
     }
     pub async fn find_by_source(&self, source: &TrackSource) -> Result<Option<models::Track>> {
-        self.track_repo.find_by_source(&source).await
+        self.track_repo.find_by_source(source).await
     }
 
     // ========================================================================
@@ -614,17 +613,13 @@ impl LibraryService {
                 fallback_url
             };
 
-            if let Some(url) = url {
-                Some(super::types::Artwork {
-                    id: super::types::ArtworkId(id),
-                    source: super::types::ArtworkSource::Url { url },
-                    width: None,
-                    height: None,
-                    created_at: now,
-                })
-            } else {
-                None
-            }
+            url.map(|url| super::types::Artwork {
+                id: super::types::ArtworkId(id),
+                source: super::types::ArtworkSource::Url { url },
+                width: None,
+                height: None,
+                created_at: now,
+            })
         } else {
             None
         };

@@ -221,10 +221,10 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
         };
 
         // Cycle detection for sub-playlists
-        if item_kind == PlaylistItemKind::Playlist {
-            if Self::has_cycle(&self.db, playlist_id.0, item_id).await? {
-                bail!("Cannot add playlist: would create a cycle");
-            }
+        if item_kind == PlaylistItemKind::Playlist
+            && Self::has_cycle(&self.db, playlist_id.0, item_id).await?
+        {
+            bail!("Cannot add playlist: would create a cycle");
         }
 
         let now = Utc::now().timestamp();

@@ -11,6 +11,12 @@ use crate::streaming::types::{
 
 pub struct BandcampProvider {}
 
+impl Default for BandcampProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BandcampProvider {
     pub fn new() -> Self {
         Self {}
@@ -49,9 +55,7 @@ impl BandcampProvider {
             return None;
         }
 
-        let duration = track
-            .duration
-            .map(|secs| std::time::Duration::from_secs_f32(secs));
+        let duration = track.duration.map(std::time::Duration::from_secs_f32);
 
         // Store "band_id:track_id" so resolve() can re-fetch fresh streaming URLs
         // via the Bandcamp mobile API directly, bypassing Cloudflare-protected stream_redirect.
@@ -275,23 +279,23 @@ impl StreamProvider for BandcampProvider {
                         }
                     }
                 }
-                bandcamp::SearchResultItem::Track(track) => {
-                    if content_type.is_none() || content_type == Some(ContentType::Track) {
-                        let track_url = track.url.item_url.clone();
-                        let track_info = TrackInfo {
-                            source: TrackSource::External {
-                                system: "bandcamp".to_string(),
-                                id: track_url,
-                            },
-                            title: track.name,
-                            artist: track.band_name,
-                            duration: None,
-                            thumbnail: None,
-                            description: None,
-                        };
+                bandcamp::SearchResultItem::Track(track)
+                    if (content_type.is_none() || content_type == Some(ContentType::Track)) =>
+                {
+                    let track_url = track.url.item_url.clone();
+                    let track_info = TrackInfo {
+                        source: TrackSource::External {
+                            system: "bandcamp".to_string(),
+                            id: track_url,
+                        },
+                        title: track.name,
+                        artist: track.band_name,
+                        duration: None,
+                        thumbnail: None,
+                        description: None,
+                    };
 
-                        search_results.push(SearchResult::Track(track_info));
-                    }
+                    search_results.push(SearchResult::Track(track_info));
                 }
                 _ => {}
             }

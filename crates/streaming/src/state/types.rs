@@ -2,10 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, path::PathBuf, sync::Arc};
 
 use crate::{
-    buffers::{chunked::ChunkedBuffer, hls::HlsBuffer, Buffer},
-    detection::StreamType,
-    error::{InitializationError, StreamingError},
-    multi_downloader::{SeekPos, TaskDownloader, TrackDownloader},
+    buffers::{chunked::ChunkedBuffer, hls::HlsBuffer},
+    error::StreamingError,
+    multi_downloader::{SeekPos, TrackDownloader},
 };
 
 pub type TrackId = u64;
@@ -43,21 +42,11 @@ pub type DefaultCallback = dyn Fn(TrackId, Result<BufferType, StreamingError>, O
 pub type TaskCallback =
     dyn Fn(Result<BufferType, StreamingError>, Option<StreamMetadata>) + Send + Sync + 'static;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct DefaultCallbacks {
     pub on_start: Option<Arc<DefaultCallback>>,
     pub on_progress: Option<Arc<DefaultCallback>>,
     pub on_finish: Option<Arc<DefaultCallback>>,
-}
-
-impl Default for DefaultCallbacks {
-    fn default() -> Self {
-        Self {
-            on_start: None,
-            on_progress: None,
-            on_finish: None,
-        }
-    }
 }
 
 impl std::fmt::Debug for DefaultCallbacks {
@@ -101,7 +90,7 @@ impl BufferType {
     }
     pub fn container(&self) -> String {
         match self {
-            BufferType::Chunked(b) => "mp3".to_string(),
+            BufferType::Chunked(_b) => "mp3".to_string(),
             BufferType::Hls(b) => b.container().unwrap_or("m4a".to_string()),
         }
     }

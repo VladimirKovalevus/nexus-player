@@ -380,7 +380,7 @@ mod tests {
         match result {
             StreamType::Range {
                 url: result_url,
-                size: size,
+                size,
             } => {
                 assert_eq!(result_url, url);
                 assert_eq!(size, Some(1));

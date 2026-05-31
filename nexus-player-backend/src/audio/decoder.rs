@@ -104,19 +104,21 @@ impl AudioDecoder {
     }
 
     pub fn from_reader(
-        mut reader: Box<dyn MediaSource>,
+        reader: Box<dyn MediaSource>,
         hint: Option<Hint>,
         output_sample_rate: u32,
     ) -> Result<Self, AudioError> {
         let reader_clone = reader.clone_box();
         let mss = MediaSourceStream::new(reader, Default::default());
-        let mut format_opts = FormatOptions::default();
-        format_opts.enable_gapless = true;
-        format_opts.prebuild_seek_index = true;
+        let format_opts = FormatOptions {
+            enable_gapless: true,
+            prebuild_seek_index: true,
+            ..Default::default()
+        };
 
         let metadata_opts = MetadataOptions::default();
 
-        let hint = hint.unwrap_or(Hint::new());
+        let hint = hint.unwrap_or_default();
         let probed = symphonia::default::get_probe()
             .format(&hint, mss, &format_opts, &metadata_opts)
             .map_err(|e| {

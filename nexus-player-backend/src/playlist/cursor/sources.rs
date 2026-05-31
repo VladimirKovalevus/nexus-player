@@ -151,7 +151,7 @@ impl CursorSource for ProviderCursor {
         }
 
         let end = (self.index + limit).min(items.len());
-        let batch = items[self.index..end].iter().cloned().collect();
+        let batch = items[self.index..end].to_vec();
 
         self.index = end;
         Ok(batch)
@@ -230,25 +230,25 @@ impl StreamingSearchCursor {
         let content_type = self.content_type;
         let new_items: Vec<CursorItem> = results
             .into_iter()
-            .filter_map(|res| match res {
-                SearchResult::Track(info) => Some(CursorItem::Track(info.into())),
+            .map(|res| match res {
+                SearchResult::Track(info) => CursorItem::Track(info.into()),
                 SearchResult::Playlist(info) => {
-                    Some(CursorItem::Container(ContainerContext::ExternalPlaylist {
+                    CursorItem::Container(ContainerContext::ExternalPlaylist {
                         system: self.system.clone(),
                         id: info.id,
-                    }))
+                    })
                 }
                 SearchResult::Album(info) => {
-                    Some(CursorItem::Container(ContainerContext::ExternalAlbum {
+                    CursorItem::Container(ContainerContext::ExternalAlbum {
                         system: self.system.clone(),
                         id: info.id,
-                    }))
+                    })
                 }
-                _ => Some(CursorItem::Container(ContainerContext::SearchQuery {
+                _ => CursorItem::Container(ContainerContext::SearchQuery {
                     system: self.system.clone(),
                     query: self.query.clone(),
                     content_type,
-                })),
+                }),
             })
             .collect();
 
@@ -271,7 +271,7 @@ impl CursorSource for StreamingSearchCursor {
         }
 
         let end = (self.index + limit).min(self.items.len());
-        let batch = self.items[self.index..end].iter().cloned().collect();
+        let batch = self.items[self.index..end].to_vec();
 
         self.index = end;
         Ok(batch)

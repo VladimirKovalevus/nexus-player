@@ -4,17 +4,12 @@ use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RepeatMode {
+    #[default]
     Off,
     All,
     One,
-}
-
-impl Default for RepeatMode {
-    fn default() -> Self {
-        Self::Off
-    }
 }
 
 pub struct CursorQueue {
@@ -28,6 +23,12 @@ pub struct CursorQueue {
 }
 
 use anyhow::Result;
+
+impl Default for CursorQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl CursorQueue {
     pub fn toggle_shuffle(&mut self) {
@@ -394,14 +395,12 @@ impl SearchQueue {
 
         if let Some(SearchQueueItem::Container {
             play_index,
-            expanded_tracks,
+            expanded_tracks: Some(tracks),
             ..
         }) = self.items.get_mut(real_idx)
         {
-            if let Some(tracks) = expanded_tracks {
-                if track_idx < tracks.len() {
-                    *play_index = track_idx;
-                }
+            if track_idx < tracks.len() {
+                *play_index = track_idx;
             }
         }
     }
@@ -530,10 +529,8 @@ impl SearchQueue {
                 SearchQueueItem::Container {
                     expanded_tracks: Some(tracks),
                     ..
-                } => {
-                    if !tracks.is_empty() {
-                        return Some(tracks[0].clone());
-                    }
+                } if !tracks.is_empty() => {
+                    return Some(tracks[0].clone());
                 }
                 _ => {}
             }
@@ -542,7 +539,7 @@ impl SearchQueue {
         None
     }
 
-    pub fn next(&mut self) -> NextResult {
+    pub fn advance(&mut self) -> NextResult {
         // Handle Repeat One
         if self.repeat_mode == RepeatMode::One {
             if let Some(track) = self.current_track() {
@@ -855,7 +852,7 @@ impl SearchQueue {
 
 /// Unified queue type
 pub enum ActiveQueue {
-    Cursor(CursorQueue),
+    Cursor(Box<CursorQueue>),
     Search(SearchQueue),
 }
 
@@ -868,14 +865,14 @@ impl ActiveQueue {
     }
 
     pub fn new_cursor() -> Self {
-        ActiveQueue::Cursor(CursorQueue::new())
+        ActiveQueue::Cursor(Box::default())
     }
 
     pub fn new_cursor_with_settings(repeat_mode: RepeatMode, shuffle_enabled: bool) -> Self {
         let mut cq = CursorQueue::new();
         cq.repeat_mode = repeat_mode;
         cq.shuffle_enabled = shuffle_enabled;
-        ActiveQueue::Cursor(cq)
+        ActiveQueue::Cursor(Box::new(cq))
     }
     pub fn peek_next(&self) -> Option<Track> {
         match self {
@@ -1136,28 +1133,28 @@ mod search_queue_tests {
     #[test]
     fn next_with_no_current_starts_from_first_item() {
         let mut sq = queue_with(vec![track_item(5)]);
-        let result = sq.next();
+        let result = sq.advance();
         assert!(matches!(result, NextResult::Track(t) if t.id == 5));
     }
 
     #[test]
     fn next_on_empty_queue_returns_end() {
         let mut sq = queue_with(vec![]);
-        assert!(matches!(sq.next(), NextResult::End));
+        assert!(matches!(sq.advance(), NextResult::End));
     }
 
     #[test]
     fn next_on_empty_queue_with_more_pages_returns_need_more() {
         let mut sq = SearchQueue::new("s".into(), "q".into(), vec![], true);
-        assert!(matches!(sq.next(), NextResult::NeedMorePages));
+        assert!(matches!(sq.advance(), NextResult::NeedMorePages));
     }
 
     #[test]
     fn next_advances_through_track_items() {
         let mut sq = queue_with(vec![track_item(1), track_item(2), track_item(3)]);
         sq.jump_to(0);
-        let r1 = sq.next();
-        let r2 = sq.next();
+        let r1 = sq.advance();
+        let r2 = sq.advance();
         assert!(matches!(r1, NextResult::Track(t) if t.id == 2));
         assert!(matches!(r2, NextResult::Track(t) if t.id == 3));
     }
@@ -1166,21 +1163,21 @@ mod search_queue_tests {
     fn next_returns_end_after_last_track() {
         let mut sq = queue_with(vec![track_item(1)]);
         sq.jump_to(0);
-        assert!(matches!(sq.next(), NextResult::End));
+        assert!(matches!(sq.advance(), NextResult::End));
     }
 
     #[test]
     fn next_returns_need_more_pages_after_last_item() {
         let mut sq = SearchQueue::new("s".into(), "q".into(), vec![track_item(1)], true);
         sq.jump_to(0);
-        assert!(matches!(sq.next(), NextResult::NeedMorePages));
+        assert!(matches!(sq.advance(), NextResult::NeedMorePages));
     }
 
     #[test]
     fn next_on_unexpanded_container_returns_need_expand() {
         let mut sq = queue_with(vec![track_item(1), container_item("c", None)]);
         sq.jump_to(0);
-        assert!(matches!(sq.next(), NextResult::NeedExpand(1)));
+        assert!(matches!(sq.advance(), NextResult::NeedExpand(1)));
     }
 
     #[test]
@@ -1190,7 +1187,7 @@ mod search_queue_tests {
             container_item("c", Some(vec![track(10), track(20)])),
         ]);
         sq.jump_to(0);
-        let result = sq.next();
+        let result = sq.advance();
         assert!(matches!(result, NextResult::Track(t) if t.id == 10));
     }
 
@@ -1201,8 +1198,8 @@ mod search_queue_tests {
             Some(vec![track(1), track(2), track(3)]),
         )]);
         sq.jump_to(0);
-        let r1 = sq.next();
-        let r2 = sq.next();
+        let r1 = sq.advance();
+        let r2 = sq.advance();
         assert!(matches!(r1, NextResult::Track(t) if t.id == 2));
         assert!(matches!(r2, NextResult::Track(t) if t.id == 3));
     }
@@ -1214,8 +1211,8 @@ mod search_queue_tests {
             track_item(99),
         ]);
         sq.jump_to(0);
-        sq.next(); // → track(2)
-        let result = sq.next(); // → track(99)
+        sq.advance(); // → track(2)
+        let result = sq.advance(); // → track(99)
         assert!(matches!(result, NextResult::Track(t) if t.id == 99));
     }
 
@@ -1230,7 +1227,7 @@ mod search_queue_tests {
             *play_index = 1;
         }
         sq.jump_to(0);
-        let result = sq.next();
+        let result = sq.advance();
         assert!(matches!(result, NextResult::Track(t) if t.id == 10));
     }
 
@@ -1351,7 +1348,7 @@ mod search_queue_tests {
         let mut sq = queue_with(vec![track_item(1)]);
         sq.append_results(vec![track_item(2)], false);
         sq.jump_to(0);
-        let result = sq.next();
+        let result = sq.advance();
         assert!(matches!(result, NextResult::Track(t) if t.id == 2));
     }
 

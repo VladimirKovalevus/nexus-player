@@ -1,16 +1,14 @@
 use crate::{
-    buffers::{hls::HlsBuffer, Buffer},
-    downloader::{hls, DownloadCommand},
+    buffers::hls::HlsBuffer,
     error::{InitializationError, StreamingError},
     hls::{
-        parser::{parse_m3u8, parse_playlist},
-        segment::{HlsPlaylist, HlsPlaylistType, HlsSegment},
+        parser::parse_playlist,
+        segment::{HlsPlaylist, HlsPlaylistType},
     },
     multi_downloader::{DownloadDirection, TrackDownloader},
-    state::types::{BufferType, ManagerCommand, TaskCommand, DEFAULT_USER_AGENT},
+    state::types::{BufferType, DEFAULT_USER_AGENT},
 };
 use async_trait::async_trait;
-use crossbeam::channel::Sender;
 use lofty::{prelude::*, probe::Probe};
 use reqwest::Client;
 use std::{io::Cursor, sync::Arc, time::Duration};
@@ -112,7 +110,6 @@ impl HlsDownloader {
         let is_contigious = self.buffer.container().as_deref() == Some("ogg")
             || self.buffer.container().as_deref() == Some("opus");
 
-        let mut current_byte_offset = 0;
         let mut write_position = 0;
 
         let mut combined_data = Vec::new();
@@ -126,7 +123,6 @@ impl HlsDownloader {
             )
             .await
             {
-                current_byte_offset += init_data.len() as u64;
                 combined_data.extend_from_slice(&init_data);
             }
         }
@@ -149,7 +145,6 @@ impl HlsDownloader {
             )
             .await
             {
-                current_byte_offset += segment_data.len() as u64;
                 combined_data.extend_from_slice(&segment_data);
                 self.buffer.write_chunk(write_position, segment_data);
 
@@ -490,7 +485,7 @@ impl TrackDownloader for HlsDownloader {
             SeekPos::Milliseconds(ms) => ms,
             SeekPos::Bytes(bytes) => {
                 // Convert bytes to milliseconds using bitrate
-                let bitrate = self.buffer.total_size().unwrap_or(0);
+                let _bitrate = self.buffer.total_size().unwrap_or(0);
                 let durations = self.buffer.durations();
                 let total_duration: f64 = durations.iter().sum();
 

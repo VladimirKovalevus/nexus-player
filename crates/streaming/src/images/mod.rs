@@ -62,7 +62,7 @@ impl ImageVariant {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "thumb" => Some(Self::Thumb),
             "large" => Some(Self::Large),

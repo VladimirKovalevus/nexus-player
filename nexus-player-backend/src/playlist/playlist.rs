@@ -1,6 +1,4 @@
-use std::time::Duration;
-
-use crate::{audio::types::Track, library};
+use crate::audio::types::Track;
 
 #[derive(Debug, Clone)]
 pub struct Playlist {
@@ -14,7 +12,7 @@ impl Playlist {
     pub fn new(title: String) -> Self {
         Self {
             tracks: Vec::new(),
-            title: title,
+            title,
             description: None,
             artwork: None,
         }

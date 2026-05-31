@@ -1,7 +1,5 @@
 use async_trait::async_trait;
 use rsoundcloud::models::playlist::TrackType;
-use rsoundcloud::models::track::BasicTrack;
-use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use rsoundcloud::models::SearchItem;
@@ -71,10 +69,6 @@ impl SoundCloudProvider {
 
     fn is_soundcloud_url(url: &str) -> bool {
         url.contains("soundcloud.com")
-    }
-
-    fn extract_track_id_from_url(url: &str) -> Option<String> {
-        url.split('/').last().map(|s| s.to_string())
     }
 
     /// 401 = stale/invalid client_id, 403 = blocked; both are fixed by re-solving the challenge.
@@ -268,7 +262,7 @@ impl StreamProvider for SoundCloudProvider {
 
                 let mut search_results = Vec::new();
                 for item in results {
-                    let mut tracks: Vec<TrackInfo> = item
+                    let tracks: Vec<TrackInfo> = item
                         .album_playlist
                         .tracks
                         .into_iter()
@@ -316,7 +310,7 @@ impl StreamProvider for SoundCloudProvider {
 
                 let mut search_results = Vec::new();
                 for item in results {
-                    let mut tracks: Vec<TrackInfo> = item
+                    let tracks: Vec<TrackInfo> = item
                         .album_playlist
                         .tracks
                         .into_iter()

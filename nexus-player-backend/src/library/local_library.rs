@@ -22,6 +22,12 @@ pub struct MusicSource {
     pub is_default: bool,
 }
 
+/// Size and modification time used to detect unchanged files between scans.
+struct FileStamp {
+    size: Option<i64>,
+    modified: Option<i64>,
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanResult {
@@ -142,11 +148,11 @@ impl LibraryService {
         source_key: &str,
         path: PathBuf,
         source_id: Option<i64>,
-        size: Option<i64>,
-        modified: Option<i64>,
+        stamp: FileStamp,
         scan: i64,
         result: &mut ScanResult,
     ) {
+        let FileStamp { size, modified } = stamp;
         result.found += 1;
         let existing = sqlx::query(
             "SELECT track_id, file_size, modified_at FROM local_media_index WHERE source_key = ?",
@@ -298,8 +304,7 @@ impl LibraryService {
                     &key,
                     canonical,
                     Some(source.id),
-                    size,
-                    modified,
+                    FileStamp { size, modified },
                     scan,
                     &mut result,
                 )
@@ -321,8 +326,10 @@ impl LibraryService {
                 &entry.source_key,
                 PathBuf::from(entry.path),
                 None,
-                entry.size,
-                entry.modified_at,
+                FileStamp {
+                    size: entry.size,
+                    modified: entry.modified_at,
+                },
                 scan,
                 &mut result,
             )

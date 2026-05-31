@@ -39,7 +39,7 @@ impl HlsAudioDecoder {
 
         let is_continuous = source.is_continuous();
 
-        let (mut format_reader, track_id, sample_rate, channels) = if is_continuous {
+        let (format_reader, track_id, sample_rate, channels) = if is_continuous {
             let adapter = HlsReaderAdapter::new(source.clone());
             let mss = MediaSourceStream::new(Box::new(adapter), Default::default());
             let hint = Hint::new();
@@ -470,7 +470,7 @@ impl HlsAudioDecoder {
         let cursor = Cursor::new(segment_data);
         let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
 
-        let mut hint = Hint::new();
+        let hint = Hint::new();
 
         let format_opts = FormatOptions::default();
         let metadata_opts = MetadataOptions::default();

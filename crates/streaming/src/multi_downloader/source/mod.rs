@@ -7,7 +7,6 @@ pub use streaming::{MediaSource, StreamingSourceV2};
 use crate::error::StreamingError;
 use crate::state::types::{BufferType, ManagerCommand};
 use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender;
 
 pub enum Source {
     Streaming(StreamingSourceV2),
@@ -19,7 +18,7 @@ impl Source {
         match self {
             Source::Streaming(s) => s
                 .save_to_file(path)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())),
+                .map_err(|e| std::io::Error::other(e.to_string())),
             Source::Hls(h) => h.save_to_file(path),
         }
     }

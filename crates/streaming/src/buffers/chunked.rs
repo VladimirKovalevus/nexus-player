@@ -1,7 +1,6 @@
 use super::sync::lock_recover;
 use std::{fs::File, io::Write, path::PathBuf, sync::Mutex};
 
-use crate::error::StreamingError;
 pub const CHUNK_SIZE: u64 = 64 * 1024; // 64kb
 
 #[derive(Debug, Clone)]
@@ -14,7 +13,6 @@ pub struct Chunk {
 struct BufferInner {
     chunks: Vec<Option<Chunk>>,
     total_size: Option<u64>,
-    error: Option<String>,
 }
 
 pub struct ChunkedBuffer {
@@ -39,7 +37,6 @@ impl ChunkedBuffer {
             inner: Mutex::new(BufferInner {
                 chunks: Vec::new(),
                 total_size: None,
-                error: None,
             }),
             chunk_size,
             waveform_enabled,
@@ -121,7 +118,7 @@ impl ChunkedBuffer {
     }
     pub fn debug(&self) {
         let inner = lock_recover(&self.inner);
-        inner.chunks.iter().enumerate().for_each(|(i, c)| {});
+        inner.chunks.iter().for_each(|_c| {});
     }
 
     pub fn is_complete(&self) -> bool {
@@ -131,14 +128,13 @@ impl ChunkedBuffer {
         };
 
         let inner = lock_recover(&self.inner);
-        let total_chunks = (total_size + self.chunk_size - 1) / self.chunk_size;
+        let total_chunks = total_size.div_ceil(self.chunk_size);
 
         inner
             .chunks
             .iter()
             .take(total_chunks as usize)
-            .enumerate()
-            .all(|(ind, c)| c.as_ref().is_some_and(|chunk| chunk.data.len() > 0))
+            .all(|c| c.as_ref().is_some_and(|chunk| !chunk.data.is_empty()))
     }
 
     pub fn set_total_size(&self, size: u64) {
@@ -150,7 +146,7 @@ impl ChunkedBuffer {
     pub fn write_chunk(&self, index: u64, data: Vec<u8>) {
         let mut inner = lock_recover(&self.inner);
 
-        ///Append not rewrite
+        // Append, do not rewrite
         if let Some(slot) = inner.chunks.get_mut(index as usize) {
             match slot {
                 Some(existing_chunk) => {
@@ -176,7 +172,7 @@ impl ChunkedBuffer {
             chunk.as_ref().is_some_and(|c| {
                 if is_last_chunk {
                     // Last chunk can be smaller than chunk_size
-                    c.data.len() > 0
+                    !c.data.is_empty()
                 } else {
                     c.data.len() == self.chunk_size as usize
                 }
@@ -192,7 +188,7 @@ impl ChunkedBuffer {
             None => 0,
         };
         let total_size = inner.total_size.unwrap_or_default();
-        let total_chunks = (total_size + self.chunk_size - 1) / self.chunk_size;
+        let _total_chunks = total_size.div_ceil(self.chunk_size);
         inner
             .chunks
             .iter()
@@ -219,10 +215,7 @@ impl ChunkedBuffer {
     }
     pub fn first_not_ready_chunk_offset(&self, offset: Option<usize>) -> Option<u64> {
         let index = self.first_not_ready_chunk(offset);
-        match index {
-            Some(i) => Some(i as u64 * self.chunk_size),
-            None => None,
-        }
+        index.map(|i| i as u64 * self.chunk_size)
     }
     pub fn read_at(&self, offset: u64, buf: &mut [u8]) -> Option<usize> {
         let inner = lock_recover(&self.inner);
@@ -253,10 +246,8 @@ impl ChunkedBuffer {
     pub fn save_to_file(&self, path: PathBuf) -> std::io::Result<()> {
         let inner = lock_recover(&self.inner);
         let mut file = File::create(path)?;
-        for chunk_opt in &inner.chunks {
-            if let Some(chunk) = chunk_opt {
-                file.write_all(&chunk.data)?;
-            }
+        for chunk in inner.chunks.iter().flatten() {
+            file.write_all(&chunk.data)?;
         }
         Ok(())
     }
@@ -271,7 +262,7 @@ impl ChunkedBuffer {
         }
 
         let inner = lock_recover(&self.inner);
-        let total_chunks = ((total_size + self.chunk_size - 1) / self.chunk_size) as usize;
+        let total_chunks = total_size.div_ceil(self.chunk_size) as usize;
 
         let downloaded_chunks = inner
             .chunks
@@ -287,10 +278,8 @@ impl ChunkedBuffer {
         let inner = lock_recover(&self.inner);
 
         let mut total = 0u64;
-        for chunk_opt in inner.chunks.iter() {
-            if let Some(chunk) = chunk_opt {
-                total += chunk.data.len() as u64;
-            }
+        for chunk in inner.chunks.iter().flatten() {
+            total += chunk.data.len() as u64;
         }
 
         total
@@ -425,7 +414,7 @@ mod tests {
     #[test]
     fn test_write_and_read_chunk() {
         let buffer = ChunkedBuffer::new(false);
-        buffer.set_total_size(CHUNK_SIZE as u64 * 2);
+        buffer.set_total_size(CHUNK_SIZE * 2);
 
         let data = vec![42u8; CHUNK_SIZE as usize];
         buffer.write_chunk(0, data);
@@ -443,14 +432,14 @@ mod tests {
     #[test]
     fn test_read_across_chunk_boundary() {
         let buffer = ChunkedBuffer::new(false);
-        buffer.set_total_size(CHUNK_SIZE as u64);
+        buffer.set_total_size(CHUNK_SIZE);
 
         let data = vec![42u8; CHUNK_SIZE as usize];
         buffer.write_chunk(0, data);
 
         let offset = CHUNK_SIZE - 50;
         let mut buf = vec![0u8; 100];
-        let n = buffer.read_at(offset as u64, &mut buf).unwrap();
+        let n = buffer.read_at(offset, &mut buf).unwrap();
         assert!(n == 50);
         assert!(buf[32] == 42u8);
         assert!(buf[51] == 0);

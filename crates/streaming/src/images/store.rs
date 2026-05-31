@@ -195,7 +195,7 @@ impl Store {
             .and_then(|p| p.parent())
             .and_then(|p| p.file_name())
             .and_then(|s| s.to_str())
-            .and_then(ImageVariant::from_str);
+            .and_then(ImageVariant::parse);
 
         if let (Some(variant), Ok(mut known)) = (variant, self.known.lock()) {
             known.remove(&(variant, key.to_string()));

@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use streaming::state::types::{DefaultCallback, DefaultCallbacks, TaskInfo};
-use tauri::{AppHandle, Emitter, Manager};
+use streaming::state::types::{DefaultCallback, DefaultCallbacks};
+use tauri::{Emitter, Manager};
 
 /// How long after the last audio download callback artwork fetching stays held.
 const AUDIO_IDLE_GRACE: Duration = Duration::from_millis(1500);

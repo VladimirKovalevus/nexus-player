@@ -30,6 +30,6 @@ pub enum InitializationError {
 }
 impl From<StreamingError> for std::io::Error {
     fn from(err: StreamingError) -> Self {
-        std::io::Error::new(std::io::ErrorKind::Other, err)
+        std::io::Error::other(err)
     }
 }

@@ -2,7 +2,7 @@ use super::decoder::{AudioDecoder, DecoderType};
 use super::eq::{EqProcessor, EqSettings};
 use super::hls_decoder::HlsAudioDecoder;
 use super::sync::lock_recover;
-use crate::audio::types::{AudioSource, MediaSource, SampleRate as MSR, TrackSource};
+use crate::audio::types::{MediaSource, SampleRate as MSR, TrackSource};
 use crate::error::AudioError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
@@ -47,22 +47,19 @@ impl Seek for HlsReaderAdapter {
             SeekFrom::Start(p) => p,
             SeekFrom::End(p) => {
                 if total_size == 0 {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Unknown stream size",
-                    ));
+                    return Err(std::io::Error::other("Unknown stream size"));
                 }
                 if p >= 0 {
                     total_size.saturating_add(p as u64)
                 } else {
-                    total_size.saturating_sub(p.abs() as u64)
+                    total_size.saturating_sub(p.unsigned_abs())
                 }
             }
             SeekFrom::Current(p) => {
                 if p >= 0 {
                     self.position.saturating_add(p as u64)
                 } else {
-                    self.position.saturating_sub(p.abs() as u64)
+                    self.position.saturating_sub(p.unsigned_abs())
                 }
             }
         };
@@ -73,10 +70,7 @@ impl Seek for HlsReaderAdapter {
                 self.position, new_pos, total_size
             );
             if let Err(e) = self.source.seek_to_byte_approx(new_pos) {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    e.to_string(),
-                ));
+                return Err(std::io::Error::other(e.to_string()));
             }
             self.position = new_pos;
         }
@@ -188,7 +182,7 @@ impl PlaybackEngine {
 
     pub fn play(&mut self, path: &TrackSource) -> Result<(), AudioError> {
         match path {
-            TrackSource::Local(p) => self.play_local(&p),
+            TrackSource::Local(p) => self.play_local(p),
             _ => todo!(),
         }
     }
@@ -493,7 +487,7 @@ impl PlaybackEngine {
 
                         let num_frames = to_copy / channels;
                         *lock_recover(&samples_played) += num_frames as u64;
-                        let sr = *lock_recover(&sample_rate_arc);
+                        let _sr = *lock_recover(&sample_rate_arc);
                         let position_secs =
                             *lock_recover(&samples_played) as f64 / config.sample_rate.0 as f64;
                         *lock_recover(&current_position) = Duration::from_secs_f64(position_secs);
@@ -571,7 +565,7 @@ impl PlaybackEngine {
 
                     {
                         if let Ok(mut recent) = recent_samples.try_lock() {
-                            recent.extend_from_slice(&data);
+                            recent.extend_from_slice(data);
                             if recent.len() > 8192 {
                                 let drain_len = recent.len() - 8192;
                                 recent.drain(0..drain_len);

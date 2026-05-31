@@ -1,10 +1,10 @@
 use crossbeam::channel::{bounded, Receiver, Sender};
 use reqwest::Client;
-use std::{sync::Arc, thread, time::Duration, u64};
+use std::{sync::Arc, thread, time::Duration};
 
 use crate::{
     buffers::chunked::ChunkedBuffer,
-    downloader::{self, DownloadCommand, DEFAULT_CAPACITY, MAX_RETRIES},
+    downloader::{DownloadCommand, DEFAULT_CAPACITY, MAX_RETRIES},
     error::StreamingError,
     state::types::DEFAULT_USER_AGENT,
 };
@@ -91,7 +91,7 @@ impl RangeDownloader {
             }
         };
 
-        let head = match client.head(&url).send().await {
+        match client.head(&url).send().await {
             Ok(response) => {
                 if let Some(size) = response.headers().get("content-length") {
                     if let Ok(length_str) = size.to_str() {
@@ -124,7 +124,7 @@ impl RangeDownloader {
             }
 
             if !stopped {
-                let chunk_index = current_offset / buffer.chunk_size() as u64;
+                let chunk_index = current_offset / buffer.chunk_size();
 
                 if buffer.has_chunk(chunk_index) {
                     current_offset += buffer.chunk_size();
@@ -172,7 +172,7 @@ impl Drop for RangeDownloader {
 #[cfg(test)]
 mod mockito_tests {
     use super::*;
-    use mockito::{Server, ServerGuard};
+    use mockito::Server;
 
     #[tokio::test]
     async fn test_download_chunk_success() {
@@ -363,7 +363,7 @@ mod mockito_tests {
             .create_async()
             .await;
 
-        let chunk_mock = server
+        let _chunk_mock = server
             .mock("GET", "/test")
             .with_status(206)
             .with_body(vec![0u8; 65536])

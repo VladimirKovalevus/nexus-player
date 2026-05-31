@@ -1,10 +1,9 @@
 use async_trait::async_trait;
-use crossbeam::channel::{bounded, Receiver, Sender};
 use reqwest::Client;
-use std::{sync::Arc, thread, time::Duration, u64};
+use std::{sync::Arc, time::Duration};
 
 use crate::{
-    buffers::{chunked::ChunkedBuffer, Buffer},
+    buffers::chunked::ChunkedBuffer,
     error::{InitializationError, StreamingError},
     multi_downloader::{DownloadDirection, TrackDownloader},
     state::types::{BufferType, DEFAULT_USER_AGENT},
@@ -109,7 +108,7 @@ impl RangeDownloader {
         Ok(())
     }
     pub async fn download_at(&mut self, offset: u64) -> Result<usize, StreamingError> {
-        let chunk_index = offset / self.buffer.chunk_size() as u64;
+        let chunk_index = offset / self.buffer.chunk_size();
 
         if self.buffer.has_chunk(chunk_index) {
             self.position += self.buffer.chunk_size();
@@ -125,7 +124,7 @@ impl RangeDownloader {
         loop {
             let result = RangeDownloader::download_chunk(
                 &client,
-                &url,
+                url,
                 current_offset,
                 current_offset + self.buffer.chunk_size() - 1,
             )

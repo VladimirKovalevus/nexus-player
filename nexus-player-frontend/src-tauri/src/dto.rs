@@ -1,7 +1,7 @@
 use nexus_player_backend::audio::types::TrackState;
 use serde::{Deserialize, Serialize};
 
-pub use nexus_player_backend::library::types::{ArtworkId, CacheStatus, PlaylistId, TrackId};
+pub use nexus_player_backend::library::types::CacheStatus;
 use nexus_player_backend::streaming::types as streaming;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,13 +66,6 @@ pub struct PlaylistDto {
     pub created_at: i64,
     pub updated_at: i64,
     pub source: Option<TrackSourceDto>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PlaylistWithTracksDto {
-    pub playlist: PlaylistDto,
-    pub tracks: Vec<TrackDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -235,15 +228,6 @@ impl From<nexus_player_backend::audio::types::BufferedRange> for BufferedRangeDt
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateTrackRequest {
-    pub title: String,
-    pub artist: Option<String>,
-    pub album: Option<String>,
-    pub source_path: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct CreatePlaylistRequest {
     pub title: String,
     pub description: Option<String>,
@@ -256,7 +240,6 @@ pub struct CreatePlaylistRequest {
 pub struct CreatePlaylistWithTracksRequest {
     pub title: String,
     pub description: Option<String>,
-    pub creator: Option<String>,
     pub artwork_url: Option<String>,
     pub tracks: Vec<TrackDto>,
 }

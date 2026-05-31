@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    buffers::{chunked::ChunkedBuffer, hls::HlsBuffer, Buffer},
+    buffers::{chunked::ChunkedBuffer, hls::HlsBuffer},
     detection::StreamType,
     error::{InitializationError, StreamingError},
     multi_downloader::{hls::HlsDownloader, range::RangeDownloader},
@@ -39,7 +39,7 @@ pub trait TrackDownloader: Send + Sync {
 }
 
 impl TaskDownloader {
-    pub fn new(
+    pub fn create(
         stream_type: StreamType,
         bandwidth_bps: u64,
         user_agent: Option<String>,

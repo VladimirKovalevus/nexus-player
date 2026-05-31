@@ -1,12 +1,11 @@
 use super::eq::EqSettings;
 use super::playback::PlaybackEngine;
-use super::sync::{lock_recover, read_recover, write_recover};
+use super::sync::{read_recover, write_recover};
 use super::types::{
     AudioCommand, AudioEvent, AudioState, BufferedRange, PlaybackState, Track, TrackSource,
 };
-use crate::audio::types::{AudioSource, MediaSource};
+use crate::audio::types::MediaSource;
 use crate::error::AudioError;
-use anyhow::Error;
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, Sender};
 use std::sync::Arc;
@@ -23,7 +22,6 @@ pub struct AudioEngine {
     event_tx: Sender<AudioEvent>,
     event_rx: Receiver<AudioEvent>,
     state: Arc<RwLock<AudioState>>,
-    audio_thread: Option<std::thread::JoinHandle<()>>,
 }
 
 impl AudioEngine {
@@ -35,15 +33,14 @@ impl AudioEngine {
 
         let state = Arc::new(RwLock::new(AudioState::default()));
 
-        let audio_thread =
-            Self::spawn_audio_thread(command_rx, event_tx.clone(), Arc::clone(&state))?;
+        // The audio thread runs detached for the lifetime of the process.
+        Self::spawn_audio_thread(command_rx, event_tx.clone(), Arc::clone(&state))?;
 
         Ok(Self {
             command_tx,
             event_tx,
             event_rx,
             state,
-            audio_thread: Some(audio_thread),
         })
     }
 
@@ -206,7 +203,7 @@ impl AudioEngine {
                 }
             }
 
-            if playback.is_playing() || playback.buffered_ranges().len() > 0 {
+            if playback.is_playing() || !playback.buffered_ranges().is_empty() {
                 let now = std::time::Instant::now();
                 if now.duration_since(last_position_update) >= Duration::from_millis(100) {
                     last_position_update = now;
@@ -610,9 +607,8 @@ impl AudioEngine {
                             Err(AudioError::OutsideOfBuffer) => {
                                 info!("OutsideOfBuffer error:");
                                 let _ = event_tx.send(AudioEvent::Error {
-                                    message: format!(
-                                        "Seeking outside the buffer is not supported for opus"
-                                    ),
+                                    message: "Seeking outside the buffer is not supported for opus"
+                                        .to_string(),
                                 });
                             }
                             Err(e) => {

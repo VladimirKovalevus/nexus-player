@@ -49,6 +49,12 @@ pub enum PlaylistType {
 }
 pub type HlsPlaylist = MediaPlaylist;
 
+impl Default for HlsPlaylist {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HlsPlaylist {
     pub fn new() -> Self {
         Self {

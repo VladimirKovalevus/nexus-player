@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
-use crate::audio::types::{MediaSource, TrackSource};
+use crate::audio::types::TrackSource;
 use crate::config::{AudioConfig, NetworkConfig, ProviderConfig};
 use crate::library::{CacheStatus, LibraryService};
-use crate::streaming::external::{StreamingMediaSource, StreamingSourceWrapper};
+use crate::streaming::external::StreamingSourceWrapper;
 use crate::streaming::types::{AlbumInfo, ResolveOptions, TrackInfo};
-use streaming::multi_downloader::source::Source;
 
 use super::error::{StreamError, StreamResult};
 use super::provider::StreamProvider;
@@ -57,7 +55,7 @@ impl StreamingService {
             providers,
             download_manager: manager,
             config: RwLock::new(config),
-            library: library,
+            library,
         })
     }
 
@@ -257,18 +255,14 @@ impl StreamingService {
         options: Option<DownloadOptions>,
     ) -> StreamResult<StreamingSourceWrapper> {
         println!("Source {:?}", source);
-        if let Ok(track) = self.library.find_by_source(&source).await {
-            if let Some(track) = track {
-                match track.cache {
-                    CacheStatus::Cached {
-                        path,
-                        downloaded_at: _,
-                    } => {
-                        let file = File::open(path)?;
-                        return Ok(StreamingSourceWrapper::Local(Box::new(file)));
-                    }
-                    _ => {}
-                }
+        if let Ok(Some(track)) = self.library.find_by_source(&source).await {
+            if let CacheStatus::Cached {
+                path,
+                downloaded_at: _,
+            } = track.cache
+            {
+                let file = File::open(path)?;
+                return Ok(StreamingSourceWrapper::Local(Box::new(file)));
             }
         }
 

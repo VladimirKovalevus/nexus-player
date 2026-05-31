@@ -141,7 +141,7 @@ impl TryFrom<entities_v2::track::Model> for models::Track {
                 format: entity
                     .file_format
                     .as_deref()
-                    .map(CodecFormat::from_str)
+                    .map(CodecFormat::parse)
                     .unwrap_or(CodecFormat::Other),
                 duration_secs: entity.duration_secs,
                 sample_rate: entity.sample_rate.map(|r| r as u32),

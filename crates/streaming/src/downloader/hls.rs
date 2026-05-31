@@ -1,9 +1,9 @@
 use crate::{
     buffers::chunked::{ChunkedBuffer, CHUNK_SIZE},
-    downloader::{hls, DownloadCommand, DEFAULT_CAPACITY, MAX_RETRIES},
+    downloader::{DownloadCommand, DEFAULT_CAPACITY, MAX_RETRIES},
     error::StreamingError,
     hls::{
-        parser::{parse_m3u8, parse_playlist},
+        parser::parse_playlist,
         segment::{HlsPlaylist, HlsPlaylistType, HlsSegment},
     },
     state::types::DEFAULT_USER_AGENT,
@@ -13,11 +13,8 @@ use reqwest::Client;
 use std::{sync::Arc, time::Duration};
 
 pub struct HlsDownloader {
-    playlist_url: String,
-    buffer: Arc<ChunkedBuffer>,
     command_tx: Sender<DownloadCommand>,
     thread: Option<std::thread::JoinHandle<()>>,
-    bandwidth_bps: u64,
 }
 
 impl HlsDownloader {
@@ -44,11 +41,8 @@ impl HlsDownloader {
         });
 
         Self {
-            playlist_url,
-            buffer,
             command_tx: tx,
             thread: Some(thread),
-            bandwidth_bps,
         }
     }
 
@@ -86,7 +80,7 @@ impl HlsDownloader {
             }
         };
 
-        let mut playlist_type = match Self::fetch_and_parse(&client, &playlist_url).await {
+        let playlist_type = match Self::fetch_and_parse(&client, &playlist_url).await {
             Ok(p) => p,
             Err(e) => {
                 eprintln!("Failed to fetch playlist: {}", e);
@@ -137,14 +131,12 @@ impl HlsDownloader {
         }
 
         let mut current_segment_idx = 0;
-        let mut should_continue = true;
         let mut paused = false;
         let mut retries = 0;
 
-        while should_continue && current_segment_idx < playlist.segments.len() {
+        while current_segment_idx < playlist.segments.len() {
             match command_rx.recv_timeout(Duration::from_millis(10)) {
                 Ok(DownloadCommand::Stop) => {
-                    should_continue = false;
                     break;
                 }
                 Ok(DownloadCommand::Pause) => {
@@ -222,33 +214,6 @@ impl HlsDownloader {
         println!("HLS FETCH PLAYLIST CONTENT:\n{}", content);
 
         parse_playlist(&content, url)
-    }
-
-    async fn fetch_and_parse_playlist(
-        client: &Client,
-        url: &str,
-    ) -> Result<HlsPlaylist, StreamingError> {
-        let response = client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| StreamingError::Http(e.to_string()))?;
-
-        if !response.status().is_success() {
-            return Err(StreamingError::Http(format!(
-                "Playlist request failed: {}",
-                response.status()
-            )));
-        }
-
-        let content = response
-            .text()
-            .await
-            .map_err(|e| StreamingError::Http(e.to_string()))?;
-
-        println!("HLS FETCH PLAYLIST CONTENT:\n{}", content);
-
-        parse_m3u8(&content, url)
     }
 
     async fn download_init_segment(

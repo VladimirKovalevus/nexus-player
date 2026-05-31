@@ -28,7 +28,7 @@ impl StatefulWaveformAnalyzer {
             .format(&hint, mss, &format_opts, &metadata_opts)
             .ok()?;
 
-        let mut format_reader = probed.format;
+        let format_reader = probed.format;
 
         let track = format_reader
             .tracks()

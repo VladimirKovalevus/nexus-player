@@ -1,12 +1,10 @@
-use crate::dto::{
-    AudioStateDto, BufferedRangeDto, QueueEntryDto, QueueStateDto, TrackDto, WaveformDto,
-};
-use nexus_player_backend::audio::types::{AudioEvent, AudioState};
+use crate::dto::{AudioStateDto, BufferedRangeDto, QueueStateDto, TrackDto, WaveformDto};
+use nexus_player_backend::audio::types::AudioEvent;
 use nexus_player_backend::state::state::AppState;
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "payload")]
@@ -79,7 +77,7 @@ pub enum FrontendEvent {
 
     #[serde(rename_all = "camelCase")]
     AudioStateUpdated {
-        state: AudioStateDto,
+        state: Box<AudioStateDto>,
         queue: QueueStateDto,
     },
 
@@ -147,7 +145,7 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                                     let _ = cq.next().await;
                                 }
                                 ActiveQueue::Search(sq) => {
-                                    sq.next();
+                                    sq.advance();
                                 }
                             }
                         }
@@ -198,9 +196,6 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                     }
                     AudioEvent::ProviderChallenge { provider, url } => {
                         FrontendEvent::ProviderChallenge { provider, url }
-                    }
-                    _ => {
-                        continue;
                     }
                 };
 
@@ -325,7 +320,7 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
             if let Err(e) = app_handle.emit(
                 "audio-event",
                 &FrontendEvent::AudioStateUpdated {
-                    state: audio_state,
+                    state: Box::new(audio_state),
                     queue: queue_state,
                 },
             ) {

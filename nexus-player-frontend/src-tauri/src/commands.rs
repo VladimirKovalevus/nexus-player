@@ -6,23 +6,22 @@ use crate::dto::{
     hash_str_to_i64, AudioStateDto, CachedAlbumDto, CleanupResultDto, ContainerMetaDto,
     CreatePlaylistRequest, CreatePlaylistWithTracksRequest, CurrentPositionDto, EqPresetDto,
     EqSettingsDto, LibraryPageDto, PlayHistoryEntryDto, PlaylistDto, PlaylistItemDto,
-    PlaylistWithItemsDto, PlaylistWithTracksDto, QueueEntryDto, QueueStateDto, ResolvedArtworkDto,
-    SearchContextDto, SearchResultDto, TaskInfoDto, TrackDto, TrackSourceDto,
+    PlaylistWithItemsDto, QueueEntryDto, QueueStateDto, ResolvedArtworkDto, SearchContextDto,
+    SearchResultDto, TaskInfoDto, TrackDto,
 };
 use crate::events::FrontendEvent;
 use nexus_player_backend::library::local_library::{AndroidMediaEntry, MusicSource, ScanResult};
-use nexus_player_backend::library::models::{Metadata, Track as LibraryTrack};
 use nexus_player_backend::library::types::{
-    AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackOrder, TrackSource,
+    CacheStatus, PlaylistId, TrackId, TrackOrder, TrackSource,
 };
 use nexus_player_backend::playlist::cursor::ContainerContext;
 use nexus_player_backend::state::state::AppState;
-use nexus_player_backend::streaming::types::{ContentType, ResolvedContent, SearchResult};
+use nexus_player_backend::streaming::types::{ContentType, SearchResult};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use streaming::images::ImageVariant;
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+use tauri_plugin_dialog::DialogExt;
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -368,7 +367,7 @@ pub async fn resolve_artwork(
 ) -> Result<Vec<ResolvedArtworkDto>> {
     let variant = variant
         .as_deref()
-        .and_then(ImageVariant::from_str)
+        .and_then(ImageVariant::parse)
         .unwrap_or(ImageVariant::Thumb);
 
     let paths = state.resolve_artwork(&urls, variant).await;
@@ -385,6 +384,8 @@ pub async fn clear_artwork_cache(state: State<'_, Arc<AppState>>) -> Result<()> 
     state.clear_artwork_cache().await.map_err(|e| e.to_string())
 }
 
+// The parameter list is the invoke contract with the frontend, so it cannot be grouped.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn create_playlist_from_container(
     state: State<'_, Arc<AppState>>,
@@ -393,7 +394,7 @@ pub async fn create_playlist_from_container(
     id: String,
     title: String,
     description: Option<String>,
-    creator: Option<String>,
+    _creator: Option<String>,
     artwork_url: Option<String>,
 ) -> Result<i64> {
     state
@@ -486,7 +487,7 @@ pub async fn get_queue(state: State<'_, Arc<AppState>>) -> Result<Vec<TrackDto>>
     match &*queue {
         ActiveQueue::Cursor(cq) => {
             let (tracks, _) = cq.snapshot();
-            Ok(tracks.into_iter().map(|t| TrackDto::from(t)).collect())
+            Ok(tracks.into_iter().map(TrackDto::from).collect())
         }
         ActiveQueue::Search(sq) => {
             // Return flat list of tracks for compatibility
@@ -765,8 +766,6 @@ pub async fn stop_radio(state: State<'_, Arc<AppState>>) -> Result<()> {
 
 #[tauri::command]
 pub async fn get_queue_state(state: State<'_, Arc<AppState>>) -> Result<QueueStateDto> {
-    use nexus_player_backend::playlist::playback_queue::{ActiveQueue, ContainerKind, QueueEntry};
-
     let queue = state.lock_queue().await;
     build_queue_state_dto(&queue)
 }
@@ -1118,7 +1117,7 @@ pub async fn handle_streaming_track(
                                 _ => {
                                     let mut cq = CursorQueue::new();
                                     cq.add_track(audio_track);
-                                    *queue = ActiveQueue::Cursor(cq);
+                                    *queue = ActiveQueue::Cursor(Box::new(cq));
                                 }
                             }
                             tracing::info!("Track added to queue");

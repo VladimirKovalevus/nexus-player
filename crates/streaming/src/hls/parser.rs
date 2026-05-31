@@ -41,8 +41,7 @@ pub fn parse_media_playlist(content: &str, url: &str) -> Result<HlsPlaylist, Str
             continue;
         }
 
-        if line.starts_with("#EXT-X-MAP:") {
-            let attrs = &line[11..];
+        if let Some(attrs) = line.strip_prefix("#EXT-X-MAP:") {
             if let Some(uri) = extract_attribute(attrs, "URI") {
                 let full_url = resolve_url(url, &uri);
                 let mut range_length = None;
@@ -132,6 +131,8 @@ fn parse_byte_range(br: &str, last_offset: u64) -> Option<(u64, u64)> {
     }
     None
 }
+#[cfg(test)]
+#[cfg(test)]
 fn extract_uri(line: &str, attribute: &str) -> Option<String> {
     let pattern = format!("{}=\"", attribute);
 
@@ -249,9 +250,9 @@ fn extract_attribute(attrs: &str, name: &str) -> Option<String> {
         let start = start_idx + pattern.len();
         let remaining = &attrs[start..];
 
-        if remaining.starts_with('"') {
-            if let Some(end_idx) = remaining[1..].find('"') {
-                return Some(remaining[1..=end_idx].to_string());
+        if let Some(quoted) = remaining.strip_prefix('"') {
+            if let Some(end_idx) = quoted.find('"') {
+                return Some(quoted[..end_idx].to_string());
             }
         } else {
             let end_idx = remaining.find(',').unwrap_or(remaining.len());

@@ -125,21 +125,16 @@ pub struct PlaylistInfo {
 
     pub description: Option<String>,
 }
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 pub enum AudioQuality {
     Best,
 
+    #[default]
     High,
 
     Medium,
 
     Low,
-}
-
-impl Default for AudioQuality {
-    fn default() -> Self {
-        AudioQuality::High
-    }
 }
 
 impl AudioQuality {
