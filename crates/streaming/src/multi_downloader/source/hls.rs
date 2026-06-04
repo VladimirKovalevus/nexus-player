@@ -12,7 +12,6 @@ pub struct HlsSource {
     sender: Arc<tokio::sync::mpsc::UnboundedSender<ManagerCommand>>,
     read_segment_idx: usize,
     read_segment_off: usize,
-    seek_lock: bool,
 }
 
 impl HlsSource {
@@ -28,7 +27,6 @@ impl HlsSource {
             sender,
             read_segment_idx: 0,
             read_segment_off: 0,
-            seek_lock: false,
         }
     }
 
@@ -63,7 +61,6 @@ impl HlsSource {
         // Try to get the current segment data
         match self.buffer.get_segment(self.read_segment_idx) {
             Some((data, _)) => {
-                self.seek_lock = false;
                 if self.read_segment_off >= data.len() {
                     // We exhausted this segment, move to next
                     self.read_segment_idx += 1;
@@ -98,21 +95,7 @@ impl HlsSource {
                     }
                 }
 
-                // Lazy Seek Trigger: We need data HERE, but we don't have it.
-                // Tell the downloader to prioritize this position.
-                let durations = self.buffer.durations();
-                let current_accumulated_time: f64 =
-                    durations.iter().take(self.read_segment_idx).sum();
-                let _target_ms = (current_accumulated_time * 1000.0) as u64;
-
-                // We ignore the error here because if we can't send, we just return WouldBlock anyway.
-                if !self.seek_lock {
-                    // let _ = self.seek(target_ms);
-                    self.seek_lock = true
-                }
-
                 // Not ready yet
-                //
                 Err(io::Error::new(
                     io::ErrorKind::WouldBlock,
                     "Segment not ready",
@@ -123,7 +106,6 @@ impl HlsSource {
 
     // Kept for compatibility but deprecated for this use case
     pub fn read_at(&self, offset: u64, buf: &mut [u8]) -> std::io::Result<usize> {
-        let _retries = 0;
         match self.buffer.read_at(offset, buf) {
             Some(n) => Ok(n),
             None => {
@@ -279,7 +261,6 @@ impl Clone for HlsSource {
             sender: Arc::clone(&self.sender),
             read_segment_idx: self.read_segment_idx,
             read_segment_off: self.read_segment_off,
-            seek_lock: self.seek_lock,
         }
     }
 }

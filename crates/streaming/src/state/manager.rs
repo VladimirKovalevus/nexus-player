@@ -874,7 +874,7 @@ impl DownloadManager {
                 user_agent,
                 cfg.waveform_enabled,
                 cfg.chunk_size,
-            )
+            )?
         };
         let meta = options.as_ref().and_then(|o| o.meta.clone());
         let download_task = DownloadTask {

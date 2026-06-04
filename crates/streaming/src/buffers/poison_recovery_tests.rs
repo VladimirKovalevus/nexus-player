@@ -1,4 +1,4 @@
-//! R4: a poisoned buffer mutex recovers its value, loses the poison flag so later try_lock
+//! A poisoned buffer mutex recovers its value, loses the poison flag so later try_lock
 //! calls succeed, and does not panic.
 
 use crate::buffers::sync::lock_recover;

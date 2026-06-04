@@ -1158,7 +1158,9 @@ pub async fn handle_streaming_track(
                             .map_err(|e| e.to_string())?;
                     }
                 }
-                _ => todo!(),
+                SearchResult::Channel(_) => {
+                    return Err("Channels cannot be added to the queue".into());
+                }
             }
             Ok(None)
         }

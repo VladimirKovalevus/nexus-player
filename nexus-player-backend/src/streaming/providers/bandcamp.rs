@@ -328,7 +328,7 @@ impl StreamProvider for BandcampProvider {
 
                 Ok(track_sources)
             }
-            _ => todo!(),
+            _ => Err(StreamError::NotSupported),
         }
     }
 

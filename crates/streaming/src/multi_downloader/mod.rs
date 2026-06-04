@@ -45,8 +45,8 @@ impl TaskDownloader {
         user_agent: Option<String>,
         waveform_enabled: bool,
         chunk_size: u64,
-    ) -> (Box<dyn TrackDownloader>, Arc<BufferType>) {
-        match stream_type {
+    ) -> Result<(Box<dyn TrackDownloader>, Arc<BufferType>), StreamingError> {
+        Ok(match stream_type {
             StreamType::Hls {
                 playlist_url,
                 playlist,
@@ -72,7 +72,27 @@ impl TaskDownloader {
                     buffer_type,
                 )
             }
-            _ => todo!(),
-        }
+            StreamType::Sequential { url } => {
+                return Err(StreamingError::DownloadFailed(format!(
+                    "server does not support range requests: {url}"
+                )));
+            }
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sequential_stream_is_an_error_rather_than_a_panic() {
+        let stream_type = StreamType::Sequential {
+            url: "https://example.com/track.mp3".to_string(),
+        };
+
+        let result = TaskDownloader::create(stream_type, 0, None, false, 1024);
+
+        assert!(matches!(result, Err(StreamingError::DownloadFailed(_))));
     }
 }

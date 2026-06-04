@@ -1,4 +1,4 @@
-//! R4: a poisoned lock on the audio path recovers its value, loses the poison flag so later
+//! A poisoned lock on the audio path recovers its value, loses the poison flag so later
 //! try_lock calls succeed, and does not panic.
 
 use crate::audio::sync::{lock_recover, read_recover, write_recover};

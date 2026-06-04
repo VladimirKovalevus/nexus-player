@@ -312,7 +312,7 @@ impl AppState {
 
                     if repeat_mode == RepeatMode::All {
                         if is_search {
-                            // SearchQueue handles it internally in next(),
+                            // SearchQueue handles it internally in advance(),
                             // but if it returned End, maybe something is wrong or items are empty
                             tracing::warn!("SearchQueue returned End even with Repeat::All");
                         } else if let Some(ctx) = context {

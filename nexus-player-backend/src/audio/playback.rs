@@ -183,7 +183,7 @@ impl PlaybackEngine {
     pub fn play(&mut self, path: &TrackSource) -> Result<(), AudioError> {
         match path {
             TrackSource::Local(p) => self.play_local(p),
-            _ => todo!(),
+            _ => Err(AudioError::StreamUnavailable),
         }
     }
 
@@ -487,7 +487,6 @@ impl PlaybackEngine {
 
                         let num_frames = to_copy / channels;
                         *lock_recover(&samples_played) += num_frames as u64;
-                        let _sr = *lock_recover(&sample_rate_arc);
                         let position_secs =
                             *lock_recover(&samples_played) as f64 / config.sample_rate.0 as f64;
                         *lock_recover(&current_position) = Duration::from_secs_f64(position_secs);

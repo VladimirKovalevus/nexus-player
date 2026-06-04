@@ -132,7 +132,6 @@ fn parse_byte_range(br: &str, last_offset: u64) -> Option<(u64, u64)> {
     None
 }
 #[cfg(test)]
-#[cfg(test)]
 fn extract_uri(line: &str, attribute: &str) -> Option<String> {
     let pattern = format!("{}=\"", attribute);
 

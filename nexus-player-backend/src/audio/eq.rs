@@ -16,7 +16,7 @@ pub struct EqSettings {
 }
 
 // Preset names stay in Russian: they are persisted in user config and compared by the
-// frontend (stores/eq.ts, EqPanel.vue). Change them together with the frontend phase.
+// frontend (stores/eq.ts, EqPanel.vue). Change them together.
 impl Default for EqSettings {
     fn default() -> Self {
         Self {

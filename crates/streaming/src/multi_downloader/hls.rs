@@ -484,8 +484,7 @@ impl TrackDownloader for HlsDownloader {
         self.position_ms = match pos {
             SeekPos::Milliseconds(ms) => ms,
             SeekPos::Bytes(bytes) => {
-                // Convert bytes to milliseconds using bitrate
-                let _bitrate = self.buffer.total_size().unwrap_or(0);
+                // Convert bytes to milliseconds as a fraction of the total duration
                 let durations = self.buffer.durations();
                 let total_duration: f64 = durations.iter().sum();
 

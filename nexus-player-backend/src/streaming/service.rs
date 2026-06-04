@@ -313,7 +313,7 @@ impl StreamingService {
                     Err(StreamError::NoProviderFound)
                 }
             }
-            _ => todo!(),
+            TrackSource::Cached { .. } => Err(StreamError::NotSupported),
         }
     }
     pub async fn set_context(&self, current: Option<u64>, active_ids: Vec<u64>) {

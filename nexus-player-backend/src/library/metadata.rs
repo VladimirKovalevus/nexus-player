@@ -40,7 +40,6 @@ pub fn parse_from_path(path: &Path) -> Result<ParsedMetadata> {
         audio_info: None,
         artwork_data: None,
     };
-    let _properties = tagged_file.properties();
     if let Some(tags) = tag {
         result.title = tags
             .title()
@@ -54,10 +53,6 @@ pub fn parse_from_path(path: &Path) -> Result<ParsedMetadata> {
         result.genre = tags.genre().map(|s| s.to_string());
         if let Some(picture) = tags.pictures().first() {
             result.artwork_data = Some(picture.data().to_vec());
-            // picture
-            //     .mime_type()
-            //     .map(|m| m.to_string())
-            //     .unwrap_or_else(|| "image/jpeg".to_string()),
         }
     };
     let properties = tagged_file.properties();
@@ -95,7 +90,6 @@ pub fn parse_from_buffer(buffer: &[u8], _file_extension: &str) -> Result<ParsedM
         audio_info: None,
         artwork_data: None,
     };
-    let _properties = tagged_file.properties();
     if let Some(tags) = tag {
         result.title = tags
             .title()
@@ -109,10 +103,6 @@ pub fn parse_from_buffer(buffer: &[u8], _file_extension: &str) -> Result<ParsedM
         result.genre = tags.genre().map(|s| s.to_string());
         if let Some(picture) = tags.pictures().first() {
             result.artwork_data = Some(picture.data().to_vec());
-            // picture
-            //     .mime_type()
-            //     .map(|m| m.to_string())
-            //     .unwrap_or_else(|| "image/jpeg".to_string()),
         }
     };
     let properties = tagged_file.properties();

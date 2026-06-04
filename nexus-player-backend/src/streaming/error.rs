@@ -33,7 +33,7 @@ pub enum StreamError {
     Unavailable(String),
 
     // Stays in Russian: the frontend CHALLENGE_RE (providerAuth.ts) parses this exact text.
-    // Change it together with that regex in the frontend phase.
+    // Change the two together.
     #[error("Требуется прохождение челленджа для {provider}: {url}")]
     ChallengeRequired { provider: String, url: String },
 

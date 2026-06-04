@@ -116,11 +116,6 @@ impl ChunkedBuffer {
             })
             .collect()
     }
-    pub fn debug(&self) {
-        let inner = lock_recover(&self.inner);
-        inner.chunks.iter().for_each(|_c| {});
-    }
-
     pub fn is_complete(&self) -> bool {
         let total_size = match self.total_size() {
             Some(s) => s,
@@ -187,8 +182,6 @@ impl ChunkedBuffer {
             Some(offset) => offset as u64 / self.chunk_size,
             None => 0,
         };
-        let total_size = inner.total_size.unwrap_or_default();
-        let _total_chunks = total_size.div_ceil(self.chunk_size);
         inner
             .chunks
             .iter()

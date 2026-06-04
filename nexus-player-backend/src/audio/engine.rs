@@ -49,13 +49,13 @@ impl AudioEngine {
         let _ = self.command_tx.send(AudioCommand::Play(track));
     }
     pub fn play_source(&self, track: Track, source: Box<dyn MediaSource>) {
-        info!("Command: play track ");
+        info!("Command: play track {}", track.id);
         let _ = self
             .command_tx
             .send(AudioCommand::PlaySource { track, source });
     }
     pub fn play_hls(&self, track: Track, source: HlsSource) {
-        info!("Command: play track ");
+        info!("Command: play track {}", track.id);
         let _ = self
             .command_tx
             .send(AudioCommand::PlayHLS { track, source });
