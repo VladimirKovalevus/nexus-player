@@ -3,7 +3,7 @@ use crate::audio::types::Track as AudioTrack;
 use crate::library::types::TrackOrder;
 use crate::library::{PlaylistId, TrackId};
 use crate::playlist::cursor::ContainerContext;
-use crate::playlist::playback_queue::ActiveQueue;
+use crate::playlist::playback_queue::{ActiveQueue, CursorQueue};
 use anyhow::Result;
 
 impl AppState {
@@ -149,5 +149,110 @@ impl AppState {
     ) -> Result<()> {
         self.load_context_and_play(ContainerContext::LocalPlaylist(playlist_id.0), start_index)
             .await
+    }
+
+    pub async fn add_track_and_play(&self, track: AudioTrack) -> Result<()> {
+        let cancel = self.begin_exclusive_op().await;
+        {
+            let mut queue = self.queue.lock().await;
+            let mut cq = CursorQueue::new();
+            cq.add_track(track.clone());
+            cq.jump_to(0);
+            *queue = ActiveQueue::Cursor(Box::new(cq));
+        }
+        if cancel.is_cancelled() {
+            return Ok(());
+        }
+        self.play_cancellable(Some(track), cancel).await;
+        Ok(())
+    }
+
+    pub async fn play_library_track(&self, track_id: TrackId) -> Result<()> {
+        let cancel = self.begin_exclusive_op().await;
+        let lib_track = self
+            .library
+            .get_track(track_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+        let track: AudioTrack = lib_track.into();
+        {
+            let mut queue = self.queue.lock().await;
+            let mut cq = CursorQueue::new();
+            cq.add_track(track.clone());
+            cq.jump_to(0);
+            *queue = ActiveQueue::Cursor(Box::new(cq));
+        }
+        if cancel.is_cancelled() {
+            return Ok(());
+        }
+        self.play_cancellable(Some(track), cancel).await;
+        Ok(())
+    }
+
+    pub async fn load_and_play_local_tracks(
+        &self,
+        track_ids: Vec<TrackId>,
+        selected_id: TrackId,
+    ) -> Result<()> {
+        let cancel = self.begin_exclusive_op().await;
+        let tracks = self.library.local_tracks_by_ids(&track_ids).await?;
+        let audio_tracks: Vec<AudioTrack> = tracks.into_iter().map(Into::into).collect();
+        let selected_index = audio_tracks
+            .iter()
+            .position(|track| i64::try_from(track.id).ok() == Some(selected_id.0))
+            .ok_or_else(|| anyhow::anyhow!("Selected local track is unavailable"))?;
+
+        self.fill_cursor_queue(audio_tracks).await;
+        let track = {
+            let mut queue = self.queue.lock().await;
+            match &mut *queue {
+                ActiveQueue::Cursor(cq) => {
+                    cq.jump_to(selected_index);
+                    cq.current_track.clone()
+                }
+                _ => None,
+            }
+        };
+        if !cancel.is_cancelled() {
+            self.play_cancellable(track, cancel).await;
+        }
+        Ok(())
+    }
+
+    /// Plays an arbitrary, caller-ordered set of library tracks as a queue, jumping to
+    /// `selected_id`. Unlike `load_and_play_local_tracks`, tracks need not be indexed as
+    /// local files — this covers liked/cached/streaming-sourced library tracks too.
+    pub async fn load_and_play_library_tracks(
+        &self,
+        track_ids: Vec<TrackId>,
+        selected_id: TrackId,
+    ) -> Result<()> {
+        let cancel = self.begin_exclusive_op().await;
+        let mut audio_tracks = Vec::with_capacity(track_ids.len());
+        for id in &track_ids {
+            if let Some(track) = self.library.get_track(*id).await? {
+                audio_tracks.push(AudioTrack::from(track));
+            }
+        }
+        let selected_index = audio_tracks
+            .iter()
+            .position(|track| i64::try_from(track.id).ok() == Some(selected_id.0))
+            .ok_or_else(|| anyhow::anyhow!("Selected track is unavailable"))?;
+
+        self.fill_cursor_queue(audio_tracks).await;
+        let track = {
+            let mut queue = self.queue.lock().await;
+            match &mut *queue {
+                ActiveQueue::Cursor(cq) => {
+                    cq.jump_to(selected_index);
+                    cq.current_track.clone()
+                }
+                _ => None,
+            }
+        };
+        if !cancel.is_cancelled() {
+            self.play_cancellable(track, cancel).await;
+        }
+        Ok(())
     }
 }
