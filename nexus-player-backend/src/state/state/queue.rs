@@ -1,6 +1,5 @@
 use super::AppState;
 use crate::audio::types::Track as AudioTrack;
-use crate::library::types::TrackOrder;
 use crate::library::TrackId;
 use crate::playlist::cursor::{ContainerContext, RadioMode};
 use crate::playlist::playback_queue::{ActiveQueue, CursorQueue, NextResult, RepeatMode};
@@ -46,61 +45,6 @@ impl AppState {
             }
         }
     }
-
-    pub async fn load_library_page_to_queue(
-        &self,
-        track_id: TrackId,
-        page_size: usize,
-        order: TrackOrder,
-    ) -> Result<(usize, usize, usize)> {
-        let all_tracks = self.get_all_library_tracks(order).await?;
-        let total = all_tracks.len();
-
-        let clicked_pos = all_tracks
-            .iter()
-            .position(|t| t.id == track_id)
-            .unwrap_or(0);
-        let page = clicked_pos / page_size;
-        let page_start = page * page_size;
-        let page_end = (page_start + page_size).min(total);
-        let track_index_in_page = clicked_pos - page_start;
-
-        let audio_tracks: Vec<AudioTrack> = all_tracks[page_start..page_end]
-            .iter()
-            .map(|t| t.clone().into())
-            .collect();
-
-        self.fill_cursor_queue(audio_tracks).await;
-
-        let total_pages = total.div_ceil(page_size);
-        Ok((page, total_pages, track_index_in_page))
-    }
-
-    pub async fn load_library_page(
-        &self,
-        page: usize,
-        page_size: usize,
-        order: TrackOrder,
-    ) -> Result<usize> {
-        let all_tracks = self.get_all_library_tracks(order).await?;
-        let total = all_tracks.len();
-
-        let page_start = (page * page_size).min(total);
-        let page_end = (page_start + page_size).min(total);
-
-        let audio_tracks: Vec<AudioTrack> = all_tracks[page_start..page_end]
-            .iter()
-            .map(|t| t.clone().into())
-            .collect();
-
-        self.fill_cursor_queue(audio_tracks).await;
-
-        let total_pages = total.div_ceil(page_size);
-        Ok(total_pages)
-    }
-
-    // --- Legacy / Missing Methods Stub ---
-    // These might need to be re-implemented in CursorQueue or removed if not used by new frontend
 
     pub async fn remove_from_queue(&self, index: usize) -> Option<AudioTrack> {
         let mut queue = self.queue.lock().await;
