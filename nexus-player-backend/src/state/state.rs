@@ -17,12 +17,12 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 mod artwork_config;
+mod audio;
 mod library_proxy;
 mod loading;
 mod playback;
 mod queue;
 mod search;
-mod transport;
 
 pub struct AppState {
     audio_engine: Arc<AudioEngine>,
