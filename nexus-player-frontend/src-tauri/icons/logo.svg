@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<title>Nexus</title>
+<defs><linearGradient id="key" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34352f"/><stop offset="1" stop-color="#25261f"/></linearGradient></defs>
+<rect x="48" y="60" width="928" height="928" rx="84" fill="#0c0d0b"/>
+<rect x="48" y="36" width="928" height="928" rx="84" fill="url(#key)"/>
+<path d="M132 36H892A84 84 0 0 1 976 120V128A84 84 0 0 0 892 44H132A84 84 0 0 0 48 128V120A84 84 0 0 1 132 36Z" fill="#fff" fill-opacity=".14"/>
+<rect x="112" y="100" width="800" height="800" rx="32" fill="#0b0c0a"/>
+<path d="M216 196H440L666 612V798a6 6 0 0 1-6 6H574L334 362V798a6 6 0 0 1-6 6H216a6 6 0 0 1-6-6V202a6 6 0 0 1 6-6Z" fill="#ffb000"/><rect x="690" y="196.0" width="124" height="102.4" rx="6" fill="#4d401c"/><rect x="690" y="322.4" width="124" height="102.4" rx="6" fill="#ffb000"/><rect x="690" y="448.8" width="124" height="102.4" rx="6" fill="#ffb000"/><rect x="690" y="575.2" width="124" height="102.4" rx="6" fill="#ffb000"/><rect x="690" y="701.6" width="124" height="102.4" rx="6" fill="#ffb000"/>
+</svg>
