@@ -1,35 +1,132 @@
 #!/usr/bin/env python3
-"""T2 R1: no first-party Rust file exceeds 800 lines, not counting #[cfg(test)] items.
+"""No first-party Rust file exceeds 800 lines, not counting #[cfg(test)] items.
 
-With no argument it checks every first-party file except test files. With `--family NAME` it
-checks only that family's files, test-looking names included, because nothing created from the
-five oversized files may hide behind a name.
+Usage, from the repository root:
+
+    python3 scripts/check_file_sizes.py            # every first-party file except test files
+    python3 scripts/check_file_sizes.py PATH...    # only the .rs files at or under PATH
+
+A file's lines are its newline characters, plus one if text follows the last newline. Lines
+from a #[cfg(test)] (or #[cfg(all(test, ...))]) attribute through the closing brace or
+semicolon of the item it marks do not count; every other line does, blank lines and comments
+included. With path arguments, test-looking names are checked too, and arguments that do not
+exist are skipped.
+
+Standard library only, with no dependency on other scripts, so it runs anywhere.
 """
 
-import argparse
+import os
+import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from moves_check import FAMILIES, REPO, family_paths  # noqa: E402
-from rust_scan import (  # noqa: E402
-    _CFG_TEST,
-    _item_end,
-    first_party_rs_files,
-    is_test_file,
-    line_of,
-    mask,
-    rel,
-)
-
+REPO = Path(__file__).resolve().parent.parent
 LIMIT = 800
+ROOTS = ("nexus-player-backend", "nexus-player-frontend/src-tauri", "crates/streaming")
+PRUNED = {"nexus-player-frontend/src-tauri/gen"}
 
-# T3 removes both of these exceptions when it splits the two files.
-T3_EXCEPTIONS = {
-    "nexus-player-frontend/src-tauri/src/commands.rs",
-    "nexus-player-frontend/src-tauri/src/dto.rs",
-}
+_CFG_TEST = re.compile(
+    r"#\s*(!?)\s*\[\s*cfg\s*\(\s*(?:test|all\s*\(\s*test\b[^()]*\))\s*\)\s*\]"
+)
+_RAW_STRING = re.compile(r'[bc]?r(#*)"')
+_CHAR = re.compile(r"'(?:\\.[^']*|[^\\'\n])'")
+
+
+def line_of(text, offset):
+    return text.count("\n", 0, offset) + 1
+
+
+def mask(text):
+    """Text with comments, strings, raw strings and char literals blanked, newlines kept."""
+    out = list(text)
+    length = len(text)
+
+    def blank(start, end):
+        for index in range(start, end):
+            if out[index] != "\n":
+                out[index] = " "
+
+    i = 0
+    while i < length:
+        ch = text[i]
+        if text.startswith("//", i):
+            end = text.find("\n", i)
+            end = length if end < 0 else end
+            blank(i, end)
+            i = end
+        elif text.startswith("/*", i):
+            depth, j = 1, i + 2
+            while j < length and depth:
+                if text.startswith("/*", j):
+                    depth, j = depth + 1, j + 2
+                elif text.startswith("*/", j):
+                    depth, j = depth - 1, j + 2
+                else:
+                    j += 1
+            blank(i, j)
+            i = j
+        elif ch == '"':
+            j = i + 1
+            while j < length and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            blank(i, min(j + 1, length))
+            i = j + 1
+        elif ch in "rbc" and not (i and (text[i - 1].isalnum() or text[i - 1] == "_")):
+            raw = _RAW_STRING.match(text, i)
+            if raw:
+                closing = '"' + raw.group(1)
+                end = text.find(closing, raw.end())
+                end = length if end < 0 else end + len(closing)
+                blank(i, end)
+                i = end
+            else:
+                i += 1
+        elif ch == "'":
+            char = _CHAR.match(text, i)
+            if char:
+                blank(i, char.end())
+                i = char.end()
+            else:
+                i += 1  # A lifetime.
+        else:
+            i += 1
+    return "".join(out)
+
+
+def _matching(code, start, opening, closing):
+    depth = 0
+    for index in range(start, len(code)):
+        if code[index] == opening:
+            depth += 1
+        elif code[index] == closing:
+            depth -= 1
+            if depth == 0:
+                return index
+    return len(code) - 1
+
+
+def _item_end(code, position):
+    """The offset just past the item that starts at position, attributes included."""
+    while True:
+        while position < len(code) and code[position].isspace():
+            position += 1
+        if code.startswith("#", position):
+            bracket = code.find("[", position)
+            position = _matching(code, bracket, "[", "]") + 1
+        else:
+            break
+    nesting = 0
+    for index in range(position, len(code)):
+        char = code[index]
+        if char in "([":
+            nesting += 1
+        elif char in ")]":
+            nesting -= 1
+        elif nesting == 0 and char == ";":
+            return index + 1
+        elif nesting == 0 and char == "{":
+            return _matching(code, index, "{", "}") + 1
+    return len(code)
 
 
 def total_lines(text):
@@ -40,7 +137,7 @@ def total_lines(text):
 
 def cfg_test_lines(text):
     """The set of lines from each #[cfg(test)] through the closing of the item it marks."""
-    code = mask(text)[0]
+    code = mask(text)
     lines = set()
     position = 0
     while True:
@@ -68,28 +165,59 @@ def offenders(sources, limit=LIMIT):
     return found
 
 
+def _rel(path):
+    return Path(path).relative_to(REPO).as_posix()
+
+
+def rs_files_under(directory):
+    found = []
+    for current, dirs, files in os.walk(directory):
+        dirs[:] = [
+            d for d in dirs if d != "target" and _rel(Path(current) / d) not in PRUNED
+        ]
+        found += [_rel(Path(current) / f) for f in files if f.endswith(".rs")]
+    return sorted(found)
+
+
+def is_test_file(relative):
+    return relative.endswith("_tests.rs") or relative.startswith("nexus-player-backend/tests/")
+
+
+def default_paths():
+    """Return (paths, issues). A missing or empty root is an issue, never a silent pass."""
+    paths, issues = [], []
+    for root in ROOTS:
+        if not (REPO / root).is_dir():
+            issues.append(f"first-party root {root} does not exist")
+            continue
+        found = rs_files_under(REPO / root)
+        if not found:
+            issues.append(f"first-party root {root} yields no .rs files")
+        paths += [path for path in found if not is_test_file(path)]
+    return paths, issues
+
+
+def argument_paths(arguments):
+    """Return (paths, issues) for repository-relative files or directories."""
+    paths = []
+    for argument in arguments:
+        target = REPO / argument
+        if target.is_file() and target.name.endswith(".rs"):
+            paths.append(Path(os.path.normpath(argument)).as_posix())
+        elif target.is_dir():
+            paths += rs_files_under(target)
+    paths = sorted(set(paths))
+    issues = [] if paths else [f"no .rs file at or under: {' '.join(arguments)}"]
+    return paths, issues
+
+
 def _read(path):
     return (REPO / path).read_bytes().decode("utf-8", errors="replace")
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--family", choices=sorted(FAMILIES))
-    args = parser.parse_args(argv)
-
-    issues = []
-    if args.family:
-        paths = family_paths(args.family)
-        if not paths:
-            issues.append(f"family {args.family} has no files")
-    else:
-        files, issues = first_party_rs_files()
-        paths = [
-            path
-            for path in map(rel, files)
-            if not is_test_file(path) and path not in T3_EXCEPTIONS
-        ]
-
+    arguments = sys.argv[1:] if argv is None else argv
+    paths, issues = argument_paths(arguments) if arguments else default_paths()
     for issue in issues:
         print(f"FAIL [R1]: {issue}", file=sys.stderr)
     found = offenders({path: _read(path) for path in paths})
