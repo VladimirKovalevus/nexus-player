@@ -1,6 +1,8 @@
 mod commands;
 mod dto;
 mod events;
+#[cfg(test)]
+mod wire_format_tests;
 
 use nexus_player_backend::state::state::AppState;
 use std::path::PathBuf;
