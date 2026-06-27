@@ -1,10 +1,10 @@
 # Butterchurn Raw Audio Interface
 
-Этот интерфейс позволяет использовать Butterchurn в средах, где нет прямого доступа к `AudioContext` (например, при получении аудиоданных из Rust, C++ или Node.js бэкенда).
+This interface lets you use Butterchurn in environments with no direct access to an `AudioContext` (for example, when audio data comes from a Rust, C++ or Node.js backend).
 
-## 1. Инициализация
+## 1. Initialization
 
-При создании визуализатора первым аргументом передайте `null`. Это отключит попытки Butterchurn подключиться к Web Audio API.
+When creating the visualizer, pass `null` as the first argument. This stops Butterchurn from trying to connect to the Web Audio API.
 
 ```javascript
 import butterchurn from 'butterchurn';
@@ -18,21 +18,21 @@ const visualizer = butterchurn.createVisualizer(null, canvas, {
 });
 ```
 
-## 2. Формат данных (audioData)
+## 2. Data format (audioData)
 
-Метод `renderRaw` ожидает объект с тремя массивами `Uint8Array` длиной **1024** байта.
+The `renderRaw` method expects an object with three `Uint8Array` arrays, each **1024** bytes long.
 
-*   **Значения**: от `0` до `255`.
-*   **Тишина**: `128`.
-*   **Длина**: Строго `1024` (соответствует внутреннему `fftSize` / 2).
+*   **Values**: from `0` to `255`.
+*   **Silence**: `128`.
+*   **Length**: exactly `1024` (matches the internal `fftSize` / 2).
 
-### Если ваш бэкенд (Rust) отдает Float32 (-1.0 ... 1.0):
-Перед отправкой в JS преобразуйте их следующим образом:
+### If your backend (Rust) provides Float32 (-1.0 ... 1.0):
+Before sending the samples to JS, convert them like this:
 `uint8_sample = (float_sample * 127.0 + 128.0) as u8`
 
-## 3. Вызов рендеринга
+## 3. Calling the renderer
 
-Вызывайте `renderRaw` в вашем основном цикле (requestAnimationFrame или callback из Rust).
+Call `renderRaw` in your main loop (requestAnimationFrame or a callback from Rust).
 
 ```javascript
 function onAudioFrame(dataFromRust, deltaTime) {
@@ -42,24 +42,24 @@ function onAudioFrame(dataFromRust, deltaTime) {
     timeByteArrayR: dataFromRust.right   // Uint8Array(1024)
   };
 
-  // deltaTime — время в секундах, прошедшее с прошлого кадра (например, 0.016)
+  // deltaTime is the time in seconds since the previous frame (for example, 0.016)
   visualizer.renderRaw(audioData, deltaTime);
 }
 ```
 
-## 4. Почему важен deltaTime (elapsedTime)?
+## 4. Why does deltaTime (elapsedTime) matter?
 
-Butterchurn использует время для расчета движения (вращение, зум, пульсация). 
-- Если не передавать `deltaTime`, он будет использовать `performance.now()`.
-- Если вы рендерите видео или ваш бэкенд идет не в реальном времени, **обязательно** передавайте точный `deltaTime`, чтобы анимация была плавной и синхронизированной с музыкой.
+Butterchurn uses time to compute motion (rotation, zoom, pulsing).
+- If you do not pass `deltaTime`, it uses `performance.now()`.
+- If you render video or your backend does not run in real time, you **must** pass an exact `deltaTime` so the animation stays smooth and in sync with the music.
 
-## 5. Пример с эмуляцией данных
+## 5. Example with simulated data
 
 ```javascript
 const mockData = new Uint8Array(1024).fill(128);
 
 function loop() {
-  // Заполняем случайными данными для теста
+  // Fill with random data for testing
   for(let i=0; i<1024; i++) mockData[i] = Math.floor(Math.random() * 256);
 
   visualizer.renderRaw({
