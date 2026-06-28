@@ -1,9 +1,11 @@
 [package]
 name = "nexus-player-frontend"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Tauri application shell of Nexus Player that exposes the Rust backend to the Vue frontend."
 edition = "2021"
+license = "MIT"
+authors = ["Vladimir Kovalev <vladkoval805@gmail.com>"]
+repository = "https://github.com/VladimirKovalevus/nexus-player"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
