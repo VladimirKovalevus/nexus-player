@@ -154,13 +154,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Related Projects
 
-- [Nexus Audio Player](../nexus-monorepo) - The main audio player application
+- [Nexus Audio Player](../../README.md) - The main audio player application
 - [CPAL](https://github.com/RustAudio/cpal) - Cross-platform audio I/O
 - [Symphonia](https://github.com/pdeljanov/Symphonia) - Audio decoding library
-
-## 🤝 Contributing
-
-Contributions are welcome! This library is part of the Nexus Audio Player ecosystem. See the main project's [Contributing Guidelines](../nexus-monorepo/CONTRIBUTING.md).
 
 ---
 
