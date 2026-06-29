@@ -3,9 +3,12 @@ use crate::dto::{CachedAlbumDto, TrackDto};
 use nexus_player_backend::library::local_library::{AndroidMediaEntry, MusicSource, ScanResult};
 use nexus_player_backend::library::types::{TrackId, TrackOrder};
 use nexus_player_backend::state::state::AppState;
-use std::path::{Path, PathBuf};
+#[cfg(not(target_os = "android"))]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
+#[cfg(not(target_os = "android"))]
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
