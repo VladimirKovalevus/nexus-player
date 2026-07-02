@@ -381,7 +381,7 @@ impl StreamProvider for SoundCloudProvider {
             })
             .collect();
 
-        println!("TRACKS LEN {:?}", track_infos.len());
+        tracing::debug!("SoundCloud returned {} tracks", track_infos.len());
         Ok(track_infos)
     }
 

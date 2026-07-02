@@ -12,8 +12,8 @@ pub async fn add_to_queue(state: State<'_, Arc<AppState>>, track_id: i64) -> Res
         .await
         .map_err(|e| e.to_string())?;
 
-    // Return dummy index or calculate real one?
-    // In async world, index might change before we return.
+    // The queue may change before this returns, so no real index is reported;
+    // callers do not use the value.
     Ok(0)
 }
 

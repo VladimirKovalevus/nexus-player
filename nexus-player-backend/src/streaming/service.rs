@@ -212,8 +212,7 @@ impl StreamingService {
             .get(provider_name)
             .ok_or_else(|| StreamError::NoProviderFound)?;
 
-        // We can create a dummy SearchResult or change expand_collection signature.
-        // For now, let's use a dummy SearchResult since that's what the trait expects.
+        // expand_collection takes a SearchResult, so build a minimal one from the id.
         let collection = match content_type {
             ContentType::Playlist => SearchResult::Playlist(PlaylistInfo {
                 id: id.to_string(),
@@ -244,7 +243,7 @@ impl StreamingService {
         };
 
         let res = provider.expand_collection(collection).await;
-        println!("EXPAND RESULT{res:?}");
+        tracing::debug!("Expanded collection: {res:?}");
         res
     }
 
@@ -254,7 +253,7 @@ impl StreamingService {
         track_id: u64,
         options: Option<DownloadOptions>,
     ) -> StreamResult<StreamingSourceWrapper> {
-        println!("Source {:?}", source);
+        tracing::debug!("Stream source: {:?}", source);
         if let Ok(Some(track)) = self.library.find_by_source(&source).await {
             if let CacheStatus::Cached {
                 path,

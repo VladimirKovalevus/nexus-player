@@ -140,7 +140,7 @@ pub async fn save_track_to_file(
         tracing::info!("Track saved");
     } else {
         tracing::info!(
-            "POEBOTA for {:?}",
+            "Track not cached yet, queueing download for {:?}",
             TrackSource::External {
                 system: src.system.clone(),
                 id: src.url.clone(),
