@@ -2,6 +2,7 @@ use super::decoder::{AudioDecoder, DecoderType};
 use super::eq::{EqProcessor, EqSettings};
 use super::hls_decoder::HlsAudioDecoder;
 use super::sync::lock_recover;
+use super::volume::{default_volume, effective_volume, IS_ANDROID};
 use crate::audio::types::{MediaSource, SampleRate as MSR, TrackSource};
 use crate::error::AudioError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -75,7 +76,7 @@ impl PlaybackEngine {
             samples_played: Arc::new(Mutex::new(0)),
             sample_buffer: Arc::new(Mutex::new(Vec::new())),
             buffer_position: Arc::new(Mutex::new(0)),
-            volume: Arc::new(Mutex::new(0.1)),
+            volume: Arc::new(Mutex::new(default_volume())),
             recent_samples: Arc::new(Mutex::new(Vec::with_capacity(8192))),
             needs_recreation: Arc::new(AtomicBool::new(false)),
             eq_settings: Arc::new(Mutex::new(EqSettings::default())),
@@ -677,8 +678,8 @@ impl PlaybackEngine {
     }
 
     pub fn set_volume(&mut self, volume: f32) {
-        let clamped = volume.clamp(0.0, 1.0);
-        *lock_recover(&self.volume) = clamped;
+        let applied = effective_volume(volume, IS_ANDROID);
+        *lock_recover(&self.volume) = applied;
     }
 
     pub fn volume(&self) -> f32 {

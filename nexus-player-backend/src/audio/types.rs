@@ -1,4 +1,5 @@
 use crate::audio::eq::EqSettings;
+use crate::audio::volume::default_volume;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -181,7 +182,7 @@ impl Default for AudioState {
             playback_state: PlaybackState::Stopped,
             position: Duration::ZERO,
             duration: Duration::ZERO,
-            volume: 0.1,
+            volume: default_volume(),
             buffered_ranges: Vec::new(),
             waveforms: Vec::new(),
             fft: Vec::new(),

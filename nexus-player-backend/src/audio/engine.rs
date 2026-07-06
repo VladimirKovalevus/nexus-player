@@ -619,9 +619,10 @@ impl AudioEngine {
 
                     AudioCommand::SetVolume(volume) => {
                         info!("Setting volume: {}", volume);
-                        write_recover(&state).volume = volume;
                         playback.set_volume(volume);
-                        let _ = event_tx.send(AudioEvent::VolumeChanged { volume });
+                        let applied = playback.volume();
+                        write_recover(&state).volume = applied;
+                        let _ = event_tx.send(AudioEvent::VolumeChanged { volume: applied });
                     }
 
                     AudioCommand::SetEq(settings) => {
