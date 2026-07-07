@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.AudioManager
 import android.os.Bundle
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
@@ -35,6 +36,9 @@ class MainActivity : TauriActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        // Hardware volume keys always control media volume, even when nothing plays
+        volumeControlStream = AudioManager.STREAM_MUSIC
 
         val filter = IntentFilter().apply {
             addAction(AudioForegroundService.ACTION_PLAY)
