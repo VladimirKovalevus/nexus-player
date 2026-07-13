@@ -3,6 +3,7 @@ import { invoke as rawInvoke, type InvokeArgs, type InvokeOptions } from '@tauri
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
 import { useNotificationStore } from '@/stores/notifications';
+import { isAndroid } from '@/utils/platform';
 
 // Single entry point for backend calls: when a command fails because a streaming provider
 // needs a challenge (SoundCloud client_id), solve it once and retry the call.
@@ -92,7 +93,7 @@ async function solveSoundCloudChallenge(url: string): Promise<string> {
   console.log('[SC-Auth] Starting SoundCloud challenge for:', url);
   const notificationStore = useNotificationStore();
 
-  if (/Android/.test(navigator.userAgent)) {
+  if (isAndroid) {
     notificationStore.addNotification(i18n.global.t('provider.opening'), 'info');
     const slowHint = setTimeout(() => {
       notificationStore.addNotification(i18n.global.t('provider.waiting'), 'info');

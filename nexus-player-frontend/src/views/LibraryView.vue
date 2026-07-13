@@ -89,6 +89,7 @@ import AppIcon from '@/components/common/AppIcon.vue';
 import { useAudioStore } from '@/stores/audio';
 import { useRowHeights } from '@/composables/useRowHeights';
 import type { AndroidMediaEntry, LocalScanResult, MusicSourceDto, TrackDto } from '@/types/types';
+import { isAndroid } from '@/utils/platform';
 
 declare global {
   interface Window { _NexusLibrary?: { hasPermission(): boolean; requestPermission(): void; scanAudio(): string } }
@@ -107,7 +108,6 @@ const sortField = ref<'catalog' | 'title' | 'artist'>('catalog');
 const sortDirection = ref<'asc' | 'desc'>('asc');
 const audioStore = useAudioStore();
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
-const isAndroid = /Android/i.test(navigator.userAgent);
 const filteredTracks = computed(() => {
   const value = query.value.trim().toLocaleLowerCase();
   if (!value) return tracks.value;
