@@ -5,6 +5,7 @@ import { useAudioStore } from '../stores/audio';
 import { useRadioStore } from '../stores/radio';
 import type { RadioMode } from '../types/types';
 import { invoke } from '@/utils/providerAuth';
+import { isAndroid } from '@/utils/platform';
 import WaveformBar from './common/WaveformBar.vue';
 import AppIcon from './common/AppIcon.vue';
 import AppImage from './common/AppImage.vue';
@@ -469,7 +470,7 @@ const presetLabel = (name: string) => (name === 'Random' ? t('visualizer.random'
           </button>
         </div>
 
-        <div class="volume-section">
+        <div v-if="!isAndroid" class="volume-section">
           <AppIcon name="volume-high" :size="16" />
           <input
             type="range"

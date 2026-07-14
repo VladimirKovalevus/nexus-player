@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { invoke } from '@/utils/providerAuth';
+import { isAndroid } from '@/utils/platform';
 import { listen } from '@tauri-apps/api/event';
 import { useAudioStore } from '../stores/audio';
 import { useEqStore } from '../stores/eq';
@@ -308,7 +309,7 @@ onUnmounted(() => {
           <span :class="$style.eqText">EQ</span>
         </button>
 
-        <div ref="volumeWrapperRef" :class="$style.volume" @wheel.stop.prevent="handleVolumeWheel">
+        <div v-if="!isAndroid" ref="volumeWrapperRef" :class="$style.volume" @wheel.stop.prevent="handleVolumeWheel">
           <button
             :class="[$style.key, { [$style.on]: volumePopupOpen }]"
             :title="$t('player.volume', { percent: Math.round(audioStore.volume * 100) })"
