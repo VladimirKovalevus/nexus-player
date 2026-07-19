@@ -34,7 +34,11 @@ fn audio_state_default_uses_platform_default_volume() {
 #[test]
 fn android_effective_volume_ignores_requests() {
     for requested in [0.0, 0.1, 0.5, 1.0, 2.0, -3.0, f32::NAN, f32::INFINITY] {
-        assert_eq!(effective_volume(requested, true), 1.0, "request {requested}");
+        assert_eq!(
+            effective_volume(requested, true),
+            1.0,
+            "request {requested}"
+        );
     }
 }
 
