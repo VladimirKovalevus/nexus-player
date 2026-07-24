@@ -12,44 +12,78 @@ const PEAK_Q: f32 = 1.4;
 pub struct EqSettings {
     pub enabled: bool,
     pub gains: [f32; 10],
+    #[serde(deserialize_with = "deserialize_preset_name")]
     pub preset_name: Option<String>,
 }
 
-// Preset names stay in Russian: they are persisted in user config and compared by the
-// frontend (stores/eq.ts, EqPanel.vue). Change them together.
 impl Default for EqSettings {
     fn default() -> Self {
         Self {
             enabled: true,
             gains: [0.0; 10],
-            preset_name: Some("Плоский".to_string()),
+            preset_name: Some("flat".to_string()),
         }
     }
 }
 
-// Russian names are persisted and matched by the frontend; see the note above.
+const PRESET_IDS: [&str; 7] = [
+    "flat",
+    "rock",
+    "pop",
+    "jazz",
+    "classical",
+    "bass_boost",
+    "vocal",
+];
+
+// Names used before presets got stable ids, in the same order as PRESET_IDS.
+const LEGACY_PRESET_NAMES: [&str; 7] = [
+    "\u{41f}\u{43b}\u{43e}\u{441}\u{43a}\u{438}\u{439}",
+    "\u{420}\u{43e}\u{43a}",
+    "\u{41f}\u{43e}\u{43f}",
+    "\u{414}\u{436}\u{430}\u{437}",
+    "\u{41a}\u{43b}\u{430}\u{441}\u{441}\u{438}\u{43a}\u{430}",
+    "\u{411}\u{430}\u{441}-\u{431}\u{443}\u{441}\u{442}",
+    "\u{412}\u{43e}\u{43a}\u{430}\u{43b}",
+];
+
+fn migrate_preset_name(name: String) -> Option<String> {
+    if PRESET_IDS.contains(&name.as_str()) {
+        return Some(name);
+    }
+    LEGACY_PRESET_NAMES
+        .iter()
+        .position(|legacy| *legacy == name)
+        .map(|i| PRESET_IDS[i].to_string())
+}
+
+fn deserialize_preset_name<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Option::<String>::deserialize(deserializer)?;
+    Ok(raw.and_then(migrate_preset_name))
+}
+
 pub fn builtin_presets() -> Vec<(&'static str, [f32; 10])> {
     vec![
+        ("flat", [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        ("rock", [4.0, 3.0, 0.0, -1.0, -2.0, 0.0, 2.0, 3.0, 3.0, 2.0]),
         (
-            "Плоский",
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-        ),
-        ("Рок", [4.0, 3.0, 0.0, -1.0, -2.0, 0.0, 2.0, 3.0, 3.0, 2.0]),
-        (
-            "Поп",
+            "pop",
             [-1.0, 2.0, 4.0, 4.0, 1.0, 0.0, -1.0, -1.0, -1.0, -2.0],
         ),
-        ("Джаз", [3.0, 2.0, 1.0, 2.0, -1.0, -1.0, 0.0, 1.0, 2.0, 3.0]),
+        ("jazz", [3.0, 2.0, 1.0, 2.0, -1.0, -1.0, 0.0, 1.0, 2.0, 3.0]),
         (
-            "Классика",
+            "classical",
             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -4.0, -4.0, -4.0, -5.0],
         ),
         (
-            "Бас-буст",
+            "bass_boost",
             [6.0, 5.0, 4.0, 2.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
-            "Вокал",
+            "vocal",
             [-3.0, -3.0, 0.0, 3.0, 5.0, 5.0, 3.0, 0.0, -1.0, -2.0],
         ),
     ]

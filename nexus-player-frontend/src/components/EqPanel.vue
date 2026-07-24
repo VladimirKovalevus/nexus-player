@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { useEqStore, EQ_FREQUENCIES } from '@/stores/eq';
+import { useI18n } from 'vue-i18n';
+import { useEqStore, EQ_FREQUENCIES, presetLabelKey } from '@/stores/eq';
 import { onClickOutside } from '@vueuse/core';
 
+const { t } = useI18n();
 const eqStore = useEqStore();
 const panelRef = ref<HTMLElement | null>(null);
 
@@ -88,7 +90,7 @@ function formatGain(db: number): string {
               :aria-pressed="eqStore.settings.presetName === preset.name"
               @click="eqStore.applyPreset(preset)"
             >
-              {{ preset.name }}
+              {{ t(presetLabelKey(preset.name)) }}
             </button>
           </div>
         </div>

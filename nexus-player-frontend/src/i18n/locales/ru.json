@@ -1,4 +1,15 @@
 {
+  "eq": {
+    "presets": {
+      "flat": "Плоский",
+      "rock": "Рок",
+      "pop": "Поп",
+      "jazz": "Джаз",
+      "classical": "Классика",
+      "bass_boost": "Бас-буст",
+      "vocal": "Вокал"
+    }
+  },
   "settings": {
     "appearance": {
       "theme": "Тема оформления",

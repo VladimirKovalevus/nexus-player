@@ -1,4 +1,15 @@
 {
+  "eq": {
+    "presets": {
+      "flat": "Flat",
+      "rock": "Rock",
+      "pop": "Pop",
+      "jazz": "Jazz",
+      "classical": "Classical",
+      "bass_boost": "Bass boost",
+      "vocal": "Vocal"
+    }
+  },
   "settings": {
     "appearance": {
       "theme": "Theme",

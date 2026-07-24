@@ -5,11 +5,15 @@ import type { EqSettingsDto, EqPresetDto } from '@/types/types';
 
 export const EQ_FREQUENCIES = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000] as const;
 
+export function presetLabelKey(id: string): string {
+  return `eq.presets.${id}`;
+}
+
 export const useEqStore = defineStore('eq', () => {
   const settings = ref<EqSettingsDto>({
     enabled: true,
     gains: new Array(10).fill(0),
-    presetName: 'Плоский',
+    presetName: 'flat',
   });
 
   const presets = ref<EqPresetDto[]>([]);
