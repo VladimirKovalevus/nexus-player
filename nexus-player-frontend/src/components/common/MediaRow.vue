@@ -46,7 +46,7 @@
         <span v-if="kindLabel" class="source-tag">{{ kindLabel }}</span>
         <template v-else>{{ track?.album ?? '' }}</template>
       </span>
-      <span class="track-col-source"><span v-if="sourceLabel" class="source-tag">{{ sourceLabel }}</span></span>
+      <span class="track-col-source"><span v-if="sourceText" class="source-tag">{{ sourceText }}</span></span>
     </template>
 
     <span :class="$style.time">
@@ -111,6 +111,7 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
+import { sourceLabel } from '@/utils/sourceLabel';
 import type { TrackDto, PlaylistDto, ContainerMetaDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
 import { useNotificationStore } from '@/stores/notifications';
@@ -318,13 +319,14 @@ const isCached = computed(() => props.track?.state?.type === 'cached');
 
 const pickerExcludeId = computed(() => (props.type === 'playlist' ? props.playlist?.id : undefined));
 
-const sourceLabel = computed(() => {
+const sourceText = computed(() => {
   if (props.type === 'track') {
     const system = props.track?.source?.system;
-    if (system) return system;
+    if (system) return sourceLabel(system, t);
     return t(isCached.value ? 'track.source.cached' : 'track.source.local');
   }
-  return props.album?.system ?? props.playlist?.source?.system ?? '';
+  const system = props.album?.system ?? props.playlist?.source?.system;
+  return system ? sourceLabel(system, t) : '';
 });
 
 const placeholderIcon = computed(() => {

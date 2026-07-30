@@ -31,7 +31,7 @@
               <div :class="$style.trackTitle" :title="entry.title">{{ entry.title }}</div>
               <div :class="$style.trackArtist">{{ entry.artist || $t('track.unknownArtist') }}</div>
             </div>
-            <span :class="$style.source"><span class="source-tag">{{ entry.source.system }}</span></span>
+            <span :class="$style.source"><span class="source-tag">{{ historySourceText(entry) }}</span></span>
             <span :class="$style.playedAt">{{ formatTime(entry.playedAt) }}</span>
           </div>
         </template>
@@ -63,9 +63,11 @@ import AppIcon from '@/components/common/AppIcon.vue';
 import AppImage from '@/components/common/AppImage.vue';
 import type { PlayHistoryEntryDto } from '@/types/types';
 import { useNotificationStore } from '@/stores/notifications';
+import { sourceLabel } from '@/utils/sourceLabel';
 import { useRowHeights } from '@/composables/useRowHeights';
 
 const { t, locale } = useI18n();
+const historySourceText = (entry: PlayHistoryEntryDto) => sourceLabel(entry.source.system, t);
 const rowHeights = useRowHeights();
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
 const notifications = useNotificationStore();

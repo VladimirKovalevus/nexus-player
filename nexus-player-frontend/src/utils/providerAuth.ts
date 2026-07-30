@@ -4,6 +4,7 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
 import { useNotificationStore } from '@/stores/notifications';
 import { isAndroid } from '@/utils/platform';
+import { PLAYLISTS_CHANGED_EVENT } from '@/utils/playlistEvents';
 
 // Single entry point for backend calls: when a command fails because a streaming provider
 // needs a challenge (SoundCloud client_id), solve it once and retry the call.
@@ -21,7 +22,7 @@ export function parseChallenge(err: unknown): ProviderChallenge | null {
   return m ? { provider: m[1], url: m[2] } : null;
 }
 
-export const PLAYLISTS_CHANGED_EVENT = 'playlists-changed';
+export { PLAYLISTS_CHANGED_EVENT };
 
 const PLAYLIST_COMMANDS = new Set([
   'create_playlist',

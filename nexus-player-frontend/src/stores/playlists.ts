@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { invoke, PLAYLISTS_CHANGED_EVENT } from '@/utils/providerAuth';
+import { invoke } from '@/utils/providerAuth';
+import { PLAYLISTS_CHANGED_EVENT } from '@/utils/playlistEvents';
 import type { PlaylistDto } from '@/types/types';
 
 export const usePlaylistsStore = defineStore('playlists', () => {

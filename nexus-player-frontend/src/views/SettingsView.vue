@@ -104,7 +104,7 @@
           <input v-model="config.providers.soundcloud.enabled" type="checkbox" :class="$style.check" />
         </label>
         <label :class="$style.row">
-          <span :class="$style.label">Bandcamp</span>
+          <span :class="$style.label">{{ sourceLabel('bandcamp', t) }}</span>
           <input v-model="config.providers.bandcamp.enabled" type="checkbox" :class="$style.check" />
         </label>
       </section>
@@ -208,6 +208,7 @@ import { invoke } from '@/utils/providerAuth';
 import AppIcon from '@/components/common/AppIcon.vue';
 import { confirmAction } from '@/composables/useConfirm';
 import { useNotificationStore } from '@/stores/notifications';
+import { sourceLabel } from '@/utils/sourceLabel';
 import { THEMES, useThemeStore } from '@/stores/theme';
 import { LOCALES, setLocale } from '@/i18n';
 import type { AppConfig, CleanupResult, SyncType } from '@/types/types';

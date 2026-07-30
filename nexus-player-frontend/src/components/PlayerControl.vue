@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { invoke } from '@/utils/providerAuth';
 import { isAndroid } from '@/utils/platform';
+import { sourceLabel } from '@/utils/sourceLabel';
 import { listen } from '@tauri-apps/api/event';
 import { useAudioStore } from '../stores/audio';
 import { useEqStore } from '../stores/eq';
@@ -242,7 +243,7 @@ onUnmounted(() => {
         </div>
         <div v-if="audioStore.currentTrack" :class="$style.trackMeta">
           {{ audioStore.currentTrack.artist || $t('track.unknownArtist') }} ·
-          {{ audioStore.currentTrack.source?.system ?? $t(sourceKey) }}
+          {{ audioStore.currentTrack.source?.system ? sourceLabel(audioStore.currentTrack.source.system, $t) : $t(sourceKey) }}
         </div>
       </div>
     </div>

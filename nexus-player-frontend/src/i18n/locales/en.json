@@ -113,6 +113,7 @@
     "unknownArtist": "Unknown artist",
     "source": {
       "local": "Local",
+      "unknown": "Unknown source",
       "cached": "Cached"
     },
     "unknownCreator": "Unknown creator",
