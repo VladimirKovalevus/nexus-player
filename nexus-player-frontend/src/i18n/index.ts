@@ -7,14 +7,18 @@ export type Locale = (typeof LOCALES)[number];
 
 const STORAGE_KEY = 'locale';
 
-const stored = localStorage.getItem(STORAGE_KEY) as Locale | null;
-const initial: Locale = stored && LOCALES.includes(stored) ? stored : 'ru';
+export function pickInitialLocale(stored: string | null, language: string | undefined): Locale {
+  if (stored && (LOCALES as readonly string[]).includes(stored)) return stored as Locale;
+  return language?.toLowerCase().startsWith('ru') ? 'ru' : 'en';
+}
+
+const initial = pickInitialLocale(localStorage.getItem(STORAGE_KEY), navigator.language);
 
 export const i18n = createI18n({
   legacy: false,
   globalInjection: true,
   locale: initial,
-  fallbackLocale: 'ru',
+  fallbackLocale: 'en',
   messages: { ru, en },
 });
 
