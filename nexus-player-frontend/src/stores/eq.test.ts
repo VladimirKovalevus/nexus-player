@@ -62,7 +62,7 @@ describe('eq store ids (R2)', () => {
   });
 
   it('has no Cyrillic in stores/eq.ts or EqPanel.vue', () => {
-    expect(eqStoreSource).not.toMatch(/[Ѐ-ӿ]/);
-    expect(eqPanelSource).not.toMatch(/[Ѐ-ӿ]/);
+    expect(eqStoreSource).not.toMatch(/[\u0400-\u04FF]/);
+    expect(eqPanelSource).not.toMatch(/[\u0400-\u04FF]/);
   });
 });

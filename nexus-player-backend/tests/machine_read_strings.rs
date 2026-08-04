@@ -46,3 +46,20 @@ fn challenge_message_matches_the_frontend_regex() {
         "{message:?} must end with `provider: url` so that the regex captures both"
     );
 }
+
+/// R6: the message is English (ASCII) and the Russian exception comment is gone.
+#[test]
+fn challenge_message_is_ascii_and_exception_comment_removed() {
+    let message = StreamError::ChallengeRequired {
+        provider: "soundcloud".to_string(),
+        url: "https://example.test/challenge".to_string(),
+    }
+    .to_string();
+    assert!(message.is_ascii(), "{message:?} must be ASCII");
+
+    let source = include_str!("../src/streaming/error.rs");
+    assert!(
+        !source.contains("Stays in Russian"),
+        "error.rs must not keep the `Stays in Russian` comment"
+    );
+}
