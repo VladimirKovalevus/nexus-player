@@ -32,9 +32,8 @@ pub enum StreamError {
     #[error("Track unavailable: {0}")]
     Unavailable(String),
 
-    // Stays in Russian: the frontend CHALLENGE_RE (providerAuth.ts) parses this exact text.
-    // Change the two together.
-    #[error("Требуется прохождение челленджа для {provider}: {url}")]
+    // The frontend CHALLENGE_RE (providerAuth.ts) parses this exact text; change the two together.
+    #[error("Challenge required for {provider}: {url}")]
     ChallengeRequired { provider: String, url: String },
 
     #[error("Streaming error: {0}")]

@@ -15,7 +15,7 @@ export interface ProviderChallenge {
 }
 
 // Mirrors StreamError::ChallengeRequired message in nexus-player-backend/src/streaming/error.rs
-const CHALLENGE_RE = /Требуется прохождение челленджа для (\w+): (\S+)/;
+const CHALLENGE_RE = /Challenge required for (\w+): (\S+)/;
 
 export function parseChallenge(err: unknown): ProviderChallenge | null {
   const m = String(err instanceof Error ? err.message : err).match(CHALLENGE_RE);
