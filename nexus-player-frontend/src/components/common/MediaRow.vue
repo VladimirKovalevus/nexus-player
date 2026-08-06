@@ -140,7 +140,7 @@ type RowContainer = Omit<ContainerMetaDto, 'kind' | 'trackCount'> & {
 };
 
 interface Props {
-  type: 'track' | 'playlist' | 'album';
+  type?: 'track' | 'playlist' | 'album';
   /** `compact` is the two-line row of the narrow queue panel. */
   layout?: 'table' | 'compact';
   /** Row number; the drag grip replaces it when `draggable` is set. */
@@ -163,6 +163,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  type: 'track',
   layout: 'table',
   showAction: true,
   active: false,
