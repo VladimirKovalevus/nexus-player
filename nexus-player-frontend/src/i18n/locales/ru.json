@@ -156,9 +156,9 @@
     "loadFailed": "Не удалось загрузить очередь: {error}"
   },
   "downloads": {
-    "started": "Начато скачивание: {artist} - {title}",
-    "finished": "Скачивание завершено!",
-    "failed": "Ошибка скачивания: {error}",
+    "cacheStarted": "Начато скачивание: {title}",
+    "cacheFinished": "Скачивание завершено: {title}",
+    "cacheFailed": "Ошибка скачивания: {title}",
     "empty": "Нет активных загрузок",
     "remove": "Убрать из списка",
     "trackFallback": "Трек #{id}",

@@ -156,9 +156,9 @@
     "loadFailed": "Could not load the queue: {error}"
   },
   "downloads": {
-    "started": "Download started: {artist} - {title}",
-    "finished": "Download finished!",
-    "failed": "Download failed: {error}",
+    "cacheStarted": "Download started: {title}",
+    "cacheFinished": "Download finished: {title}",
+    "cacheFailed": "Download failed: {title}",
     "empty": "No active downloads",
     "remove": "Remove from list",
     "trackFallback": "Track #{id}",

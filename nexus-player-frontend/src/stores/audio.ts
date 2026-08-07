@@ -258,7 +258,7 @@ export const useAudioStore = defineStore('audio', () => {
       case 'DownloadStarted':
         if (event.payload?.title) {
           notificationStore.addNotification(
-            `Download started: ${event.payload.title}`,
+            i18n.global.t('downloads.cacheStarted', { title: event.payload.title }),
             'success',
           );
         }
@@ -272,12 +272,12 @@ export const useAudioStore = defineStore('audio', () => {
         }
         if (event.payload?.success) {
           notificationStore.addNotification(
-            `Download finished: ${event.payload.title}`,
+            i18n.global.t('downloads.cacheFinished', { title: event.payload.title }),
             'success',
           );
         } else {
           notificationStore.addNotification(
-            `Download failed: ${event.payload.title}`,
+            i18n.global.t('downloads.cacheFailed', { title: event.payload.title }),
             'error',
           );
         }
