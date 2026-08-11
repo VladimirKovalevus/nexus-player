@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { QueueState } from '@/types/types';
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@/utils/providerAuth';
 import MediaRow from './common/MediaRow.vue';
@@ -62,7 +63,7 @@ const fetchQueue = async () => {
     loading.value = true;
     error.value = null;
 
-    const queueState = await invoke<any>('get_queue_state');
+    const queueState = await invoke<QueueState>('get_queue_state');
     audioStore.updateQueueState(queueState);
   } catch (e) {
     error.value = t('queue.loadFailed', { error: String(e) });
@@ -93,7 +94,7 @@ const expandContainer = async (itemIndex: number) => {
   try {
     const entry = audioStore.entries[itemIndex];
     if (entry?.entryType === 'container' && !entry.tracks) {
-      const result = await invoke<any>('expand_queue_container', { itemIndex });
+      const result = await invoke<QueueState>('expand_queue_container', { itemIndex });
       audioStore.updateQueueState(result);
     }
     expandedContainers.value.add(itemIndex);
@@ -140,7 +141,7 @@ const ensureAllContainersExpanded = async () => {
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     if (entry.entryType === 'container' && !entry.tracks) {
-      const result = await invoke<any>('expand_queue_container', {
+      const result = await invoke<QueueState>('expand_queue_container', {
         itemIndex: i,
       });
       audioStore.updateQueueState(result);
@@ -265,7 +266,7 @@ const handleContainerAddToPlaylist = async (
 
   await addContainerToPlaylist(playlistId, entry.meta.title, async () => {
     if (!entry.tracks) {
-      const result = await invoke<any>('expand_queue_container', { itemIndex });
+      const result = await invoke<QueueState>('expand_queue_container', { itemIndex });
       audioStore.updateQueueState(result);
     }
     const freshEntry = audioStore.entries[itemIndex];

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { SearchResult } from '@/types/types';
 import { ref, inject, nextTick, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
@@ -280,7 +281,7 @@ const execSearch: ExecFn = async ([provArg, typeArg, limitArg, pageArg], _, quer
   changeView?.('search');
   if (query) {
     streamingStore.query = query; streamingStore.activeQuery = query; streamingStore.searchResults = [];
-    const results = await invoke<any[]>('search_streaming', {
+    const results = await invoke<SearchResult[]>('search_streaming', {
       provider, contentType: norm?.toLowerCase() ?? null, query, limit, offset: page * limit,
     });
     streamingStore.searchResults = results;
@@ -420,7 +421,7 @@ function resolveSpec(complete: string[]): { spec: CmdSpec; argTokens: string[] }
 // Open / Close / Reset
 // ════════════════════════════════════════════════════════════════════
 
-const isTauriEnv = () => !!(window as any).__TAURI_INTERNALS__;
+const isTauriEnv = () => !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 
 const resetTab = () => { tabMatches.value = []; tabIndex.value = -1; tabPrefix.value = ''; tabQuoted.value = false; };
 

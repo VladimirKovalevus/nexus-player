@@ -18,11 +18,11 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts" generic="T">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 
 const props = defineProps<{
-  items: any[];
+  items: T[];
   itemHeight: number | ((index: number) => number);
   overscan?: number;
   containerSelector?: string;

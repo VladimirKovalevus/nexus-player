@@ -10,9 +10,8 @@ import WaveformBar from './common/WaveformBar.vue';
 import AppIcon from './common/AppIcon.vue';
 import AppImage from './common/AppImage.vue';
 
-// @ts-ignore
 import butterchurn from 'butterchurn/dist/butterchurn.min.js';
-// @ts-ignore
+import type { ButterchurnVisualizer } from 'butterchurn/dist/butterchurn.min.js';
 import butterchurnPresets from 'butterchurn-presets';
 
 const props = defineProps<{
@@ -44,7 +43,7 @@ const selectedPresetName = ref('Random');
 const presetList = ref<string[]>([]);
 
 // Butterchurn state
-let visualizer: any = null;
+let visualizer: ButterchurnVisualizer | null = null;
 let animationFrameId: number | null = null;
 let presetInterval: number | null = null;
 let resizeObserver: ResizeObserver | null = null;
@@ -144,7 +143,7 @@ const destroyVisualizer = () => {
   }
   if (visualizer) {
     try {
-      visualizer.loseGLContext();
+      visualizer.loseGLContext?.();
     } catch (e) {
       console.warn('[Butterchurn] Error losing GL context:', e);
     }
@@ -211,9 +210,9 @@ const initButterchurn = () => {
     window.addEventListener('resize', onWindowResize);
 
     butterchurnError.value = null;
-  } catch (e: any) {
+  } catch (e) {
     console.error('[Butterchurn] Init Error:', e);
-    butterchurnError.value = e.message;
+    butterchurnError.value = e instanceof Error ? e.message : String(e);
   }
 };
 

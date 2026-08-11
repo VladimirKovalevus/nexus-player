@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { AudioEvent, AudioState, QueueState } from '@/types/types';
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { invoke } from '@/utils/providerAuth';
 import { isAndroid } from '@/utils/platform';
@@ -65,7 +66,7 @@ const emit = defineEmits<{
 
 const fetchAudioState = async () => {
   try {
-    const state = await invoke<any>('get_audio_state');
+    const state = await invoke<AudioState>('get_audio_state');
     audioStore.updateAudioState(state);
   } catch (e) {
     console.error('Failed to fetch audio state:', e);
@@ -75,7 +76,7 @@ defineExpose({ fetchAudioState });
 
 const fetchQueueState = async () => {
   try {
-    const state = await invoke<any>('get_queue_state');
+    const state = await invoke<QueueState>('get_queue_state');
     audioStore.updateQueueState(state);
   } catch (e) {
     console.error('Failed to fetch queue state:', e);
@@ -196,7 +197,7 @@ onMounted(async () => {
   document.addEventListener('click', handleDocumentClick);
 
   try {
-    unlistenFn = await listen('audio-event', (event: any) => {
+    unlistenFn = await listen('audio-event', (event: { payload: AudioEvent }) => {
       audioStore.handleAudioEvent(event.payload);
 
       if (

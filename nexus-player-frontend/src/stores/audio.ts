@@ -2,6 +2,11 @@ import { i18n } from '@/i18n';
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { AudioState, QueueState, AudioEvent } from '@/types/types';
+
+interface NexusAudioBridge {
+  stopService: () => void;
+  updateState: (title: string, artist: string, playing: boolean) => void;
+}
 import { invoke, requestProviderAuth } from '@/utils/providerAuth';
 import { useNotificationStore } from './notifications';
 
@@ -90,12 +95,12 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   if (typeof window !== 'undefined') {
-    (window as any).__nexusControl = (command: string) => invoke(command);
+    (window as unknown as { __nexusControl: (command: string) => Promise<unknown> }).__nexusControl = (command: string) => invoke(command);
   }
 
   function syncNativeBridge() {
     const bridge =
-      typeof window !== 'undefined' ? (window as any)._NexusAudio : null;
+      typeof window !== 'undefined' ? (window as unknown as { _NexusAudio?: NexusAudioBridge })._NexusAudio : null;
     if (!bridge) return;
     const track = audioState.value.currentTrack;
     const playing =
@@ -242,7 +247,7 @@ export const useAudioStore = defineStore('audio', () => {
         isWaitingForAudio.value = false;
         if (event.payload?.state) {
           const { positionSecs, fft, ...rest } = event.payload.state;
-          audioState.value = rest;
+          audioState.value = rest as AudioState;
           currentPositionSecs.value = positionSecs;
           if (fft) {
             currentFft.value = fft;
@@ -277,7 +282,7 @@ export const useAudioStore = defineStore('audio', () => {
           );
         } else {
           notificationStore.addNotification(
-            i18n.global.t('downloads.cacheFailed', { title: event.payload.title }),
+            i18n.global.t('downloads.cacheFailed', { title: event.payload?.title }),
             'error',
           );
         }
@@ -316,7 +321,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   function updateAudioState(newState: AudioState) {
     const { positionSecs, ...rest } = newState;
-    audioState.value = rest as any;
+    audioState.value = rest as AudioState;
     currentPositionSecs.value = positionSecs;
   }
 

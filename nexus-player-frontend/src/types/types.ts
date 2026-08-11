@@ -156,9 +156,28 @@ export interface CleanupResult {
   deletedArtworks: number;
 }
 
+export interface AudioEventPayload {
+  positionSecs?: number;
+  durationSecs?: number;
+  fft?: number[];
+  pcm?: number[];
+  volume?: number;
+  ranges?: BufferedRange[];
+  waveforms?: Waveform[];
+  track?: TrackDto;
+  state?: AudioState;
+  queue?: QueueState;
+  title?: string;
+  trackId?: number;
+  success?: boolean;
+  message?: string;
+  provider?: string;
+  url?: string;
+}
+
 export interface AudioEvent {
   type: string;
-  payload?: any;
+  payload?: AudioEventPayload;
 }
 
 export interface StreamingTrack {
