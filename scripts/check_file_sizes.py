@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""No first-party Rust file exceeds 800 lines, not counting #[cfg(test)] items.
+"""No first-party Rust or .vue file exceeds 800 lines (Rust: not counting #[cfg(test)] items).
 
 Usage, from the repository root:
 
     python3 scripts/check_file_sizes.py            # every first-party file except test files
-    python3 scripts/check_file_sizes.py PATH...    # only the .rs files at or under PATH
+    python3 scripts/check_file_sizes.py PATH...    # only the .rs and .vue files at or under PATH
 
 A file's lines are its newline characters, plus one if text follows the last newline. Lines
 from a #[cfg(test)] (or #[cfg(all(test, ...))]) attribute through the closing brace or
@@ -23,6 +23,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 LIMIT = 800
 ROOTS = ("nexus-player-backend", "nexus-player-frontend/src-tauri", "crates/streaming")
+VUE_ROOT = "nexus-player-frontend/src"
 PRUNED = {"nexus-player-frontend/src-tauri/gen"}
 
 _CFG_TEST = re.compile(
@@ -159,7 +160,7 @@ def offenders(sources, limit=LIMIT):
     """Return (path, count) for each {path: text} entry above the limit."""
     found = []
     for path, text in sorted(sources.items()):
-        count = counted_lines(text)
+        count = total_lines(text) if path.endswith(".vue") else counted_lines(text)
         if count > limit:
             found.append((path, count))
     return found
@@ -169,13 +170,13 @@ def _rel(path):
     return Path(path).relative_to(REPO).as_posix()
 
 
-def rs_files_under(directory):
+def source_files_under(directory):
     found = []
     for current, dirs, files in os.walk(directory):
         dirs[:] = [
             d for d in dirs if d != "target" and _rel(Path(current) / d) not in PRUNED
         ]
-        found += [_rel(Path(current) / f) for f in files if f.endswith(".rs")]
+        found += [_rel(Path(current) / f) for f in files if f.endswith((".rs", ".vue"))]
     return sorted(found)
 
 
@@ -190,10 +191,14 @@ def default_paths():
         if not (REPO / root).is_dir():
             issues.append(f"first-party root {root} does not exist")
             continue
-        found = rs_files_under(REPO / root)
+        found = source_files_under(REPO / root)
         if not found:
             issues.append(f"first-party root {root} yields no .rs files")
         paths += [path for path in found if not is_test_file(path)]
+    if not (REPO / VUE_ROOT).is_dir():
+        issues.append(f"first-party root {VUE_ROOT} does not exist")
+    else:
+        paths += [p for p in source_files_under(REPO / VUE_ROOT) if p.endswith(".vue")]
     return paths, issues
 
 
@@ -202,12 +207,12 @@ def argument_paths(arguments):
     paths = []
     for argument in arguments:
         target = REPO / argument
-        if target.is_file() and target.name.endswith(".rs"):
+        if target.is_file() and target.name.endswith((".rs", ".vue")):
             paths.append(Path(os.path.normpath(argument)).as_posix())
         elif target.is_dir():
-            paths += rs_files_under(target)
+            paths += source_files_under(target)
     paths = sorted(set(paths))
-    issues = [] if paths else [f"no .rs file at or under: {' '.join(arguments)}"]
+    issues = [] if paths else [f"no .rs or .vue file at or under: {' '.join(arguments)}"]
     return paths, issues
 
 
@@ -225,7 +230,8 @@ def main(argv=None):
         print(f"FAIL [R1]: {path} has {count} lines, the limit is {LIMIT}", file=sys.stderr)
     if issues or found:
         return 1
-    print(f"ok [R1]: {len(paths)} files are within {LIMIT} lines")
+    rs = sum(1 for p in paths if p.endswith(".rs"))
+    print(f"ok [R1]: {rs} .rs and {len(paths) - rs} .vue files are within {LIMIT} lines")
     return 0
 
 
