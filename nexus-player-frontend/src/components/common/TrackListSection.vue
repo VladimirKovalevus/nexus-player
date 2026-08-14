@@ -1,6 +1,6 @@
 <template>
   <section :class="$style.section">
-    <div class="section-head">
+    <div class="section-head" :class="{ [$style.sticky]: stickyHead }">
       <span class="section-label">{{ title }}</span>
       <span class="view-spacer" />
       <slot name="header-extra" />
@@ -66,6 +66,8 @@ const props = withDefaults(
     activeTrackId?: number | null;
     showAction?: boolean;
     emptyIcon?: string;
+    /** Keeps the header pinned while the surrounding container scrolls (mobile only). */
+    stickyHead?: boolean;
   }>(),
   {
     activeTrackId: null,
@@ -92,6 +94,15 @@ const filteredTracks = computed(() =>
 <style module lang="scss">
 .section {
   min-width: 0;
+}
+
+.sticky {
+  @media (max-width: 640px) {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--bg-body);
+  }
 }
 
 .emptyState {

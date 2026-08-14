@@ -214,6 +214,7 @@
   },
   "home": {
     "playlists": "Playlists",
+    "allPlaylists": "All ({count})",
     "tracks": "Tracks",
     "trackCount": "Tracks: {count}",
     "addPlaylist": "Playlist",

@@ -214,6 +214,7 @@
   },
   "home": {
     "playlists": "Плейлисты",
+    "allPlaylists": "Все ({count})",
     "tracks": "Треки",
     "trackCount": "Треков: {count}",
     "addPlaylist": "Плейлист",

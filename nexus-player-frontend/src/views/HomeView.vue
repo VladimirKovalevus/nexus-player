@@ -10,24 +10,50 @@
 
       <p v-if="error" :class="$style.error">{{ error }}</p>
 
-      <MediaTileSection
-        mobile-only
-        :title="$t('home.playlists')"
-        :items="playlistItems"
-        :empty-title="$t('home.noPlaylists')"
-        placeholder-icon="playlist"
-        @item-click="handlePlaylistClick"
-        @item-play="handlePlaylistPlay"
-      >
-        <template #menu="{ close, item }">
-          <MenuItem icon="download-tray" @click="cachePlaylist(item.id, item.title); close()">
-            {{ $t('home.cachePlaylist') }}
-          </MenuItem>
-          <MenuItem icon="trash" danger @click="deletePlaylist(item.id, item.title); close()">
-            {{ $t('common.delete') }}
-          </MenuItem>
-        </template>
-      </MediaTileSection>
+      <section v-if="isMobile && playlistsStore.playlists.length > 0" data-testid="home-playlists">
+        <div class="section-head">
+          <span class="section-label">{{ $t('home.playlists') }}</span>
+          <span class="view-spacer" />
+          <button class="deck-btn" data-testid="home-playlists-all-link" @click="showAllPlaylists = true">
+            {{ $t('home.allPlaylists', { count: playlistsStore.playlists.length }) }} ›
+          </button>
+        </div>
+        <div :class="$style.row">
+          <div
+            v-for="item in rowItems"
+            :key="item.id"
+            data-testid="home-playlist-tile"
+            :class="$style.cell"
+          >
+            <MediaTile
+              :title="item.title"
+              :subtitle="item.subtitle"
+              :thumbnail="item.thumbnail"
+              placeholder-icon="playlist"
+              @click="handlePlaylistClick(item)"
+              @play="handlePlaylistPlay(item)"
+            >
+              <template #menu="{ close }">
+                <MenuItem icon="download-tray" @click="cachePlaylist(item.id, item.title); close()">
+                  {{ $t('home.cachePlaylist') }}
+                </MenuItem>
+                <MenuItem icon="trash" danger @click="deletePlaylist(item.id, item.title); close()">
+                  {{ $t('common.delete') }}
+                </MenuItem>
+              </template>
+            </MediaTile>
+          </div>
+          <button
+            v-if="hasMore"
+            type="button"
+            data-testid="home-playlists-all-tile"
+            :class="[$style.cell, $style.allTile]"
+            @click="showAllPlaylists = true"
+          >
+            {{ $t('home.allPlaylists', { count: playlistsStore.playlists.length }) }} ›
+          </button>
+        </div>
+      </section>
 
       <TrackListSection
         :title="$t('home.tracks')"
@@ -35,6 +61,7 @@
         :active-track-id="audioStore.currentTrack?.id ?? null"
         :empty-title="$t('home.noTracks')"
         scroll-selector=".home-scroll"
+        sticky-head
         @track-click="handleTrackClick"
         @track-play="handleTrackPlay"
         @track-refresh="fetchTracks"
@@ -75,10 +102,12 @@
 <script setup lang="ts">
 import { ref, onMounted, inject, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useMediaQuery } from '@vueuse/core';
 import { invoke } from '@/utils/providerAuth';
 import AppIcon from '@/components/common/AppIcon.vue';
 import MenuItem from '@/components/common/MenuItem.vue';
-import MediaTileSection, { type MediaTileItem } from '@/components/common/MediaTileSection.vue';
+import MediaTile from '@/components/common/MediaTile.vue';
+import type { MediaTileItem } from '@/components/common/MediaTileSection.vue';
 import TrackListSection from '@/components/common/TrackListSection.vue';
 import { useAudioStore } from '@/stores/audio';
 import { usePlaylistsStore } from '@/stores/playlists';
@@ -96,6 +125,10 @@ const openNewPlaylist = inject<() => void>('openNewPlaylist', () => {});
 const playlistsStore = usePlaylistsStore();
 const { cachePlaylist, deletePlaylist } = usePlaylistActions();
 
+const isMobile = useMediaQuery('(max-width: 640px)');
+const showAllPlaylists = ref(false);
+const ROW_LIMIT = 12;
+
 const tracks = ref<TrackDto[]>([]);
 const loading = ref(false);
 
@@ -107,6 +140,9 @@ const playlistItems = computed<MediaTileItem[]>(() =>
     thumbnail: playlist.thumbnail,
   })),
 );
+
+const rowItems = computed(() => playlistItems.value.slice(0, ROW_LIMIT));
+const hasMore = computed(() => playlistItems.value.length > ROW_LIMIT);
 
 watch(
   () => audioStore.lastUnavailableTrackId,
@@ -303,6 +339,37 @@ const handleTrackPlay = async (
 .error {
   padding: 10px 12px;
   color: var(--danger);
+}
+
+.row {
+  display: flex;
+  gap: 1px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  background: var(--line-soft);
+  border-block: 1px solid var(--line);
+}
+
+.cell {
+  flex: none;
+  width: 220px;
+  display: flex;
+  scroll-snap-align: start;
+
+  > * {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.allTile {
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: var(--bg-table);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .pagination {
