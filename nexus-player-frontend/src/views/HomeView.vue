@@ -1,5 +1,5 @@
 <template>
-  <div class="home-scroll" :class="$style.home">
+  <div ref="scrollEl" class="home-scroll" :class="$style.home">
     <div>
       <div class="view-header">
         <h1 class="view-title">{{ $t('nav.home') }}</h1>
@@ -10,11 +10,39 @@
 
       <p v-if="error" :class="$style.error">{{ error }}</p>
 
-      <section v-if="isMobile && playlistsStore.playlists.length > 0" data-testid="home-playlists">
+      <section v-if="showAllPlaylists" data-testid="home-playlists-grid">
+        <div class="section-head">
+          <button class="deck-btn" data-testid="home-playlists-back" @click="closeAllPlaylists">
+            <AppIcon name="chevron-left" :size="13" />
+            {{ $t('common.back') }}
+          </button>
+          <span class="view-spacer" />
+          <span class="view-count">{{ $t('home.allPlaylists', { count: playlistsStore.playlists.length }) }}</span>
+        </div>
+        <MediaTileSection
+          :title="$t('home.playlists')"
+          :items="playlistItems"
+          :empty-title="$t('home.noPlaylists')"
+          placeholder-icon="playlist"
+          @item-click="handlePlaylistClick"
+          @item-play="handlePlaylistPlay"
+        >
+          <template #menu="{ close, item }">
+            <MenuItem icon="download-tray" @click="cachePlaylist(item.id, item.title); close()">
+              {{ $t('home.cachePlaylist') }}
+            </MenuItem>
+            <MenuItem icon="trash" danger @click="deletePlaylist(item.id, item.title); close()">
+              {{ $t('common.delete') }}
+            </MenuItem>
+          </template>
+        </MediaTileSection>
+      </section>
+
+      <section v-if="!showAllPlaylists && isMobile && playlistsStore.playlists.length > 0" data-testid="home-playlists">
         <div class="section-head">
           <span class="section-label">{{ $t('home.playlists') }}</span>
           <span class="view-spacer" />
-          <button class="deck-btn" data-testid="home-playlists-all-link" @click="showAllPlaylists = true">
+          <button class="deck-btn" data-testid="home-playlists-all-link" @click="openAllPlaylists">
             {{ $t('home.allPlaylists', { count: playlistsStore.playlists.length }) }} ›
           </button>
         </div>
@@ -48,7 +76,7 @@
             type="button"
             data-testid="home-playlists-all-tile"
             :class="[$style.cell, $style.allTile]"
-            @click="showAllPlaylists = true"
+            @click="openAllPlaylists"
           >
             {{ $t('home.allPlaylists', { count: playlistsStore.playlists.length }) }} ›
           </button>
@@ -56,6 +84,7 @@
       </section>
 
       <TrackListSection
+        v-if="!showAllPlaylists"
         :title="$t('home.tracks')"
         :tracks="tracks"
         :active-track-id="audioStore.currentTrack?.id ?? null"
@@ -100,14 +129,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject, computed, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, inject, computed, watch, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMediaQuery } from '@vueuse/core';
 import { invoke } from '@/utils/providerAuth';
 import AppIcon from '@/components/common/AppIcon.vue';
 import MenuItem from '@/components/common/MenuItem.vue';
 import MediaTile from '@/components/common/MediaTile.vue';
-import type { MediaTileItem } from '@/components/common/MediaTileSection.vue';
+import MediaTileSection, { type MediaTileItem } from '@/components/common/MediaTileSection.vue';
 import TrackListSection from '@/components/common/TrackListSection.vue';
 import { useAudioStore } from '@/stores/audio';
 import { usePlaylistsStore } from '@/stores/playlists';
@@ -128,6 +157,47 @@ const { cachePlaylist, deletePlaylist } = usePlaylistActions();
 const isMobile = useMediaQuery('(max-width: 640px)');
 const showAllPlaylists = ref(false);
 const ROW_LIMIT = 12;
+const scrollEl = ref<HTMLElement | null>(null);
+let savedScroll = 0;
+
+const onPopState = () => {
+  if (showAllPlaylists.value) hideGrid();
+};
+
+const hideGrid = () => {
+  showAllPlaylists.value = false;
+  window.removeEventListener('popstate', onPopState);
+  const top = savedScroll;
+  nextTick(() => {
+    if (scrollEl.value) scrollEl.value.scrollTop = top;
+  });
+};
+
+const openAllPlaylists = () => {
+  if (showAllPlaylists.value) return;
+  savedScroll = scrollEl.value?.scrollTop ?? 0;
+  history.pushState({ homeAllPlaylists: true }, '');
+  window.addEventListener('popstate', onPopState);
+  showAllPlaylists.value = true;
+};
+
+const closeAllPlaylists = () => {
+  if (showAllPlaylists.value) history.back();
+};
+
+watch(isMobile, (mobile) => {
+  if (!mobile && showAllPlaylists.value) {
+    hideGrid();
+    history.back();
+  }
+});
+
+onBeforeUnmount(() => {
+  if (!showAllPlaylists.value) return;
+  window.removeEventListener('popstate', onPopState);
+  showAllPlaylists.value = false;
+  history.back();
+});
 
 const tracks = ref<TrackDto[]>([]);
 const loading = ref(false);
