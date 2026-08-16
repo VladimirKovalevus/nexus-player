@@ -3,6 +3,9 @@
   "private": true,
   "license": "MIT",
   "version": "0.1.0",
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "scripts": {
     "dev": "npm run build:vendor && vite",

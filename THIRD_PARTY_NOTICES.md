@@ -54,8 +54,9 @@ This project vendors five third-party source trees under `vendor/`. Each one is 
   - `src/audio/audioProcessor.js`, `src/visualizer.js` and `src/rendering/renderer.js` (about 190 lines) add a raw audio input mode, so the visualizer runs on samples passed in from the Rust backend with no `AudioContext` (null-safe analysers, `updateAudio` accepting frequency arrays).
   - New `raw.md`, written by the project's author, describes that interface.
   - New `package-lock.json`.
-  - The tracked `dist/` is the build of these sources.
-  - `experiments/`, the `test/visual` snapshots and `preview.png` were removed.
+  - `dist/` is not tracked: it is gitignored and built from these sources by `npm run setup` (the vendor build).
+  - `test/visual` (the jest + puppeteer harness) is present and unused by the package build; its image snapshots, `experiments/` and `preview.png` were removed.
+  - `pnpm-lock.yaml` was removed.
 
 ## Other assets and dependencies
 

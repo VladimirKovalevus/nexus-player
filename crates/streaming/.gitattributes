@@ -9,7 +9,6 @@
 # Configuration files
 .gitignore text eol=lf
 .gitattributes text eol=lf
-makefile text eol=lf
 
 # Exclude files from linguist statistics
 target/** linguist-generated
