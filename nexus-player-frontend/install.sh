@@ -62,7 +62,7 @@ detect_launcher() {
 
 if [[ ! -f "$APPIMAGE_SOURCE" ]]; then
   echo "AppImage not found: $APPIMAGE_SOURCE" >&2
-  echo "Build it first with: npm run bld" >&2
+  echo "Build it first with: npm run build:appimage" >&2
   exit 1
 fi
 

@@ -10,17 +10,16 @@
   "scripts": {
     "dev": "npm run build:vendor && vite",
     "build": "npm run build:vendor && vite build",
-    "build:vendor": "PUPPETEER_SKIP_DOWNLOAD=true npm --prefix ../vendor/butterchurn install && npm --prefix ../vendor/butterchurn run build",
+    "setup": "node scripts/vendor.mjs setup",
+    "build:vendor": "node scripts/vendor.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
-    "andr": "NO_STRIP=true tauri android build --target aarch64",
     "android-build": "NO_STRIP=true tauri android build --target aarch64",
     "android-build-all": "NO_STRIP=true tauri android build",
     "android-install": "bash android-deploy.sh",
     "android-deploy": "NO_STRIP=true tauri android build --target aarch64 && bash android-deploy.sh",
-    "bld": "NO_STRIP=true tauri build",
+    "build:appimage": "NO_STRIP=true tauri build",
     "start": "tauri dev",
-    "windows": "tauri build  --runner cargo-xwin --target x86_64-pc-windows-msvc",
     "test": "vitest run"
   },
   "dependencies": {
