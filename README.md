@@ -76,6 +76,7 @@ Butterchurn normally reads audio from a Web Audio `AudioContext`. Here the playe
 - Play history and liked tracks
 - Telegram-based library sync
 - Dark and light themes
+- Interface in Russian and English
 - Eight views: Home, Library, Playlist, Radio, History, Cache, Downloads, Settings
 
 ## Platforms
@@ -84,27 +85,98 @@ Built and run by the author on Linux, Windows and Android. macOS has not been bu
 
 ## Building
 
-On Debian or Ubuntu, install the system packages. `.cargo/config.toml` links x86_64 Linux builds with clang and mold, and the C dependencies need cmake and pkg-config:
+Tested versions: Rust 1.98.0 (pinned by `rust-toolchain.toml`, so rustup picks it up inside the repository) and Node.js 22 or newer (`.nvmrc`). macOS is not built or tested.
 
-```sh
-sudo apt install clang mold cmake pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libasound2-dev
-```
-
-You also need a Rust toolchain from rustup, and Node.js with npm.
+Common steps, after installing the system packages for your platform below:
 
 ```sh
 git clone https://github.com/VladimirKovalevus/nexus-player.git
 cd nexus-player/nexus-player-frontend
 npm ci
-npm run tauri build
+npm run setup
+npm run tauri dev     # development
+npm run tauri build   # release build
 ```
 
-Use `npm run tauri dev` to run in development. The frontend build step also builds `vendor/butterchurn`, as the scripts in `package.json` and `tauri.conf.json` define.
+`npm run setup` installs and builds `vendor/butterchurn`; it needs network access once. Later `npm run dev` and `npm run build` reuse the built copy.
 
-Other targets:
+### Linux
 
-- Android: `npm run android-build`
-- Windows (cross-compiled with cargo-xwin): `npm run windows`
+Debian or Ubuntu:
+
+```sh
+sudo apt install clang mold cmake pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libasound2-dev
+```
+
+Arch:
+
+```sh
+sudo pacman -S clang mold cmake pkgconf webkit2gtk-4.1 gtk3 libsoup3 alsa-lib
+```
+
+`.cargo/config.toml` links x86_64 Linux builds with clang and mold, and the C dependencies need cmake and pkg-config.
+
+To build an AppImage, run `npm run build:appimage` from `nexus-player-frontend`. It sets `NO_STRIP=true` because the `strip` bundled with linuxdeploy fails on Arch, whose libraries use newer ELF sections.
+
+To install the AppImage with a launcher entry, run `./install.sh` from `nexus-player-frontend` after the build. It installs to `~/.local/bin/nexus-player`.
+
+#### Linux: WebKitGTK environment flags
+
+`install.sh` detects the environment and writes the matching variables into the desktop entry's `Exec` line:
+
+- `LIBGL_ALWAYS_SOFTWARE=1` when running in a virtual machine
+- `WEBKIT_DISABLE_DMABUF_RENDERER=1` on an NVIDIA driver or a Wayland session
+- `__NV_DISABLE_EXPLICIT_SYNC=1` on NVIDIA with Wayland
+
+Override the choice with `WEBKIT_FLAGS`, for example `WEBKIT_FLAGS="WEBKIT_DISABLE_DMABUF_RENDERER=1" ./install.sh`. An empty `WEBKIT_FLAGS=""` disables all flags. With a launcher that runs binaries from `PATH` instead of reading desktop entries (`LAUNCHER=path`), export the flags in your shell profile.
+
+### Windows
+
+Native build only, with no installer.
+
+1. Install Visual Studio Build Tools with the "Desktop development with C++" workload.
+2. Install the WebView2 runtime (already present on current Windows 10 and 11).
+3. Install rustup with the MSVC toolchain, and Node.js.
+4. In `nexus-player-frontend`, run `npm ci`, `npm run setup` and `npm run tauri build`.
+
+The output is `target/release/nexus-player-frontend.exe`.
+
+### Android
+
+- JDK 17 or newer (tested with 21)
+- Android SDK, with `ANDROID_HOME` pointing to it
+- Android NDK (tested with 30.0.16248370), with `NDK_HOME` pointing to it
+- Rust targets, added for the pinned toolchain by running this inside the repository:
+
+```sh
+rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+```
+
+From `nexus-player-frontend`:
+
+- `npm run android-build` builds an aarch64 APK
+- `npm run android-build-all` builds for all targets
+- `npm run android-deploy` builds for aarch64, debug-signs the APK and installs it over adb (`android-deploy.sh` reads the SDK from `ANDROID_HOME`, falling back to `~/Android/Sdk`)
+
+## Checks
+
+Run from the repository root:
+
+```sh
+cargo fmt -p nexus-player-backend -p nexus-player-frontend -p streaming -- --check
+cargo clippy -p nexus-player-backend -p nexus-player-frontend -p streaming --all-targets --locked -- -D warnings
+cargo test -p nexus-player-backend -p nexus-player-frontend -p streaming --locked
+python3 scripts/check_file_sizes.py
+```
+
+From `nexus-player-frontend`:
+
+```sh
+npx vue-tsc --noEmit
+npm test
+```
+
+The Tauri crate needs `nexus-player-frontend/dist/index.html` to exist at compile time. For Rust-only checks without a frontend build, CI creates a stub: `mkdir -p nexus-player-frontend/dist && echo '<!doctype html>' > nexus-player-frontend/dist/index.html`.
 
 ## Repository layout
 
