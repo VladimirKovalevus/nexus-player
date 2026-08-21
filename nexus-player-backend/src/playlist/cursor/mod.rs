@@ -8,7 +8,7 @@ pub mod types;
 
 pub use engine::{CursorResolver, PlayerCursor};
 pub use resolver::AppCursorResolver;
-pub use sources::{DbTrackCursor, ProviderCursor, StaticTrackCursor, StreamingSearchCursor};
+pub use sources::{DbTrackCursor, ProviderCursor, StreamingSearchCursor};
 pub use types::{ContainerContext, CursorItem, RadioMode};
 
 #[async_trait]

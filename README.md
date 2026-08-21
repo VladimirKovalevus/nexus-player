@@ -40,7 +40,7 @@ Playback does not hold a flat list of tracks. A [`PlayerCursor`](nexus-player-ba
 
 ### HLS and chunked streaming
 
-Remote audio is read through two paths. HLS streams are parsed and fetched segment by segment in [`crates/streaming/src/hls/`](crates/streaming/src/hls) and held in [`buffers/hls.rs`](crates/streaming/src/buffers/hls.rs); plain HTTP audio is held in fixed-size chunks in [`buffers/chunked.rs`](crates/streaming/src/buffers/chunked.rs). On the backend side, [`hls_decoder.rs`](nexus-player-backend/src/audio/hls_decoder.rs) decodes HLS segments with Symphonia through [`hls_reader.rs`](nexus-player-backend/src/audio/playback/hls_reader.rs), which adapts the segment source to a seekable reader, and [`chunked.rs`](nexus-player-backend/src/audio/chunked.rs) provides a seekable media source that caches chunks fetched over HTTP.
+Remote audio is read through two paths. HLS streams are parsed and fetched segment by segment in [`crates/streaming/src/hls/`](crates/streaming/src/hls) and held in [`buffers/hls.rs`](crates/streaming/src/buffers/hls.rs); plain HTTP audio is held in fixed-size chunks in [`buffers/chunked.rs`](crates/streaming/src/buffers/chunked.rs). On the backend side, [`hls_decoder.rs`](nexus-player-backend/src/audio/hls_decoder.rs) decodes HLS segments with Symphonia through [`hls_reader.rs`](nexus-player-backend/src/audio/playback/hls_reader.rs), which adapts the segment source to a seekable reader.
 
 ### Download manager
 

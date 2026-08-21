@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::library::models::PlaylistItemKind;
-use crate::library::types::{PlaylistId, TrackId as LibTrackId, TrackOrder};
+use crate::library::types::{PlaylistId, TrackId as LibTrackId};
 use crate::library::LibraryService;
 use crate::playlist::cursor::{
     ContainerContext, CursorItem, CursorResolver, CursorSource, DbTrackCursor, ProviderCursor,
@@ -71,18 +71,6 @@ impl CursorResolver for AppCursorResolver {
                 let mut visited = HashSet::new();
                 let track_ids =
                     Self::flatten_playlist_tracks(&self.library, playlist_id, &mut visited).await?;
-
-                Ok(Box::new(DbTrackCursor::new(
-                    self.library.clone(),
-                    track_ids,
-                )))
-            }
-
-            ContainerContext::LocalAlbum(_id) => {
-                // Assuming we can find tracks by album ID or name.
-                // For now, let's say we have a method in library or use a placeholder.
-                let tracks = self.library.get_all_tracks(TrackOrder::default()).await?; // Temporary: should be filtered by album
-                let track_ids: Vec<LibTrackId> = tracks.into_iter().map(|t| t.id).collect();
 
                 Ok(Box::new(DbTrackCursor::new(
                     self.library.clone(),

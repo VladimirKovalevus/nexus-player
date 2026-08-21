@@ -6,7 +6,6 @@ use crate::audio::types::Track;
 pub enum ContainerContext {
     // Local DB sources
     LocalPlaylist(i64),
-    LocalAlbum(i64),
 
     // External Provider sources
     ExternalPlaylist {

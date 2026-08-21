@@ -130,14 +130,6 @@ impl CursorQueue {
         None
     }
 
-    pub fn peek_upcoming_ids(&self, limit: usize) -> Vec<u64> {
-        self.manual_queue
-            .iter()
-            .take(limit)
-            .map(|t| t.id as u64)
-            .collect()
-    }
-
     pub fn peek_upcoming_tracks(&self, limit: usize) -> Vec<Track> {
         self.manual_queue.iter().take(limit).cloned().collect()
     }
@@ -327,13 +319,6 @@ impl ActiveQueue {
         match self {
             ActiveQueue::Cursor(o) => o.peek_next(),
             ActiveQueue::Search(o) => o.peek_next(),
-        }
-    }
-
-    pub fn peek_upcoming_ids(&self, limit: usize) -> Vec<u64> {
-        match self {
-            ActiveQueue::Cursor(o) => o.peek_upcoming_ids(limit),
-            ActiveQueue::Search(_) => vec![],
         }
     }
 

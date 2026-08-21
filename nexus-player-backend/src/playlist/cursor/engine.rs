@@ -74,25 +74,4 @@ impl PlayerCursor {
             self.buffer.push_back(batch.remove(0));
         }
     }
-
-    /// Peek ahead to see upcoming items without consuming them.
-    pub async fn peek_next_batch(&mut self, limit: usize) -> Result<Vec<CursorItem>> {
-        // Fill buffer if it has fewer items than requested
-        while self.buffer.len() < limit {
-            if let Some(active_cursor) = self.stack.last_mut() {
-                let batch = active_cursor.next_batch(1).await?;
-                if batch.is_empty() {
-                    break;
-                }
-                for item in batch {
-                    self.buffer.push_back(item);
-                }
-            } else {
-                break;
-            }
-        }
-
-        // Return items from buffer without removing them
-        Ok(self.buffer.iter().take(limit).cloned().collect())
-    }
 }

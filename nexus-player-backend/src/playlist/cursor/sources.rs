@@ -3,46 +3,10 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use super::{ContainerContext, CursorItem, CursorSource};
-use crate::audio::types::Track;
 use crate::library::types::TrackId as LibTrackId;
 use crate::library::LibraryService;
 use crate::streaming::types::{ContentType, SearchResult};
 use crate::streaming::StreamingService;
-
-/// A simple cursor that iterates over a pre-loaded list of tracks.
-pub struct StaticTrackCursor {
-    tracks: Vec<Track>,
-    index: usize,
-}
-
-impl StaticTrackCursor {
-    pub fn new(tracks: Vec<Track>) -> Self {
-        Self { tracks, index: 0 }
-    }
-}
-
-#[async_trait]
-impl CursorSource for StaticTrackCursor {
-    async fn next_batch(&mut self, limit: usize) -> Result<Vec<CursorItem>> {
-        if self.index >= self.tracks.len() {
-            return Ok(Vec::new());
-        }
-
-        let end = (self.index + limit).min(self.tracks.len());
-        let batch = self.tracks[self.index..end]
-            .iter()
-            .cloned()
-            .map(CursorItem::Track)
-            .collect();
-
-        self.index = end;
-        Ok(batch)
-    }
-
-    fn has_more(&self) -> bool {
-        self.index < self.tracks.len()
-    }
-}
 
 /// A cursor that fetches tracks from the local database by their IDs.
 pub struct DbTrackCursor {
