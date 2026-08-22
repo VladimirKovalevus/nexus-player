@@ -74,6 +74,7 @@
   },
   "common": {
     "close": "Закрыть",
+    "unknownError": "Неизвестная ошибка",
     "loading": "Загрузка...",
     "error": "Ошибка: {error}",
     "cancel": "Отмена",

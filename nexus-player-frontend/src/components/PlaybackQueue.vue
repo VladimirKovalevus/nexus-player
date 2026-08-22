@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '@/utils/errorMessage';
 import type { QueueState } from '@/types/types';
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@/utils/providerAuth';
@@ -66,7 +67,7 @@ const fetchQueue = async () => {
     const queueState = await invoke<QueueState>('get_queue_state');
     audioStore.updateQueueState(queueState);
   } catch (e) {
-    error.value = t('queue.loadFailed', { error: String(e) });
+    error.value = t('queue.loadFailed', { error: errorMessage(e) });
     console.error('Error loading queue:', e);
   } finally {
     loading.value = false;
@@ -236,8 +237,7 @@ const handleCreatePlaylist = async (data: {
 
     isModalOpen.value = false;
   } catch (e) {
-    const errorMessage = e instanceof Error ? e.message : String(e);
-    error.value = t('common.error', { error: errorMessage });
+    error.value = t('common.error', { error: errorMessage(e) });
     console.error('Failed to create playlist:', e);
   } finally {
     isSavingPlaylist.value = false;

@@ -202,6 +202,7 @@
 </template>
 
 <script setup lang="ts">
+import { errorMessage } from '@/utils/errorMessage';
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
@@ -278,7 +279,7 @@ const handleTelegramSave = async () => {
     }
   } catch (e) {
     tgStatus.value = 'error';
-    tgError.value = String(e);
+    tgError.value = errorMessage(e);
   } finally {
     tgLoading.value = false;
   }
@@ -292,7 +293,7 @@ const handleTelegramPush = async (syncType: SyncType) => {
     await invoke('telegram_push', { syncType, deviceName: null });
     tgSyncSuccess.value = t(syncType === 'full' ? 'settings.sync.fullSent' : 'settings.sync.diffSent');
   } catch (e) {
-    tgSyncError.value = String(e);
+    tgSyncError.value = errorMessage(e);
   } finally {
     tgSyncLoading.value = false;
   }
@@ -306,7 +307,7 @@ const handleTelegramPull = async () => {
     await invoke('telegram_pull');
     tgSyncSuccess.value = t('settings.sync.applied');
   } catch (e) {
-    tgSyncError.value = String(e);
+    tgSyncError.value = errorMessage(e);
   } finally {
     tgSyncLoading.value = false;
   }
@@ -320,7 +321,7 @@ const save = async () => {
   } catch (e) {
     // The form stays open, so nothing the user typed is lost.
     console.error('Failed to save config:', e);
-    notifications.addNotification(t('common.error', { error: String(e) }), 'error');
+    notifications.addNotification(t('common.error', { error: errorMessage(e) }), 'error');
   }
 };
 
@@ -347,7 +348,7 @@ const handleCleanup = async () => {
       artworks: result.deletedArtworks,
     });
   } catch (e) {
-    cleanupError.value = String(e);
+    cleanupError.value = errorMessage(e);
   } finally {
     cleanupLoading.value = false;
   }
@@ -359,7 +360,7 @@ onMounted(async () => {
     config.value = await invoke<AppConfig>('get_app_config');
   } catch (e) {
     console.error('Failed to load config:', e);
-    loadError.value = t('common.error', { error: String(e) });
+    loadError.value = t('common.error', { error: errorMessage(e) });
   } finally {
     loading.value = false;
   }

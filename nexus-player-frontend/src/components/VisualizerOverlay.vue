@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '@/utils/errorMessage';
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAudioStore } from '../stores/audio';
@@ -212,7 +213,7 @@ const initButterchurn = () => {
     butterchurnError.value = null;
   } catch (e) {
     console.error('[Butterchurn] Init Error:', e);
-    butterchurnError.value = e instanceof Error ? e.message : String(e);
+    butterchurnError.value = errorMessage(e);
   }
 };
 

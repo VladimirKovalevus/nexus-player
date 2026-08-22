@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '@/utils/errorMessage';
 import { ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
@@ -37,7 +38,7 @@ const fetchTracks = async () => {
     allTracks.value = await invoke<TrackDto[]>('get_all_tracks');
   } catch (e) {
     console.error('Failed to fetch tracks:', e);
-    error.value = t('common.error', { error: String(e) });
+    error.value = t('common.error', { error: errorMessage(e) });
   }
 };
 
@@ -70,7 +71,7 @@ const handleSave = async () => {
     handleClose();
   } catch (e) {
     console.error('Failed to create playlist:', e);
-    error.value = t('common.error', { error: String(e) });
+    error.value = t('common.error', { error: errorMessage(e) });
   } finally {
     loading.value = false;
   }

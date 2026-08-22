@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '@/utils/errorMessage';
 import type { SearchResult } from '@/types/types';
 import { ref, inject, nextTick, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -535,7 +536,7 @@ const execute = async () => {
     await resolved.spec.exec(resolved.argTokens, raw, query);
     pushHistory(raw);
   } catch (e) {
-    showFeedback(t('common.error', { error: String(e) }), true, 2000);
+    showFeedback(t('common.error', { error: errorMessage(e) }), true, 2000);
   }
 };
 

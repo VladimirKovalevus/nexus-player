@@ -55,6 +55,7 @@
 </template>
 
 <script setup lang="ts">
+import { errorMessage } from '@/utils/errorMessage';
 import { ref, onMounted, inject } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
@@ -90,7 +91,7 @@ const fetchHistory = async (targetPage: number) => {
     page.value = targetPage;
   } catch (e) {
     console.error('Failed to fetch history:', e);
-    error.value = t('common.error', { error: String(e) });
+    error.value = t('common.error', { error: errorMessage(e) });
   } finally {
     loading.value = false;
   }
@@ -111,7 +112,7 @@ const handleClearHistory = async () => {
     notifications.addNotification(t('history.cleared'), 'success');
   } catch (e) {
     console.error('Failed to clear history:', e);
-    error.value = t('common.error', { error: String(e) });
+    error.value = t('common.error', { error: errorMessage(e) });
     notifications.addNotification(t('history.clearFailed'), 'error');
   } finally {
     loading.value = false;

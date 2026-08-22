@@ -1,3 +1,4 @@
+import { errorMessage } from '@/utils/errorMessage';
 import { i18n } from '@/i18n';
 import { invoke as rawInvoke, type InvokeArgs, type InvokeOptions } from '@tauri-apps/api/core';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -76,7 +77,7 @@ export function requestProviderAuth(provider: string, url: string): Promise<void
       await rawInvoke('update_provider_auth', { provider, authData: clientId });
     } catch (e) {
       console.error('[SC-Auth] Failed:', e);
-      notificationStore.addNotification(i18n.global.t('provider.failed', { error: String(e) }), 'error');
+      notificationStore.addNotification(i18n.global.t('provider.failed', { error: errorMessage(e) }), 'error');
       throw e;
     }
   })().finally(() => pending.delete(provider));

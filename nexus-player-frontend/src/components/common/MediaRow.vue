@@ -108,6 +108,7 @@
 </template>
 
 <script setup lang="ts">
+import { errorMessage } from '@/utils/errorMessage';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
@@ -413,7 +414,7 @@ const handleAddToQueue = async () => {
     emit('refresh');
   } catch (e) {
     console.error('Failed to add track to queue:', e);
-    notifications.addNotification(t('common.error', { error: String(e) }), 'error');
+    notifications.addNotification(t('common.error', { error: errorMessage(e) }), 'error');
   }
   closeMenu();
 };

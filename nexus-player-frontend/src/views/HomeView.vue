@@ -129,6 +129,7 @@
 </template>
 
 <script setup lang="ts">
+import { errorMessage } from '@/utils/errorMessage';
 import { ref, onMounted, onBeforeUnmount, inject, computed, watch, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMediaQuery } from '@vueuse/core';
@@ -264,7 +265,7 @@ const fetchTracks = async () => {
     tracks.value = trackDtos;
   } catch (e) {
     console.error('Failed to fetch tracks:', e);
-    error.value = t('common.error', { error: String(e) });
+    error.value = t('common.error', { error: errorMessage(e) });
   }
 };
 

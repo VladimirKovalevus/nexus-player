@@ -51,6 +51,7 @@
 </template>
 
 <script setup lang="ts">
+import { errorMessage } from '@/utils/errorMessage';
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -85,7 +86,7 @@ const removeTask = async (task: TaskInfoDto) => {
     tasks.value = tasks.value.filter((other) => other.trackId !== task.trackId);
   } catch (e) {
     console.error('Failed to remove task:', e);
-    notifications.addNotification(t('common.error', { error: String(e) }), 'error');
+    notifications.addNotification(t('common.error', { error: errorMessage(e) }), 'error');
   }
 };
 

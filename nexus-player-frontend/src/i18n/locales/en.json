@@ -74,6 +74,7 @@
   },
   "common": {
     "close": "Close",
+    "unknownError": "Unknown error",
     "loading": "Loading...",
     "error": "Error: {error}",
     "cancel": "Cancel",

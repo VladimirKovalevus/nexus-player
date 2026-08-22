@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '@/utils/errorMessage';
 import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
@@ -106,7 +107,7 @@ const resolveDirectLink = async (url: string) => {
     activeProvider.value = selectedProvider.value;
     activeContentType.value = selectedContentType.value;
   } catch (e) {
-    error.value = t('common.error', { error: String(e) });
+    error.value = t('common.error', { error: errorMessage(e) });
     console.error('direct_link_resolve error:', e);
   } finally {
     loading.value = false;
@@ -126,7 +127,7 @@ const search = async (newOffset: number) => {
       offset: offset.value,
     });
   } catch (e) {
-    error.value = t('search.failed', { error: String(e) });
+    error.value = t('search.failed', { error: errorMessage(e) });
     console.error('Search error:', e);
   } finally {
     loading.value = false;
@@ -166,7 +167,7 @@ const handleResultPlay = async (result: SearchResult, index: number) => {
     } catch (fallbackError) {
       console.error('Failed to play search result:', fallbackError);
       audioStore.stopLoading();
-      error.value = t('common.error', { error: String(fallbackError) });
+      error.value = t('common.error', { error: errorMessage(fallbackError) });
       return;
     }
   }
@@ -227,7 +228,7 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
     isModalOpen.value = false;
     emit('refetch');
   } catch (e) {
-    error.value = t('common.error', { error: e instanceof Error ? e.message : String(e) });
+    error.value = t('common.error', { error: errorMessage(e) });
     console.error('Failed to create playlist:', e);
   } finally {
     isSavingPlaylist.value = false;

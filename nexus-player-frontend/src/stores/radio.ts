@@ -1,3 +1,4 @@
+import { errorMessage } from '@/utils/errorMessage';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { i18n } from '@/i18n';
@@ -34,7 +35,7 @@ export const useRadioStore = defineStore('radio', () => {
       await invoke('start_radio', { mode });
     } catch (e) {
       audioStore.stopLoading();
-      notificationStore.addNotification(i18n.global.t('radio.failed', { error: String(e) }), 'error');
+      notificationStore.addNotification(i18n.global.t('radio.failed', { error: errorMessage(e) }), 'error');
     } finally {
       isStarting.value = false;
     }
@@ -44,7 +45,7 @@ export const useRadioStore = defineStore('radio', () => {
     try {
       await invoke('stop_radio');
     } catch (e) {
-      notificationStore.addNotification(i18n.global.t('radio.failed', { error: String(e) }), 'error');
+      notificationStore.addNotification(i18n.global.t('radio.failed', { error: errorMessage(e) }), 'error');
     }
   };
 

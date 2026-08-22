@@ -1,3 +1,4 @@
+import { errorMessage } from '@/utils/errorMessage';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
 import { confirmAction } from '@/composables/useConfirm';
@@ -26,7 +27,7 @@ export function usePlaylistActions() {
       notifications.addNotification(t('playlist.added', { item: itemTitle, target }), 'success');
     } catch (e) {
       console.error('Failed to add to playlist:', e);
-      const message = String(e);
+      const message = errorMessage(e);
       // Backend errors carry no codes; anything unrecognized is shown as it is.
       if (message.includes('UNIQUE constraint failed')) {
         notifications.addNotification(t('playlist.alreadyIn', { item: itemTitle, target }), 'warning');
@@ -49,7 +50,7 @@ export function usePlaylistActions() {
       childPlaylistId = await createChild();
     } catch (e) {
       console.error('Failed to save container as a playlist:', e);
-      notifications.addNotification(t('playlist.addFailed', { error: String(e) }), 'error');
+      notifications.addNotification(t('playlist.addFailed', { error: errorMessage(e) }), 'error');
       return;
     }
     await addToPlaylist(targetPlaylistId, title, 'add_playlist_to_playlist', {
@@ -85,7 +86,7 @@ export function usePlaylistActions() {
       }
     } catch (e) {
       console.error('Failed to cache playlist:', e);
-      notifications.addNotification(t('playlist.cacheFailed', { error: String(e) }), 'error');
+      notifications.addNotification(t('playlist.cacheFailed', { error: errorMessage(e) }), 'error');
     }
   };
 
@@ -103,7 +104,7 @@ export function usePlaylistActions() {
       return true;
     } catch (e) {
       console.error('Failed to delete playlist:', e);
-      notifications.addNotification(t('common.error', { error: String(e) }), 'error');
+      notifications.addNotification(t('common.error', { error: errorMessage(e) }), 'error');
       return false;
     }
   };

@@ -1,3 +1,4 @@
+import { errorMessage } from './utils/errorMessage';
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
@@ -26,7 +27,7 @@ const notificationStore = useNotificationStore(pinia);
 
 app.config.errorHandler = (err, _instance, info) => {
   console.error('Vue Error:', err, info);
-  notificationStore.addNotification(`Vue Error: ${err}`, 'error');
+  notificationStore.addNotification(`Vue Error: ${errorMessage(err)}`, 'error');
 };
 
 window.addEventListener('error', (event) => {
@@ -36,7 +37,7 @@ window.addEventListener('error', (event) => {
 
 window.addEventListener('unhandledrejection', (event) => {
   console.error('Promise Rejection:', event.reason);
-  notificationStore.addNotification(`Promise Error: ${event.reason}`, 'error');
+  notificationStore.addNotification(`Promise Error: ${errorMessage(event.reason)}`, 'error');
 });
 
 app.mount('#app');

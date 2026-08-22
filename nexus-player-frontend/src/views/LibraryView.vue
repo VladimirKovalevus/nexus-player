@@ -79,6 +79,7 @@
 </template>
 
 <script setup lang="ts">
+import { errorMessage } from '@/utils/errorMessage';
 import { computed, inject, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
@@ -137,7 +138,7 @@ async function load() {
   try {
     tracks.value = await invoke<TrackDto[]>('get_local_library');
     if (!isAndroid) sources.value = await invoke<MusicSourceDto[]>('get_music_sources');
-  } catch (e) { error.value = String(e); }
+  } catch (e) { error.value = errorMessage(e); }
   finally { loading.value = false; }
 }
 
@@ -163,7 +164,7 @@ async function scan() {
       result = await invoke('scan_local_library');
     }
     describe(result); await load();
-  } catch (e) { error.value = t('library.refreshFailed', { error: String(e) }); }
+  } catch (e) { error.value = t('library.refreshFailed', { error: errorMessage(e) }); }
   finally { scanning.value = false; }
 }
 
@@ -187,7 +188,7 @@ async function play(track: TrackDto) {
     await invoke('load_and_play_local_tracks', { trackIds, selectedId: track.id });
     refreshQueue();
   }
-  catch (e) { error.value = t('library.playFailed', { error: String(e) }); audioStore.stopLoading(); }
+  catch (e) { error.value = t('library.playFailed', { error: errorMessage(e) }); audioStore.stopLoading(); }
 }
 
 onMounted(async () => {
