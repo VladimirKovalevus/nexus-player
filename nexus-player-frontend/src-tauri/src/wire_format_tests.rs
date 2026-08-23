@@ -701,3 +701,66 @@ fn create_playlist_with_tracks_request_deserializes_with_options_omitted() {
     assert_eq!(request.tracks.len(), 1);
     assert_eq!(to_json(&request.tracks[0]), bare_track_json());
 }
+
+// CommandError is expected at `crate::error::CommandError` (src-tauri/src/error.rs, `mod error;`
+// in lib.rs). It needs `anyhow` as a dependency of nexus-player-frontend and implements
+// `From<String>`, `From<&str>` and `From<anyhow::Error>`.
+mod command_error {
+    use crate::error::CommandError;
+    use nexus_player_backend::streaming::error::StreamError;
+    use serde_json::{json, Value};
+
+    fn challenge() -> StreamError {
+        StreamError::ChallengeRequired {
+            provider: "soundcloud".into(),
+            url: "https://soundcloud.com/x".into(),
+        }
+    }
+
+    fn to_json(e: CommandError) -> Value {
+        serde_json::to_value(e).unwrap()
+    }
+
+    #[test]
+    fn string_error_serializes_as_internal_without_optional_keys() {
+        assert_eq!(
+            to_json(CommandError::from("boom".to_string())),
+            json!({ "code": "internal", "message": "boom" })
+        );
+    }
+
+    #[test]
+    fn str_error_serializes_as_internal() {
+        assert_eq!(
+            to_json(CommandError::from("boom")),
+            json!({ "code": "internal", "message": "boom" })
+        );
+    }
+
+    #[test]
+    fn plain_anyhow_error_serializes_as_internal() {
+        let value = to_json(CommandError::from(anyhow::anyhow!("disk full")));
+        assert_eq!(value["code"], "internal");
+        assert_eq!(value["message"], "disk full");
+        assert!(value.get("provider").is_none());
+        assert!(value.get("url").is_none());
+    }
+
+    #[test]
+    fn challenge_error_serializes_with_provider_and_url() {
+        let value = to_json(CommandError::from(anyhow::Error::new(challenge())));
+        assert_eq!(value["code"], "challenge_required");
+        assert_eq!(value["provider"], "soundcloud");
+        assert_eq!(value["url"], "https://soundcloud.com/x");
+        assert!(value["message"].is_string());
+    }
+
+    #[test]
+    fn challenge_error_wrapped_in_context_keeps_its_code() {
+        let wrapped = anyhow::Error::new(challenge()).context("failed to resolve track");
+        let value = to_json(CommandError::from(wrapped));
+        assert_eq!(value["code"], "challenge_required");
+        assert_eq!(value["provider"], "soundcloud");
+        assert_eq!(value["url"], "https://soundcloud.com/x");
+    }
+}
