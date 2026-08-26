@@ -8,7 +8,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 pub async fn retry_playback(state: State<'_, Arc<AppState>>) -> Result<()> {
-    state.play_current().await.map_err(|e| e.to_string())
+    state
+        .play_current()
+        .await
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -17,12 +20,8 @@ pub async fn save_track_to_file(
     state: State<'_, Arc<AppState>>,
     track: TrackDto,
 ) -> Result<()> {
-    let downloads_dir = app
-        .path()
-        .cache_dir()
-        .map_err(|e| e.to_string())?
-        .join("nexus-downloads");
-    std::fs::create_dir_all(&downloads_dir).map_err(|e| e.to_string())?;
+    let downloads_dir = app.path().cache_dir()?.join("nexus-downloads");
+    std::fs::create_dir_all(&downloads_dir)?;
 
     let track_id = if track.id == 0 {
         let src = track.source.as_ref().ok_or("Track has no source")?;
@@ -156,8 +155,7 @@ pub async fn save_track_to_file(
                 track_id as u64,
                 Some(options),
             )
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
 
         tracing::info!("Track download initiated for {:?}", track_id);
     }
@@ -170,24 +168,19 @@ pub async fn delete_cached_track(state: State<'_, Arc<AppState>>, track_id: i64)
     let mut lib_track = state
         .library()
         .get_track(TrackId(track_id))
-        .await
-        .map_err(|e| e.to_string())?
+        .await?
         .ok_or_else(|| "Track not found in library".to_string())?;
 
     if let CacheStatus::Cached { path, .. } = &lib_track.cache {
         if let Err(e) = std::fs::remove_file(path) {
             if e.kind() != std::io::ErrorKind::NotFound {
-                return Err(e.to_string());
+                return Err(e.to_string().into());
             }
         }
     }
 
     lib_track.cache = CacheStatus::None;
-    state
-        .library()
-        .update_track(lib_track)
-        .await
-        .map_err(|e| e.to_string())?;
+    state.library().update_track(lib_track).await?;
 
     tracing::info!("Deleted cached file for track {}", track_id);
     Ok(())

@@ -18,7 +18,7 @@ pub async fn set_eq_settings(
 ) -> Result<()> {
     state
         .set_eq_settings(settings.into())
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]

@@ -1,13 +1,7 @@
 import { i18n } from '@/i18n';
+import type { CommandError } from '@/types/types';
 
-export interface CommandErrorLike {
-  code: string;
-  message: string;
-  provider?: string;
-  url?: string;
-}
-
-export function isCommandError(e: unknown): e is CommandErrorLike {
+export function isCommandError(e: unknown): e is CommandError {
   return (
     typeof e === 'object' &&
     e !== null &&

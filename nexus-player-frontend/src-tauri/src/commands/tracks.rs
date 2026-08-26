@@ -18,8 +18,7 @@ pub async fn get_all_tracks(
 ) -> Result<Vec<TrackDto>> {
     let tracks = state
         .get_all_library_tracks(order.unwrap_or_default())
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     Ok(tracks.into_iter().map(|t| t.into()).collect())
 }
@@ -31,28 +30,21 @@ pub async fn get_cached_tracks(
 ) -> Result<Vec<TrackDto>> {
     let tracks = state
         .get_cached_library_tracks(order.unwrap_or_default())
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     Ok(tracks.into_iter().map(|t| t.into()).collect())
 }
 
 #[tauri::command]
 pub async fn get_cached_albums(state: State<'_, Arc<AppState>>) -> Result<Vec<CachedAlbumDto>> {
-    let albums = state
-        .get_cached_library_albums()
-        .await
-        .map_err(|e| e.to_string())?;
+    let albums = state.get_cached_library_albums().await?;
 
     Ok(albums.into_iter().map(|a| a.into()).collect())
 }
 
 #[tauri::command]
 pub async fn get_track(state: State<'_, Arc<AppState>>, track_id: i64) -> Result<Option<TrackDto>> {
-    let track = state
-        .get_library_track(TrackId(track_id))
-        .await
-        .map_err(|e| e.to_string())?;
+    let track = state.get_library_track(TrackId(track_id)).await?;
 
     Ok(track.map(|t| t.into()))
 }
@@ -62,10 +54,7 @@ pub async fn search_tracks(
     state: State<'_, Arc<AppState>>,
     query: String,
 ) -> Result<Vec<TrackDto>> {
-    let tracks = state
-        .search_library_tracks(&query)
-        .await
-        .map_err(|e| e.to_string())?;
+    let tracks = state.search_library_tracks(&query).await?;
 
     Ok(tracks.into_iter().map(|t| t.into()).collect())
 }
@@ -110,11 +99,7 @@ pub async fn add_track_from_file(state: State<'_, Arc<AppState>>, path: String) 
 
 #[tauri::command]
 pub async fn get_local_library(state: State<'_, Arc<AppState>>) -> Result<Vec<TrackDto>> {
-    let tracks = state
-        .library()
-        .local_tracks()
-        .await
-        .map_err(|e| e.to_string())?;
+    let tracks = state.library().local_tracks().await?;
     Ok(tracks.into_iter().map(Into::into).collect())
 }
 
@@ -127,7 +112,7 @@ pub async fn scan_local_library(state: State<'_, Arc<AppState>>) -> Result<ScanR
         .library()
         .scan_desktop_music()
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -139,7 +124,7 @@ pub async fn import_android_media(
         .library()
         .import_android_media(entries)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -148,7 +133,7 @@ pub async fn get_music_sources(state: State<'_, Arc<AppState>>) -> Result<Vec<Mu
         .library()
         .music_sources()
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -160,17 +145,9 @@ pub async fn add_music_source(
     let Some(folder) = app.dialog().file().blocking_pick_folder() else {
         return Ok(None);
     };
-    let path = folder.into_path().map_err(|e| e.to_string())?;
-    state
-        .library()
-        .add_music_source(&path)
-        .await
-        .map_err(|e| e.to_string())?;
-    let sources = state
-        .library()
-        .music_sources()
-        .await
-        .map_err(|e| e.to_string())?;
+    let path = folder.into_path()?;
+    state.library().add_music_source(&path).await?;
+    let sources = state.library().music_sources().await?;
     Ok(sources
         .into_iter()
         .find(|source| Path::new(&source.path) == path))
@@ -191,15 +168,12 @@ pub async fn remove_music_source(state: State<'_, Arc<AppState>>, source_id: i64
         .library()
         .remove_music_source(source_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
 pub async fn delete_track(state: State<'_, Arc<AppState>>, track_id: i64) -> Result<()> {
-    state
-        .delete_track_from_library(TrackId(track_id))
-        .await
-        .map_err(|e| e.to_string())?;
+    state.delete_track_from_library(TrackId(track_id)).await?;
 
     Ok(())
 }

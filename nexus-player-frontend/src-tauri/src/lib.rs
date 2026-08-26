@@ -1,5 +1,6 @@
 mod commands;
 mod dto;
+mod error;
 mod events;
 #[cfg(test)]
 mod wire_format_tests;

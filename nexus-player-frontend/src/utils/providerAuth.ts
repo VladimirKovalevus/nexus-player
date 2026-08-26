@@ -1,4 +1,4 @@
-import { errorMessage } from '@/utils/errorMessage';
+import { errorMessage, isCommandError } from '@/utils/errorMessage';
 import { i18n } from '@/i18n';
 import { invoke as rawInvoke, type InvokeArgs, type InvokeOptions } from '@tauri-apps/api/core';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -15,12 +15,11 @@ export interface ProviderChallenge {
   url: string;
 }
 
-// Mirrors StreamError::ChallengeRequired message in nexus-player-backend/src/streaming/error.rs
-const CHALLENGE_RE = /Challenge required for (\w+): (\S+)/;
-
 export function parseChallenge(err: unknown): ProviderChallenge | null {
-  const m = String(err instanceof Error ? err.message : err).match(CHALLENGE_RE);
-  return m ? { provider: m[1], url: m[2] } : null;
+  if (isCommandError(err) && err.code === 'challenge_required' && err.provider && err.url) {
+    return { provider: err.provider, url: err.url };
+  }
+  return null;
 }
 
 export { PLAYLISTS_CHANGED_EVENT };

@@ -282,3 +282,10 @@ export interface TaskInfoDto {
 }
 
 export type SyncType = 'full' | 'diff';
+
+export interface CommandError {
+  code: 'challenge_required' | 'internal';
+  message: string;
+  provider?: string;
+  url?: string;
+}

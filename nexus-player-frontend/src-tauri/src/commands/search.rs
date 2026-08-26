@@ -31,8 +31,7 @@ pub async fn search_streaming(
             limit.unwrap_or(10),
             offset.unwrap_or(0),
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     let mut dtos: Vec<SearchResultDto> = Vec::new();
     let mut tracks_to_enrich: Vec<nexus_player_backend::audio::types::Track> = Vec::new();
@@ -48,10 +47,7 @@ pub async fn search_streaming(
     }
 
     if !tracks_to_enrich.is_empty() {
-        let enriched = state
-            .enrich_tracks(tracks_to_enrich)
-            .await
-            .map_err(|e| e.to_string())?;
+        let enriched = state.enrich_tracks(tracks_to_enrich).await?;
         for (i, track) in track_indices.into_iter().zip(enriched) {
             if let SearchResultDto::Track(ref mut t) = dtos[i] {
                 t.liked = track.liked;
@@ -106,21 +102,16 @@ pub async fn handle_streaming_track(
                         if should_play {
                             state
                                 .load_search_and_play(system, q, content_type, target_id)
-                                .await
-                                .map_err(|e| e.to_string())?;
+                                .await?;
                         } else {
                             state
                                 .load_search_to_queue(system, q, content_type, target_id)
-                                .await
-                                .map_err(|e| e.to_string())?;
+                                .await?;
                         }
                     } else {
                         let audio_track: nexus_player_backend::audio::types::Track = track.into();
                         if should_play {
-                            state
-                                .add_track_and_play(audio_track)
-                                .await
-                                .map_err(|e| e.to_string())?;
+                            state.add_track_and_play(audio_track).await?;
                         } else {
                             use nexus_player_backend::playlist::playback_queue::{
                                 ActiveQueue, CursorQueue,
@@ -146,15 +137,9 @@ pub async fn handle_streaming_track(
                         id: playlist.id,
                     };
                     if should_play {
-                        state
-                            .load_context_and_play(context, 0)
-                            .await
-                            .map_err(|e| e.to_string())?;
+                        state.load_context_and_play(context, 0).await?;
                     } else {
-                        state
-                            .load_context_to_queue(context)
-                            .await
-                            .map_err(|e| e.to_string())?;
+                        state.load_context_to_queue(context).await?;
                     }
                 }
                 SearchResult::Album(album) => {
@@ -163,15 +148,9 @@ pub async fn handle_streaming_track(
                         id: album.id,
                     };
                     if should_play {
-                        state
-                            .load_context_and_play(context, 0)
-                            .await
-                            .map_err(|e| e.to_string())?;
+                        state.load_context_and_play(context, 0).await?;
                     } else {
-                        state
-                            .load_context_to_queue(context)
-                            .await
-                            .map_err(|e| e.to_string())?;
+                        state.load_context_to_queue(context).await?;
                     }
                 }
                 SearchResult::Channel(_) => {

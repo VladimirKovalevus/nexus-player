@@ -153,8 +153,7 @@ pub async fn handle_search(
             offset.unwrap_or(0),
             selected_index,
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     Ok(())
 }
@@ -164,10 +163,7 @@ pub async fn expand_queue_container(
     state: State<'_, Arc<AppState>>,
     item_index: usize,
 ) -> Result<QueueStateDto> {
-    state
-        .expand_search_container(item_index)
-        .await
-        .map_err(|e| e.to_string())?;
+    state.expand_search_container(item_index).await?;
 
     let queue = state.lock_queue().await;
     build_queue_state_dto(&queue)

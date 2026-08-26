@@ -7,10 +7,7 @@ use tauri::State;
 
 #[tauri::command]
 pub async fn add_to_queue(state: State<'_, Arc<AppState>>, track_id: i64) -> Result<usize> {
-    state
-        .add_to_queue(TrackId(track_id))
-        .await
-        .map_err(|e| e.to_string())?;
+    state.add_to_queue(TrackId(track_id)).await?;
 
     // The queue may change before this returns, so no real index is reported;
     // callers do not use the value.
@@ -70,8 +67,7 @@ pub async fn load_playlist_to_queue(
 ) -> Result<()> {
     state
         .load_playlist_to_queue(PlaylistId(playlist_id))
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     Ok(())
 }
@@ -88,8 +84,7 @@ pub async fn load_library_page_to_queue(
 
     let (current_page, total_pages, track_index_in_page) = state
         .load_library_page_to_queue(TrackId(track_id), page_size, order)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     let total_tracks = total_pages * page_size; // approximate; not critical
     Ok(LibraryPageDto {
@@ -110,10 +105,7 @@ pub async fn load_library_page(
 ) -> Result<LibraryPageDto> {
     let order = order.unwrap_or_default();
 
-    let total_pages = state
-        .load_library_page(page, page_size, order)
-        .await
-        .map_err(|e| e.to_string())?;
+    let total_pages = state.load_library_page(page, page_size, order).await?;
 
     Ok(LibraryPageDto {
         current_page: page,
@@ -135,8 +127,7 @@ pub async fn load_and_play_library_page_at_track(
     let order = order.unwrap_or_default();
     let (current_page, total_pages, track_index_in_page) = state
         .load_and_play_library_page_at_track(TrackId(track_id), page_size, order)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(LibraryPageDto {
         current_page,
         total_pages,
@@ -151,7 +142,7 @@ pub async fn play_library_track(state: State<'_, Arc<AppState>>, track_id: i64) 
     state
         .play_library_track(TrackId(track_id))
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -166,7 +157,7 @@ pub async fn load_and_play_library_tracks(
             TrackId(selected_id),
         )
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -181,7 +172,7 @@ pub async fn load_and_play_local_tracks(
             TrackId(selected_id),
         )
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -193,7 +184,7 @@ pub async fn load_playlist_and_play(
     state
         .load_playlist_and_play(PlaylistId(playlist_id), start_index.unwrap_or(0))
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -206,8 +197,7 @@ pub async fn load_and_play_library_page(
     let order = order.unwrap_or_default();
     let total_pages = state
         .load_and_play_library_page(page, page_size, order)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(LibraryPageDto {
         current_page: page,
         total_pages,
@@ -304,7 +294,7 @@ pub async fn start_radio(state: State<'_, Arc<AppState>>, mode: String) -> Resul
     state
         .start_radio(radio_mode)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]

@@ -11,7 +11,7 @@ use tauri::State;
 
 #[tauri::command]
 pub async fn get_all_playlists(state: State<'_, Arc<AppState>>) -> Result<Vec<PlaylistDto>> {
-    let playlists = state.get_all_playlists().await.map_err(|e| e.to_string())?;
+    let playlists = state.get_all_playlists().await?;
 
     Ok(playlists.into_iter().map(|p| p.into()).collect())
 }
@@ -23,8 +23,7 @@ pub async fn get_playlist_with_tracks(
 ) -> Result<Option<PlaylistWithItemsDto>> {
     let pwi = state
         .get_playlist_with_items(PlaylistId(playlist_id))
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     let Some(pwi) = pwi else {
         return Ok(None);
@@ -34,11 +33,7 @@ pub async fn get_playlist_with_tracks(
     for item in &pwi.items {
         match item.item_kind {
             nexus_player_backend::library::models::PlaylistItemKind::Track => {
-                if let Some(track) = state
-                    .get_library_track(TrackId(item.item_id))
-                    .await
-                    .map_err(|e| e.to_string())?
-                {
+                if let Some(track) = state.get_library_track(TrackId(item.item_id)).await? {
                     items.push(PlaylistItemDto::Track {
                         id: item.id,
                         item_id: item.item_id,
@@ -48,11 +43,7 @@ pub async fn get_playlist_with_tracks(
                 }
             }
             nexus_player_backend::library::models::PlaylistItemKind::Playlist => {
-                if let Some(playlist) = state
-                    .get_playlist(PlaylistId(item.item_id))
-                    .await
-                    .map_err(|e| e.to_string())?
-                {
+                if let Some(playlist) = state.get_playlist(PlaylistId(item.item_id)).await? {
                     items.push(PlaylistItemDto::Playlist {
                         id: item.id,
                         item_id: item.item_id,
@@ -84,8 +75,7 @@ pub async fn add_playlist_to_playlist(
             PlaylistId(parent_playlist_id),
             PlaylistId(child_playlist_id),
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 
@@ -100,8 +90,7 @@ pub async fn remove_playlist_from_playlist(
             PlaylistId(parent_playlist_id),
             PlaylistId(child_playlist_id),
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 
@@ -117,18 +106,14 @@ pub async fn create_playlist(
             request.creator,
             request.artwork_url,
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     Ok(playlist_id.0)
 }
 
 #[tauri::command]
 pub async fn delete_playlist(state: State<'_, Arc<AppState>>, playlist_id: i64) -> Result<()> {
-    state
-        .delete_playlist(PlaylistId(playlist_id))
-        .await
-        .map_err(|e| e.to_string())?;
+    state.delete_playlist(PlaylistId(playlist_id)).await?;
     Ok(())
 }
 
@@ -149,7 +134,7 @@ pub async fn create_playlist_from_container(
         .create_playlist_from_container(provider, content_type, id, title, description, artwork_url)
         .await
         .map(|id| id.0)
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -170,8 +155,7 @@ pub async fn create_playlist_with_tracks(
             request.artwork_url,
             audio_tracks,
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     Ok(playlist_id.0)
 }
@@ -184,8 +168,7 @@ pub async fn add_track_to_playlist(
 ) -> Result<()> {
     state
         .add_track_to_playlist(PlaylistId(playlist_id), track.try_to_audio_track()?)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     Ok(())
 }
@@ -198,8 +181,7 @@ pub async fn remove_track_from_playlist(
 ) -> Result<()> {
     state
         .remove_track_from_playlist(PlaylistId(playlist_id), TrackId(track_id))
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     Ok(())
 }

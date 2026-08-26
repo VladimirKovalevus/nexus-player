@@ -13,17 +13,13 @@ pub async fn get_play_history(
 ) -> Result<Vec<PlayHistoryEntryDto>> {
     let entries = state
         .get_play_history(limit.unwrap_or(50), offset.unwrap_or(0))
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(entries.into_iter().map(Into::into).collect())
 }
 
 #[tauri::command]
 pub async fn clear_play_history(state: State<'_, Arc<AppState>>) -> Result<()> {
-    state
-        .clear_play_history()
-        .await
-        .map_err(|e| e.to_string())?;
+    state.clear_play_history().await?;
     Ok(())
 }
 
@@ -32,7 +28,7 @@ pub async fn toggle_liked(state: State<'_, Arc<AppState>>, track: TrackDto) -> R
     state
         .toggle_liked(track.try_to_audio_track()?)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -44,7 +40,7 @@ pub async fn reorder_liked_tracks(
     state
         .reorder_liked_tracks(ids)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -56,7 +52,7 @@ pub async fn reorder_playlist_items(
     state
         .reorder_playlist_items(PlaylistId(playlist_id), item_ids)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]

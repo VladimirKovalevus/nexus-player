@@ -3342,6 +3342,7 @@ dependencies = [
 name = "nexus-player-frontend"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "nexus-player-backend",
  "openssl",

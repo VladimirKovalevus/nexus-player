@@ -12,9 +12,6 @@ pub async fn direct_link_resolve(
     provider: String,
     url: String,
 ) -> Result<SearchResultDto> {
-    let result = state
-        .direct_link_resolve(&provider, &url)
-        .await
-        .map_err(|e| e.to_string())?;
+    let result = state.direct_link_resolve(&provider, &url).await?;
     Ok(SearchResultDto::from(result))
 }

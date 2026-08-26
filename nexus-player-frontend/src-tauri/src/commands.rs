@@ -1,4 +1,4 @@
-type Result<T> = std::result::Result<T, String>;
+type Result<T> = std::result::Result<T, crate::error::CommandError>;
 
 pub(crate) mod cache;
 pub(crate) mod config;

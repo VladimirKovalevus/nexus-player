@@ -7,8 +7,7 @@ use tauri::State;
 
 #[tauri::command]
 pub async fn cleanup_library(state: State<'_, Arc<AppState>>) -> Result<CleanupResultDto> {
-    let (deleted_tracks, deleted_artworks) =
-        state.cleanup_library().await.map_err(|e| e.to_string())?;
+    let (deleted_tracks, deleted_artworks) = state.cleanup_library().await?;
     Ok(CleanupResultDto {
         deleted_tracks,
         deleted_artworks,
@@ -45,5 +44,8 @@ pub async fn resolve_artwork(
 
 #[tauri::command]
 pub async fn clear_artwork_cache(state: State<'_, Arc<AppState>>) -> Result<()> {
-    state.clear_artwork_cache().await.map_err(|e| e.to_string())
+    state
+        .clear_artwork_cache()
+        .await
+        .map_err(crate::error::CommandError::from)
 }

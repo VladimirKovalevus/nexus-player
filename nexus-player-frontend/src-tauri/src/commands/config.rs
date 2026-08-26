@@ -12,7 +12,10 @@ pub fn get_app_config(state: State<'_, Arc<AppState>>) -> Result<AppConfig> {
 
 #[tauri::command]
 pub async fn update_app_config(state: State<'_, Arc<AppState>>, config: AppConfig) -> Result<()> {
-    state.update_config(config).await.map_err(|e| e.to_string())
+    state
+        .update_config(config)
+        .await
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -50,7 +53,10 @@ pub async fn update_provider_auth(
         }
     }
 
-    state.update_config(config).await.map_err(|e| e.to_string())
+    state
+        .update_config(config)
+        .await
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
@@ -67,8 +73,7 @@ pub async fn submit_challenge_result(
             "clientId": client_id,
             "label": label
         }),
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     Ok(())
 }
 
