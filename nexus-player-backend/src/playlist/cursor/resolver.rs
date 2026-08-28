@@ -7,10 +7,10 @@ use crate::library::models::PlaylistItemKind;
 use crate::library::types::{PlaylistId, TrackId as LibTrackId};
 use crate::library::LibraryService;
 use crate::playlist::cursor::{
-    ContainerContext, CursorItem, CursorResolver, CursorSource, DbTrackCursor, ProviderCursor,
+    ContainerContext, CursorResolver, CursorSource, DbTrackCursor, ProviderCursor,
     StreamingSearchCursor,
 };
-use crate::streaming::types::{ContentType, SearchResult};
+use crate::streaming::types::ContentType;
 use crate::streaming::StreamingService;
 
 pub struct AppCursorResolver {
@@ -102,41 +102,13 @@ impl CursorResolver for AppCursorResolver {
                 query,
                 content_type,
             } => {
-                let results = self
-                    .streaming
-                    .search(&system, Some(content_type), &query, 50, 0)
-                    .await?;
-
-                let items = results
-                    .into_iter()
-                    .map(|res| match res {
-                        SearchResult::Track(info) => CursorItem::Track(info.into()),
-                        SearchResult::Playlist(info) => {
-                            CursorItem::Container(ContainerContext::ExternalPlaylist {
-                                system: system.clone(),
-                                id: info.id,
-                            })
-                        }
-                        SearchResult::Album(info) => {
-                            CursorItem::Container(ContainerContext::ExternalAlbum {
-                                system: system.clone(),
-                                id: info.id,
-                            })
-                        }
-                        _ => CursorItem::Container(ContainerContext::SearchQuery {
-                            system: system.clone(),
-                            query: query.clone(),
-                            content_type,
-                        }),
-                    })
-                    .collect();
-
+                // Starts empty: the cursor fetches its first page on demand and maps
+                // each result through `search_result_to_item()`.
                 Ok(Box::new(StreamingSearchCursor::new(
                     self.streaming.clone(),
                     system,
                     query,
                     content_type,
-                    items,
                 )))
             }
         }

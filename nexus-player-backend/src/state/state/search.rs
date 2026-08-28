@@ -97,7 +97,7 @@ impl AppState {
                     expanded_tracks: None,
                     play_index: 0,
                 },
-                SR::Channel(_) => SearchQueueItem::Track(Track {
+                _ => SearchQueueItem::Track(Track {
                     id: 0,
                     title: "Channel (unsupported)".to_string(),
                     artist: None,

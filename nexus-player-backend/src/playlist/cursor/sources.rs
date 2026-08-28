@@ -5,6 +5,7 @@ use std::sync::Arc;
 use super::{ContainerContext, CursorItem, CursorSource};
 use crate::library::types::TrackId as LibTrackId;
 use crate::library::LibraryService;
+use crate::streaming::error::StreamResult;
 use crate::streaming::types::{ContentType, SearchResult};
 use crate::streaming::StreamingService;
 
@@ -129,14 +130,64 @@ impl CursorSource for ProviderCursor {
     }
 }
 
+/// Maps one streaming search result to a cursor item.
+/// Channels are skipped: they must never start a recursive search.
+pub fn search_result_to_item(system: &str, result: &SearchResult) -> Option<CursorItem> {
+    match result {
+        SearchResult::Track(info) => Some(CursorItem::Track(info.clone().into())),
+        SearchResult::Playlist(info) => {
+            Some(CursorItem::Container(ContainerContext::ExternalPlaylist {
+                system: system.to_string(),
+                id: info.id.clone(),
+            }))
+        }
+        SearchResult::Album(info) => Some(CursorItem::Container(ContainerContext::ExternalAlbum {
+            system: system.to_string(),
+            id: info.id.clone(),
+        })),
+        SearchResult::Channel(_) => {
+            tracing::debug!("Skipping channel search result");
+            None
+        }
+    }
+}
+
+/// Fetches one page of search results.
+#[async_trait]
+pub trait SearchPageSource: Send + Sync {
+    async fn search(
+        &self,
+        system: &str,
+        content_type: Option<ContentType>,
+        query: &str,
+        limit: usize,
+        offset: usize,
+    ) -> StreamResult<Vec<SearchResult>>;
+}
+
+#[async_trait]
+impl SearchPageSource for StreamingService {
+    async fn search(
+        &self,
+        system: &str,
+        content_type: Option<ContentType>,
+        query: &str,
+        limit: usize,
+        offset: usize,
+    ) -> StreamResult<Vec<SearchResult>> {
+        StreamingService::search(self, system, content_type, query, limit, offset).await
+    }
+}
+
 /// A cursor that wraps streaming search results.
 pub struct StreamingSearchCursor {
-    streaming: Arc<StreamingService>,
+    source: Arc<dyn SearchPageSource>,
     system: String,
     query: String,
     content_type: ContentType,
     items: Vec<CursorItem>,
     index: usize,
+    /// Raw results requested so far (before channels are dropped).
     offset: usize,
     limit: usize,
     has_more: bool,
@@ -148,76 +199,63 @@ impl StreamingSearchCursor {
         system: String,
         query: String,
         content_type: ContentType,
-        initial_items: Vec<CursorItem>,
     ) -> Self {
-        let count = initial_items.len();
+        Self::with_source(streaming, system, query, content_type)
+    }
+
+    pub fn with_source(
+        source: Arc<dyn SearchPageSource>,
+        system: String,
+        query: String,
+        content_type: ContentType,
+    ) -> Self {
         Self {
-            streaming,
+            source,
             system,
             query,
             content_type,
-            items: initial_items,
+            items: Vec::new(),
             index: 0,
-            offset: count,
+            offset: 0,
             limit: 50,
-            has_more: count > 0,
+            has_more: true,
         }
     }
 
     async fn fetch_next_page(&mut self) -> Result<()> {
-        if !self.has_more {
-            return Ok(());
+        // A page made only of channels yields nothing; keep going until
+        // something is mapped or the results run out.
+        while self.has_more && self.index >= self.items.len() {
+            tracing::info!(
+                "Fetching next page for search: {} (offset: {})",
+                self.query,
+                self.offset
+            );
+
+            let results = self
+                .source
+                .search(
+                    &self.system,
+                    Some(self.content_type),
+                    &self.query,
+                    self.limit,
+                    self.offset,
+                )
+                .await?;
+
+            if results.is_empty() {
+                self.has_more = false;
+                return Ok(());
+            }
+
+            self.offset += results.len();
+            let system = &self.system;
+            self.items.extend(
+                results
+                    .iter()
+                    .filter_map(|r| search_result_to_item(system, r)),
+            );
         }
-
-        tracing::info!(
-            "Fetching next page for search: {} (offset: {})",
-            self.query,
-            self.offset
-        );
-
-        let results = self
-            .streaming
-            .search(
-                &self.system,
-                Some(self.content_type),
-                &self.query,
-                self.limit,
-                self.offset,
-            )
-            .await?;
-
-        if results.is_empty() {
-            self.has_more = false;
-            return Ok(());
-        }
-
-        let content_type = self.content_type;
-        let new_items: Vec<CursorItem> = results
-            .into_iter()
-            .map(|res| match res {
-                SearchResult::Track(info) => CursorItem::Track(info.into()),
-                SearchResult::Playlist(info) => {
-                    CursorItem::Container(ContainerContext::ExternalPlaylist {
-                        system: self.system.clone(),
-                        id: info.id,
-                    })
-                }
-                SearchResult::Album(info) => {
-                    CursorItem::Container(ContainerContext::ExternalAlbum {
-                        system: self.system.clone(),
-                        id: info.id,
-                    })
-                }
-                _ => CursorItem::Container(ContainerContext::SearchQuery {
-                    system: self.system.clone(),
-                    query: self.query.clone(),
-                    content_type,
-                }),
-            })
-            .collect();
-
-        self.offset += new_items.len();
-        self.items.extend(new_items);
 
         Ok(())
     }
@@ -226,9 +264,7 @@ impl StreamingSearchCursor {
 #[async_trait]
 impl CursorSource for StreamingSearchCursor {
     async fn next_batch(&mut self, limit: usize) -> Result<Vec<CursorItem>> {
-        if self.index >= self.items.len() && self.has_more {
-            self.fetch_next_page().await?;
-        }
+        self.fetch_next_page().await?;
 
         if self.index >= self.items.len() {
             return Ok(Vec::new());
