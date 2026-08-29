@@ -183,3 +183,54 @@ impl SearchPageSource for ScriptedPages {
         Ok(self.results.get(offset..end).unwrap_or_default().to_vec())
     }
 }
+
+/// Serves search results by raw offset, up to `page_size` per request, and records every
+/// request as `(offset, limit)`.
+pub struct RecordingPages {
+    results: Vec<SearchResult>,
+    page_size: usize,
+    pub requests: Mutex<Vec<(usize, usize)>>,
+}
+
+impl RecordingPages {
+    pub fn new(results: Vec<SearchResult>, page_size: usize) -> Arc<Self> {
+        Arc::new(Self {
+            results,
+            page_size,
+            requests: Mutex::new(Vec::new()),
+        })
+    }
+
+    pub fn recorded(&self) -> Vec<(usize, usize)> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl SearchPageSource for RecordingPages {
+    async fn search(
+        &self,
+        _system: &str,
+        _content_type: Option<ContentType>,
+        _query: &str,
+        limit: usize,
+        offset: usize,
+    ) -> StreamResult<Vec<SearchResult>> {
+        self.requests.lock().unwrap().push((offset, limit));
+        let end = self.results.len().min(offset + self.page_size.min(limit));
+        Ok(self.results.get(offset..end).unwrap_or_default().to_vec())
+    }
+}
+
+pub fn channel_result(id: &str) -> SearchResult {
+    SearchResult::Channel(nexus_player_backend::streaming::types::ChannelInfo {
+        id: id.into(),
+        url: String::new(),
+        service: StreamingService::Bandcamp,
+        name: "Channel".into(),
+        subscriber_count: None,
+        track_count: None,
+        thumbnail: None,
+        description: None,
+    })
+}

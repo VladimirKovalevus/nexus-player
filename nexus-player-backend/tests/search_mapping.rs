@@ -219,3 +219,81 @@ async fn first_page_of_search_cursor_has_17_items_when_three_are_channels() {
     assert_eq!(batch.len(), 17);
     assert_eq!(tracks.len(), 17);
 }
+
+fn hundred_results() -> Vec<SearchResult> {
+    (0..100)
+        .map(|i| SearchResult::Track(track_info(i)))
+        .collect()
+}
+
+#[tokio::test]
+async fn positioned_search_cursor_requests_one_page_holding_the_position() {
+    let pages = common::RecordingPages::new(hundred_results(), 20);
+    let mut cursor = StreamingSearchCursor::with_source(
+        pages.clone(),
+        "soundcloud".into(),
+        "q".into(),
+        ContentType::Track,
+    )
+    .starting_at(47);
+
+    let batch = cursor.next_batch(1).await.unwrap();
+
+    let requests = pages.recorded();
+    assert_eq!(requests.len(), 1, "requests: {requests:?}");
+    let (offset, limit) = requests[0];
+    assert_ne!(offset, 0, "must not start from the first page");
+    assert!(
+        offset <= 47 && 47 < offset + limit,
+        "requests: {requests:?}"
+    );
+    assert_eq!(batch.len(), 1);
+    assert_eq!(title_of(&batch[0]), "Title 47");
+}
+
+#[tokio::test]
+async fn positioned_search_cursor_continues_with_the_results_after_the_position() {
+    let pages = common::RecordingPages::new(hundred_results(), 20);
+    let mut cursor = StreamingSearchCursor::with_source(
+        pages.clone(),
+        "soundcloud".into(),
+        "q".into(),
+        ContentType::Track,
+    )
+    .starting_at(47);
+
+    let mut titles = Vec::new();
+    loop {
+        let batch = cursor.next_batch(10).await.unwrap();
+        if batch.is_empty() {
+            break;
+        }
+        titles.extend(batch.iter().map(title_of));
+    }
+
+    assert_eq!(titles.len(), 53);
+    assert_eq!(titles.first().map(String::as_str), Some("Title 47"));
+    assert_eq!(titles.last().map(String::as_str), Some("Title 99"));
+}
+
+#[tokio::test]
+async fn positioned_search_cursor_counts_raw_positions_past_earlier_channels() {
+    // Channels at raw positions 0, 7 and 14; the chosen result is at raw position 10.
+    let pages = Arc::new(FakePages {
+        total: 40,
+        channel_every: 7,
+        requests: Mutex::new(Vec::new()),
+    });
+    let mut cursor = StreamingSearchCursor::with_source(
+        pages.clone(),
+        "soundcloud".into(),
+        "q".into(),
+        ContentType::Track,
+    )
+    .starting_at(10);
+
+    let batch = cursor.next_batch(1).await.unwrap();
+
+    assert_eq!(title_of(&batch[0]), "Title 10");
+    assert_eq!(pages.requests.lock().unwrap().len(), 1);
+}
