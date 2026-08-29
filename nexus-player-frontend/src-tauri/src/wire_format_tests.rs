@@ -764,3 +764,138 @@ mod command_error {
         assert_eq!(value["url"], "https://soundcloud.com/x");
     }
 }
+
+mod cursor_queue_rows {
+    use crate::commands::queue_state::build_queue_state_dto;
+    use anyhow::Result;
+    use nexus_player_backend::playlist::cursor::{
+        ContainerContext, CursorResolver, CursorSource, PlayerCursor, SearchPageSource,
+        StreamingSearchCursor,
+    };
+    use nexus_player_backend::playlist::playback_queue::{ActiveQueue, CursorQueue};
+    use nexus_player_backend::streaming::error::StreamResult;
+    use nexus_player_backend::streaming::types::{
+        AlbumInfo, ContentType, SearchResult, StreamingService, TrackInfo,
+    };
+    use serde_json::json;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::Arc;
+
+    // The trait methods are written the way `async_trait` expands them: this crate does not
+    // depend on `async-trait`.
+    struct OneAlbumPage;
+
+    impl SearchPageSource for OneAlbumPage {
+        fn search<'a, 'b, 'c, 'async_trait>(
+            &'a self,
+            _system: &'b str,
+            _content_type: Option<ContentType>,
+            _query: &'c str,
+            _limit: usize,
+            offset: usize,
+        ) -> Pin<Box<dyn Future<Output = StreamResult<Vec<SearchResult>>> + Send + 'async_trait>>
+        where
+            'a: 'async_trait,
+            'b: 'async_trait,
+            'c: 'async_trait,
+            Self: 'async_trait,
+        {
+            Box::pin(async move {
+                if offset > 0 {
+                    return Ok(Vec::new());
+                }
+                Ok(vec![SearchResult::Album(AlbumInfo {
+                    id: "a1".into(),
+                    tracks: vec![],
+                    url: String::new(),
+                    service: StreamingService::Bandcamp,
+                    title: "Album A".into(),
+                    artist: "Band".into(),
+                    track_count: 4,
+                    year: None,
+                    thumbnail: None,
+                    description: None,
+                })])
+            })
+        }
+    }
+
+    struct NeverResolves;
+
+    impl CursorResolver for NeverResolves {
+        fn resolve<'life0, 'async_trait>(
+            &'life0 self,
+            _context: ContainerContext,
+        ) -> Pin<Box<dyn Future<Output = Result<Box<dyn CursorSource>>> + Send + 'async_trait>>
+        where
+            'life0: 'async_trait,
+            Self: 'async_trait,
+        {
+            Box::pin(async {
+                Err(anyhow::anyhow!(
+                    "an unreached container must not be resolved"
+                ))
+            })
+        }
+    }
+
+    fn track(n: usize) -> nexus_player_backend::audio::types::Track {
+        TrackInfo {
+            source: nexus_player_backend::audio::types::TrackSource::External {
+                system: "bandcamp".into(),
+                id: format!("t{n}"),
+            },
+            title: format!("Title {n}"),
+            artist: "Artist".into(),
+            duration: None,
+            thumbnail: None,
+            description: None,
+        }
+        .into()
+    }
+
+    #[test]
+    fn search_queue_with_an_unreached_album_serializes_a_container_entry_and_the_search_context() {
+        let mut queue = CursorQueue::new();
+        queue.history.push(track(1));
+        queue.current_track = Some(track(2));
+        queue.context = Some(ContainerContext::SearchQuery {
+            system: "bandcamp".into(),
+            query: "band".into(),
+            content_type: ContentType::Album,
+        });
+        let source = StreamingSearchCursor::with_source(
+            Arc::new(OneAlbumPage),
+            "bandcamp".into(),
+            "band".into(),
+            ContentType::Album,
+        );
+        queue.set_cursor(PlayerCursor::new(Box::new(source), Arc::new(NeverResolves)));
+        tauri::async_runtime::block_on(queue.prefetch(10)).unwrap_or_else(|e| panic!("{e}"));
+
+        let dto = build_queue_state_dto(&ActiveQueue::Cursor(Box::new(queue)))
+            .unwrap_or_else(|e| panic!("{e}"));
+        let value = serde_json::to_value(dto).unwrap_or_else(|e| panic!("{e}"));
+
+        let entries = value["entries"].as_array().cloned().unwrap_or_default();
+        let kinds: Vec<_> = entries.iter().map(|e| e["entryType"].clone()).collect();
+        assert_eq!(
+            kinds,
+            vec![json!("track"), json!("track"), json!("container")]
+        );
+        assert_eq!(entries[1]["track"]["title"], "Title 2");
+        assert_eq!(entries[2]["meta"]["title"], "Album A");
+        assert_eq!(entries[2]["meta"]["kind"], "album");
+        assert_eq!(entries[2]["meta"]["trackCount"], 4);
+        assert_eq!(entries[2]["tracks"], json!(null));
+        assert_eq!(
+            value["currentPosition"],
+            json!({ "itemIndex": 1, "trackWithinContainer": null })
+        );
+        assert_eq!(
+            value["searchContext"],
+            json!({ "system": "bandcamp", "query": "band" })
+        );
+    }
+}
