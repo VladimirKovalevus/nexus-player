@@ -32,8 +32,21 @@ pub async fn get_queue(state: State<'_, Arc<AppState>>) -> Result<Vec<TrackDto>>
     let queue = state.lock_queue().await;
     match &*queue {
         ActiveQueue::Cursor(cq) => {
-            let (tracks, _) = cq.snapshot();
-            Ok(tracks.into_iter().map(TrackDto::from).collect())
+            let (rows, _) = cq.snapshot();
+            let mut tracks = Vec::new();
+            for row in rows {
+                match row {
+                    nexus_player_backend::playlist::playback_queue::QueueEntry::Track(t) => {
+                        tracks.push(TrackDto::from(t));
+                    }
+                    nexus_player_backend::playlist::playback_queue::QueueEntry::Container {
+                        tracks: Some(ts),
+                        ..
+                    } => tracks.extend(ts.into_iter().map(TrackDto::from)),
+                    _ => {}
+                }
+            }
+            Ok(tracks)
         }
         ActiveQueue::Search(sq) => {
             // Return flat list of tracks for compatibility

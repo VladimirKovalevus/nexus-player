@@ -156,6 +156,16 @@ impl AppState {
     pub async fn expand_search_container(&self, item_index: usize) -> Result<()> {
         use crate::streaming::types::ContentType;
 
+        {
+            let mut queue = self.queue.lock().await;
+            if let ActiveQueue::Cursor(cq) = &mut *queue {
+                return cq
+                    .expand_container(item_index)
+                    .await
+                    .context("Failed to expand container");
+            }
+        }
+
         // Get container info while holding lock briefly
         let (kind, id, system) = {
             let queue = self.queue.lock().await;

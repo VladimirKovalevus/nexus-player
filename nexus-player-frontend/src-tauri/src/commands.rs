@@ -13,5 +13,3 @@ pub(crate) mod queue_state;
 pub(crate) mod search;
 pub(crate) mod sync;
 pub(crate) mod tracks;
-
-pub(crate) use queue_state::radio_mode_label;

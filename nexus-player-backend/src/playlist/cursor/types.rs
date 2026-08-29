@@ -47,3 +47,33 @@ pub enum CursorItem {
     Track(Track),
     Container(ContainerContext),
 }
+
+/// Type of container in search results
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContainerKind {
+    Album,
+    Playlist,
+}
+
+/// Metadata for a container (album or playlist) taken from its search result.
+#[derive(Debug, Clone)]
+pub struct ContainerMeta {
+    pub kind: ContainerKind,
+    pub id: String,
+    pub system: String,
+    pub title: String,
+    pub artist: String,
+    pub track_count: usize,
+    pub thumbnail: Option<String>,
+}
+
+/// What `PlayerCursor::next_row` yields: a playable track, or a root-level container that
+/// was left unexpanded.
+#[derive(Debug, Clone)]
+pub enum CursorRow {
+    Track(Track),
+    Container {
+        context: ContainerContext,
+        meta: ContainerMeta,
+    },
+}

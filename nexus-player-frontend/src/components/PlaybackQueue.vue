@@ -21,7 +21,14 @@ const error = ref<string | null>(null);
 const isModalOpen = ref(false);
 const isSavingPlaylist = ref(false);
 const { addContainerToPlaylist } = usePlaylistActions();
-const expandedContainers = ref<Set<number>>(new Set());
+// Expansion is keyed by the container itself, not by row index: when a container is
+// played its row turns into track rows and every later index shifts.
+const expandedContainers = ref<Set<string>>(new Set());
+const containerKey = (index: number): string | null => {
+  const entry = audioStore.entries[index];
+  if (entry?.entryType !== 'container') return null;
+  return `${entry.meta.kind}:${entry.meta.system}:${entry.meta.id}`;
+};
 const playlistInitialData = ref<{
   title?: string;
   description?: string;
@@ -51,7 +58,7 @@ const calculateItemHeight = (index: number) => {
   const entry = audioStore.entries[index];
   if (!entry) return 0;
   const rowHeight = rowHeights.compact.value;
-  if (entry.entryType === 'container' && expandedContainers.value.has(index) && entry.tracks) {
+  if (entry.entryType === 'container' && isContainerExpanded(index) && entry.tracks) {
     return rowHeight + entry.tracks.length * CONTAINER_TRACK_HEIGHT;
   }
   return rowHeight;
@@ -98,22 +105,26 @@ const expandContainer = async (itemIndex: number) => {
       const result = await invoke<QueueState>('expand_queue_container', { itemIndex });
       audioStore.updateQueueState(result);
     }
-    expandedContainers.value.add(itemIndex);
+    const key = containerKey(itemIndex);
+    if (key) expandedContainers.value.add(key);
   } catch (e) {
     console.error('Failed to expand container:', e);
   }
 };
 
 const toggleContainer = (itemIndex: number) => {
-  if (expandedContainers.value.has(itemIndex)) {
-    expandedContainers.value.delete(itemIndex);
+  if (isContainerExpanded(itemIndex)) {
+    const key = containerKey(itemIndex);
+    if (key) expandedContainers.value.delete(key);
   } else {
     expandContainer(itemIndex);
   }
 };
 
-const isContainerExpanded = (itemIndex: number) =>
-  expandedContainers.value.has(itemIndex);
+function isContainerExpanded(itemIndex: number): boolean {
+  const key = containerKey(itemIndex);
+  return key !== null && expandedContainers.value.has(key);
+}
 
 const clearQueue = async () => {
   try {

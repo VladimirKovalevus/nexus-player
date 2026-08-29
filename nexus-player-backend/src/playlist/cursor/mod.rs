@@ -11,7 +11,7 @@ pub use resolver::AppCursorResolver;
 pub use sources::{
     search_result_to_item, DbTrackCursor, ProviderCursor, SearchPageSource, StreamingSearchCursor,
 };
-pub use types::{ContainerContext, CursorItem, RadioMode};
+pub use types::{ContainerContext, ContainerKind, ContainerMeta, CursorItem, CursorRow, RadioMode};
 
 #[async_trait]
 pub trait CursorSource: Send + Sync {
@@ -22,4 +22,10 @@ pub trait CursorSource: Send + Sync {
     /// Checks if the source has more items.
     /// Note: This might be an estimation or require a network check.
     fn has_more(&self) -> bool;
+
+    /// Describes a container this source yielded, so a queue can show it as a row before
+    /// it is expanded. Sources whose containers carry no description return `None`.
+    fn container_meta(&self, _context: &ContainerContext) -> Option<ContainerMeta> {
+        None
+    }
 }

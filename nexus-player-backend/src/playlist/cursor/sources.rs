@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use super::{ContainerContext, CursorItem, CursorSource};
+use super::{ContainerContext, ContainerKind, ContainerMeta, CursorItem, CursorSource};
 use crate::library::types::TrackId as LibTrackId;
 use crate::library::LibraryService;
 use crate::streaming::error::StreamResult;
@@ -152,6 +152,31 @@ pub fn search_result_to_item(system: &str, result: &SearchResult) -> Option<Curs
     }
 }
 
+/// Describes the album or playlist behind a search result, for showing it as a queue row.
+fn container_meta_of(system: &str, result: &SearchResult) -> Option<ContainerMeta> {
+    match result {
+        SearchResult::Album(info) => Some(ContainerMeta {
+            kind: ContainerKind::Album,
+            id: info.id.clone(),
+            system: system.to_string(),
+            title: info.title.clone(),
+            artist: info.artist.clone(),
+            track_count: info.track_count,
+            thumbnail: info.thumbnail.clone(),
+        }),
+        SearchResult::Playlist(info) => Some(ContainerMeta {
+            kind: ContainerKind::Playlist,
+            id: info.id.clone(),
+            system: system.to_string(),
+            title: info.title.clone(),
+            artist: info.creator.clone(),
+            track_count: info.track_count,
+            thumbnail: info.thumbnail.clone(),
+        }),
+        SearchResult::Track(_) | SearchResult::Channel(_) => None,
+    }
+}
+
 /// Fetches one page of search results.
 #[async_trait]
 pub trait SearchPageSource: Send + Sync {
@@ -186,6 +211,7 @@ pub struct StreamingSearchCursor {
     query: String,
     content_type: ContentType,
     items: Vec<CursorItem>,
+    metas: Vec<ContainerMeta>,
     index: usize,
     /// Raw results requested so far (before channels are dropped).
     offset: usize,
@@ -215,6 +241,7 @@ impl StreamingSearchCursor {
             query,
             content_type,
             items: Vec::new(),
+            metas: Vec::new(),
             index: 0,
             offset: 0,
             limit: 50,
@@ -249,12 +276,12 @@ impl StreamingSearchCursor {
             }
 
             self.offset += results.len();
-            let system = &self.system;
-            self.items.extend(
-                results
-                    .iter()
-                    .filter_map(|r| search_result_to_item(system, r)),
-            );
+            for result in &results {
+                if let Some(item) = search_result_to_item(&self.system, result) {
+                    self.items.push(item);
+                    self.metas.extend(container_meta_of(&self.system, result));
+                }
+            }
         }
 
         Ok(())
@@ -279,5 +306,17 @@ impl CursorSource for StreamingSearchCursor {
 
     fn has_more(&self) -> bool {
         self.has_more || self.index < self.items.len()
+    }
+
+    fn container_meta(&self, context: &ContainerContext) -> Option<ContainerMeta> {
+        let (kind, id) = match context {
+            ContainerContext::ExternalAlbum { id, .. } => (ContainerKind::Album, id),
+            ContainerContext::ExternalPlaylist { id, .. } => (ContainerKind::Playlist, id),
+            _ => return None,
+        };
+        self.metas
+            .iter()
+            .find(|m| m.id == *id && m.kind == kind)
+            .cloned()
     }
 }

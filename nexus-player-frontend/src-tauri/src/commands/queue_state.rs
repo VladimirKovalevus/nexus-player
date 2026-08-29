@@ -30,89 +30,90 @@ pub(crate) fn radio_mode_label(
     }
 }
 
-fn build_queue_state_dto(
+fn entry_dto(entry: nexus_player_backend::playlist::playback_queue::QueueEntry) -> QueueEntryDto {
+    use nexus_player_backend::playlist::playback_queue::{ContainerKind, QueueEntry};
+
+    match entry {
+        QueueEntry::Track(track) => QueueEntryDto::Track {
+            track: track.into(),
+        },
+        QueueEntry::Container {
+            info,
+            tracks,
+            play_index,
+        } => {
+            let kind_str = match info.kind {
+                ContainerKind::Album => "album",
+                ContainerKind::Playlist => "playlist",
+            };
+            QueueEntryDto::Container {
+                meta: ContainerMetaDto {
+                    kind: kind_str.to_string(),
+                    id: info.id,
+                    system: info.system,
+                    title: info.title,
+                    artist: info.artist,
+                    track_count: info.track_count,
+                    thumbnail: info.thumbnail,
+                },
+                tracks: tracks.map(|ts| ts.into_iter().map(|t| t.into()).collect()),
+                play_index,
+            }
+        }
+    }
+}
+
+fn repeat_mode_label(mode: nexus_player_backend::playlist::playback_queue::RepeatMode) -> String {
+    use nexus_player_backend::playlist::playback_queue::RepeatMode;
+    match mode {
+        RepeatMode::Off => "off",
+        RepeatMode::All => "all",
+        RepeatMode::One => "one",
+    }
+    .to_string()
+}
+
+/// The one place that turns the active queue into the DTO the UI shows.
+pub(crate) fn build_queue_state_dto(
     queue: &nexus_player_backend::playlist::playback_queue::ActiveQueue,
 ) -> Result<QueueStateDto> {
-    use nexus_player_backend::playlist::playback_queue::{ActiveQueue, ContainerKind, QueueEntry};
+    use nexus_player_backend::playlist::playback_queue::ActiveQueue;
 
     match queue {
         ActiveQueue::Cursor(cq) => {
-            let (tracks, current_index) = cq.snapshot();
-            let entries: Vec<QueueEntryDto> = tracks
-                .into_iter()
-                .map(|t| QueueEntryDto::Track { track: t.into() })
-                .collect();
-
-            let current_position = current_index.map(|idx| CurrentPositionDto {
-                item_index: idx,
-                track_within_container: None,
-            });
-
-            let repeat_mode = match cq.repeat_mode {
-                nexus_player_backend::playlist::playback_queue::RepeatMode::Off => "off",
-                nexus_player_backend::playlist::playback_queue::RepeatMode::All => "all",
-                nexus_player_backend::playlist::playback_queue::RepeatMode::One => "one",
+            let (rows, current_index) = cq.snapshot();
+            let search_context = match &cq.context {
+                Some(ContainerContext::SearchQuery { system, query, .. }) => {
+                    Some(SearchContextDto {
+                        system: system.clone(),
+                        query: query.clone(),
+                    })
+                }
+                _ => None,
             };
 
             Ok(QueueStateDto {
-                entries,
-                current_position,
-                repeat_mode: repeat_mode.to_string(),
+                entries: rows.into_iter().map(entry_dto).collect(),
+                current_position: current_index.map(|idx| CurrentPositionDto {
+                    item_index: idx,
+                    track_within_container: None,
+                }),
+                repeat_mode: repeat_mode_label(cq.repeat_mode),
                 shuffle_enabled: cq.shuffle_enabled,
-                search_context: None,
+                search_context,
                 radio_mode: radio_mode_label(cq),
             })
         }
         ActiveQueue::Search(sq) => {
             let (entries, position) = sq.snapshot();
 
-            let entries_dto: Vec<QueueEntryDto> = entries
-                .into_iter()
-                .map(|entry| match entry {
-                    QueueEntry::Track(track) => QueueEntryDto::Track {
-                        track: track.into(),
-                    },
-                    QueueEntry::Container {
-                        info,
-                        tracks,
-                        play_index,
-                    } => {
-                        let kind_str = match info.kind {
-                            ContainerKind::Album => "album",
-                            ContainerKind::Playlist => "playlist",
-                        };
-                        QueueEntryDto::Container {
-                            meta: ContainerMetaDto {
-                                kind: kind_str.to_string(),
-                                id: info.id,
-                                system: info.system,
-                                title: info.title,
-                                artist: info.artist,
-                                track_count: info.track_count,
-                                thumbnail: info.thumbnail,
-                            },
-                            tracks: tracks.map(|ts| ts.into_iter().map(|t| t.into()).collect()),
-                            play_index,
-                        }
-                    }
-                })
-                .collect();
-
-            let current_position = position.map(|p| CurrentPositionDto {
-                item_index: p.item_index,
-                track_within_container: p.track_within_container,
-            });
-
-            let repeat_mode = match sq.repeat_mode {
-                nexus_player_backend::playlist::playback_queue::RepeatMode::Off => "off",
-                nexus_player_backend::playlist::playback_queue::RepeatMode::All => "all",
-                nexus_player_backend::playlist::playback_queue::RepeatMode::One => "one",
-            };
-
             Ok(QueueStateDto {
-                entries: entries_dto,
-                current_position,
-                repeat_mode: repeat_mode.to_string(),
+                entries: entries.into_iter().map(entry_dto).collect(),
+                current_position: position.map(|p| CurrentPositionDto {
+                    item_index: p.item_index,
+                    track_within_container: p.track_within_container,
+                }),
+                repeat_mode: repeat_mode_label(sq.repeat_mode),
                 shuffle_enabled: sq.shuffle_enabled,
                 search_context: Some(SearchContextDto {
                     system: sq.system.clone(),

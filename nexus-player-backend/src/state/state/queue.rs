@@ -140,10 +140,13 @@ impl AppState {
         let track = {
             let mut queue = self.queue.lock().await;
             match &mut *queue {
-                ActiveQueue::Cursor(cq) => {
-                    cq.jump_to(index);
-                    cq.current_track.clone()
-                }
+                ActiveQueue::Cursor(cq) => match cq.play_queue_item(index, None).await {
+                    Ok(track) => track,
+                    Err(e) => {
+                        tracing::error!("Failed to play queue row {}: {}", index, e);
+                        None
+                    }
+                },
                 ActiveQueue::Search(sq) => {
                     sq.jump_to(index);
                     sq.current_track()
@@ -180,10 +183,13 @@ impl AppState {
                     }
                 }
                 ActiveQueue::Cursor(cq) => {
-                    cq.jump_to(item_index);
-                    match cq.current_track.clone() {
-                        Some(track) => NextResult::Track(track),
-                        None => NextResult::End,
+                    match cq.play_queue_item(item_index, track_index).await {
+                        Ok(Some(track)) => NextResult::Track(track),
+                        Ok(None) => NextResult::End,
+                        Err(e) => {
+                            tracing::error!("Failed to play queue row {}: {}", item_index, e);
+                            NextResult::End
+                        }
                     }
                 }
             }

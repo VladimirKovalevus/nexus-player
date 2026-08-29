@@ -212,108 +212,15 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
             let audio_state: AudioStateDto = state.audio_state().into();
 
             let queue_state = {
-                use crate::dto::{
-                    ContainerMetaDto, CurrentPositionDto, QueueEntryDto, SearchContextDto,
-                };
-                use nexus_player_backend::playlist::playback_queue::{
-                    ActiveQueue, ContainerKind, QueueEntry,
-                };
-
                 let queue = state.lock_queue().await;
-                match &*queue {
-                    ActiveQueue::Cursor(cq) => {
-                        let (tracks, current_index) = cq.snapshot();
-                        let entries: Vec<QueueEntryDto> = tracks
-                            .into_iter()
-                            .map(|t| QueueEntryDto::Track { track: t.into() })
-                            .collect();
-                        let current_position = current_index.map(|idx| CurrentPositionDto {
-                            item_index: idx,
-                            track_within_container: None,
-                        });
-                        let repeat_mode = match cq.repeat_mode {
-                            nexus_player_backend::playlist::playback_queue::RepeatMode::Off => {
-                                "off"
-                            }
-                            nexus_player_backend::playlist::playback_queue::RepeatMode::All => {
-                                "all"
-                            }
-                            nexus_player_backend::playlist::playback_queue::RepeatMode::One => {
-                                "one"
-                            }
-                        };
-                        QueueStateDto {
-                            entries,
-                            current_position,
-                            repeat_mode: repeat_mode.to_string(),
-                            shuffle_enabled: cq.shuffle_enabled,
-                            search_context: None,
-                            radio_mode: crate::commands::radio_mode_label(cq),
-                        }
-                    }
-                    ActiveQueue::Search(sq) => {
-                        let (entries, position) = sq.snapshot();
-                        let entries_dto: Vec<QueueEntryDto> = entries
-                            .into_iter()
-                            .map(|entry| match entry {
-                                QueueEntry::Track(track) => QueueEntryDto::Track {
-                                    track: track.into(),
-                                },
-                                QueueEntry::Container {
-                                    info,
-                                    tracks,
-                                    play_index,
-                                } => {
-                                    let kind_str = match info.kind {
-                                        ContainerKind::Album => "album",
-                                        ContainerKind::Playlist => "playlist",
-                                    };
-                                    QueueEntryDto::Container {
-                                        meta: ContainerMetaDto {
-                                            kind: kind_str.to_string(),
-                                            id: info.id,
-                                            system: info.system,
-                                            title: info.title,
-                                            artist: info.artist,
-                                            track_count: info.track_count,
-                                            thumbnail: info.thumbnail,
-                                        },
-                                        tracks: tracks
-                                            .map(|ts| ts.into_iter().map(|t| t.into()).collect()),
-                                        play_index,
-                                    }
-                                }
-                            })
-                            .collect();
-                        let current_position = position.map(|p| CurrentPositionDto {
-                            item_index: p.item_index,
-                            track_within_container: p.track_within_container,
-                        });
-
-                        let repeat_mode = match sq.repeat_mode {
-                            nexus_player_backend::playlist::playback_queue::RepeatMode::Off => {
-                                "off"
-                            }
-                            nexus_player_backend::playlist::playback_queue::RepeatMode::All => {
-                                "all"
-                            }
-                            nexus_player_backend::playlist::playback_queue::RepeatMode::One => {
-                                "one"
-                            }
-                        };
-
-                        QueueStateDto {
-                            entries: entries_dto,
-                            current_position,
-                            repeat_mode: repeat_mode.to_string(),
-                            shuffle_enabled: sq.shuffle_enabled,
-                            search_context: Some(SearchContextDto {
-                                system: sq.system.clone(),
-                                query: sq.query.clone(),
-                            }),
-                            radio_mode: None,
-                        }
-                    }
+                crate::commands::queue_state::build_queue_state_dto(&queue)
+            };
+            let queue_state = match queue_state {
+                Ok(dto) => dto,
+                Err(e) => {
+                    tracing::error!("Failed to build queue state, skipping update: {e:?}");
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    continue;
                 }
             };
 
