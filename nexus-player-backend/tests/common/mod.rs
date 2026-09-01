@@ -65,7 +65,7 @@ impl FakeResolver {
     pub fn serve_local_playlist(&self, id: i64, items: Vec<CursorItem>) {
         self.contents
             .lock()
-            .unwrap()
+            .expect("test mutex poisoned")
             .insert(format!("local:{id}"), items);
     }
 
@@ -73,7 +73,7 @@ impl FakeResolver {
     pub fn serve_album(&self, id: &str, items: Vec<CursorItem>) {
         self.contents
             .lock()
-            .unwrap()
+            .expect("test mutex poisoned")
             .insert(format!("album:{id}"), items);
     }
 
@@ -81,12 +81,12 @@ impl FakeResolver {
     pub fn serve_playlist(&self, id: &str, items: Vec<CursorItem>) {
         self.contents
             .lock()
-            .unwrap()
+            .expect("test mutex poisoned")
             .insert(format!("playlist:{id}"), items);
     }
 
     pub fn resolved_contexts(&self) -> Vec<ContainerContext> {
-        self.resolved.lock().unwrap().clone()
+        self.resolved.lock().expect("test mutex poisoned").clone()
     }
 }
 
@@ -96,11 +96,14 @@ impl CursorResolver for FakeResolver {
         let items = self
             .contents
             .lock()
-            .unwrap()
+            .expect("test mutex poisoned")
             .get(&context_key(&context))
             .cloned()
             .unwrap_or_default();
-        self.resolved.lock().unwrap().push(context);
+        self.resolved
+            .lock()
+            .expect("test mutex poisoned")
+            .push(context);
         Ok(Box::new(VecSource::new(items)))
     }
 }
@@ -202,7 +205,7 @@ impl RecordingPages {
     }
 
     pub fn recorded(&self) -> Vec<(usize, usize)> {
-        self.requests.lock().unwrap().clone()
+        self.requests.lock().expect("test mutex poisoned").clone()
     }
 }
 
@@ -216,7 +219,10 @@ impl SearchPageSource for RecordingPages {
         limit: usize,
         offset: usize,
     ) -> StreamResult<Vec<SearchResult>> {
-        self.requests.lock().unwrap().push((offset, limit));
+        self.requests
+            .lock()
+            .expect("test mutex poisoned")
+            .push((offset, limit));
         let end = self.results.len().min(offset + self.page_size.min(limit));
         Ok(self.results.get(offset..end).unwrap_or_default().to_vec())
     }

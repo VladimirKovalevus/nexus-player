@@ -144,7 +144,10 @@ impl SearchPageSource for FakePages {
         limit: usize,
         offset: usize,
     ) -> StreamResult<Vec<SearchResult>> {
-        self.requests.lock().unwrap().push(offset);
+        self.requests
+            .lock()
+            .expect("test mutex poisoned")
+            .push(offset);
         let page_size = limit.min(20);
         Ok((offset..self.total.min(offset + page_size))
             .map(|i| {
@@ -182,7 +185,7 @@ async fn search_cursor_pages_by_raw_count_and_yields_each_result_once() {
         titles.extend(batch.iter().map(title_of));
     }
 
-    let requests = pages.requests.lock().unwrap().clone();
+    let requests = pages.requests.lock().expect("test mutex poisoned").clone();
     assert_eq!(requests[0], 0);
     assert_eq!(requests[1], 20, "second page starts after the raw results");
 
@@ -295,5 +298,5 @@ async fn positioned_search_cursor_counts_raw_positions_past_earlier_channels() {
     let batch = cursor.next_batch(1).await.unwrap();
 
     assert_eq!(title_of(&batch[0]), "Title 10");
-    assert_eq!(pages.requests.lock().unwrap().len(), 1);
+    assert_eq!(pages.requests.lock().expect("test mutex poisoned").len(), 1);
 }
