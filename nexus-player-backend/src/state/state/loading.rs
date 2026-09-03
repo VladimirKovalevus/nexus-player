@@ -94,13 +94,9 @@ impl AppState {
 
         let track = {
             let mut queue = self.queue.lock().await;
-            match &mut *queue {
-                ActiveQueue::Cursor(cq) => {
-                    cq.jump_to(track_index_in_page);
-                    cq.current_track.clone()
-                }
-                _ => None,
-            }
+            let ActiveQueue::Cursor(cq) = &mut *queue;
+            cq.jump_to(track_index_in_page);
+            cq.current_track.clone()
         };
 
         if let Some(t) = track {
@@ -138,13 +134,9 @@ impl AppState {
 
         let track = {
             let mut queue = self.queue.lock().await;
-            match &mut *queue {
-                ActiveQueue::Cursor(cq) => {
-                    cq.jump_to(0);
-                    cq.current_track.clone()
-                }
-                _ => None,
-            }
+            let ActiveQueue::Cursor(cq) = &mut *queue;
+            cq.jump_to(0);
+            cq.current_track.clone()
         };
 
         if let Some(t) = track {
@@ -171,19 +163,12 @@ impl AppState {
         }
         let track = {
             let mut queue = self.queue.lock().await;
-            match &mut *queue {
-                ActiveQueue::Cursor(cq) => {
-                    cq.jump_to(start_index);
-                    if cq.current_track.is_none() && start_index == 0 {
-                        let _ = cq.next().await;
-                    }
-                    cq.current_track.clone()
-                }
-                ActiveQueue::Search(sq) => {
-                    sq.jump_to(start_index);
-                    sq.current_track()
-                }
+            let ActiveQueue::Cursor(cq) = &mut *queue;
+            cq.jump_to(start_index);
+            if cq.current_track.is_none() && start_index == 0 {
+                let _ = cq.next().await;
             }
+            cq.current_track.clone()
         };
         self.play_cancellable(track, cancel).await;
         Ok(())
@@ -257,13 +242,9 @@ impl AppState {
         self.fill_cursor_queue(audio_tracks).await;
         let track = {
             let mut queue = self.queue.lock().await;
-            match &mut *queue {
-                ActiveQueue::Cursor(cq) => {
-                    cq.jump_to(selected_index);
-                    cq.current_track.clone()
-                }
-                _ => None,
-            }
+            let ActiveQueue::Cursor(cq) = &mut *queue;
+            cq.jump_to(selected_index);
+            cq.current_track.clone()
         };
         if !cancel.is_cancelled() {
             self.play_cancellable(track, cancel).await;
@@ -294,13 +275,9 @@ impl AppState {
         self.fill_cursor_queue(audio_tracks).await;
         let track = {
             let mut queue = self.queue.lock().await;
-            match &mut *queue {
-                ActiveQueue::Cursor(cq) => {
-                    cq.jump_to(selected_index);
-                    cq.current_track.clone()
-                }
-                _ => None,
-            }
+            let ActiveQueue::Cursor(cq) = &mut *queue;
+            cq.jump_to(selected_index);
+            cq.current_track.clone()
         };
         if !cancel.is_cancelled() {
             self.play_cancellable(track, cancel).await;

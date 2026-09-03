@@ -253,6 +253,7 @@ const execSearchPlay: ExecFn = async ([idxStr]) => {
       limit: streamingStore.limit,
       offset: streamingStore.offset,
       selectedIndex: n - 1,
+      resultId: result.type === 'track' ? result.source?.url : result.id,
     });
   } catch {
     await invoke('handle_streaming_track', {

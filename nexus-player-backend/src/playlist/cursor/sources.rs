@@ -217,6 +217,8 @@ pub struct StreamingSearchCursor {
     offset: usize,
     limit: usize,
     has_more: bool,
+    /// Set by `starting_at`: the first result requested is the chosen one and must be playable.
+    check_first: bool,
 }
 
 impl StreamingSearchCursor {
@@ -246,7 +248,16 @@ impl StreamingSearchCursor {
             offset: 0,
             limit: 50,
             has_more: true,
+            check_first: false,
         }
+    }
+
+    /// Positions the cursor at raw result `position`: the first request starts at that
+    /// offset itself, so earlier pages are never fetched. A channel there is an error.
+    pub fn starting_at(mut self, position: usize) -> Self {
+        self.offset = position;
+        self.check_first = true;
+        self
     }
 
     async fn fetch_next_page(&mut self) -> Result<()> {
@@ -271,8 +282,15 @@ impl StreamingSearchCursor {
                 .await?;
 
             if results.is_empty() {
+                self.check_first = false;
                 self.has_more = false;
                 return Ok(());
+            }
+
+            if std::mem::take(&mut self.check_first)
+                && matches!(results.first(), Some(SearchResult::Channel(_)))
+            {
+                anyhow::bail!("The chosen search result is a channel and cannot be played");
             }
 
             self.offset += results.len();

@@ -5,11 +5,11 @@ use crate::config::ConfigManager;
 use crate::library::models::PlayHistoryEntry;
 use crate::library::{LibraryService, TrackId};
 use crate::playlist::cursor::{AppCursorResolver, ContainerContext, PlayerCursor};
-use crate::playlist::playback_queue::{ActiveQueue, ContainerKind, ContainerMeta, SearchQueueItem};
+use crate::playlist::playback_queue::ActiveQueue;
 use crate::streaming::artwork::ArtworkCache;
 use crate::streaming::types::ContentType;
 use crate::streaming::StreamingService;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::Path;
 use std::sync::Arc;
 use streaming::state::types::DefaultCallbacks;
@@ -255,21 +255,10 @@ impl AppState {
 
     async fn fill_cursor_queue(&self, tracks: Vec<AudioTrack>) {
         let mut queue = self.queue.lock().await;
-        match &mut *queue {
-            ActiveQueue::Cursor(cq) => {
-                cq.clear();
-                for track in tracks {
-                    cq.add_track(track);
-                }
-            }
-            _ => {
-                *queue = ActiveQueue::new_cursor();
-                if let ActiveQueue::Cursor(cq) = &mut *queue {
-                    for track in tracks {
-                        cq.add_track(track);
-                    }
-                }
-            }
+        let ActiveQueue::Cursor(cq) = &mut *queue;
+        cq.clear();
+        for track in tracks {
+            cq.add_track(track);
         }
     }
 
@@ -505,24 +494,8 @@ impl AppState {
 
         {
             let mut queue = self.queue.lock().await;
-            let (repeat_mode, shuffle_enabled) = match &*queue {
-                ActiveQueue::Cursor(cq) => (cq.repeat_mode, cq.shuffle_enabled),
-                ActiveQueue::Search(sq) => (sq.repeat_mode, sq.shuffle_enabled),
-            };
-
-            let cq = match &mut *queue {
-                ActiveQueue::Cursor(cq) => {
-                    cq.clear();
-                    cq
-                }
-                _ => {
-                    *queue = ActiveQueue::new_cursor_with_settings(repeat_mode, shuffle_enabled);
-                    match &mut *queue {
-                        ActiveQueue::Cursor(cq) => cq,
-                        _ => unreachable!(),
-                    }
-                }
-            };
+            let ActiveQueue::Cursor(cq) = &mut *queue;
+            cq.clear();
             cq.context = Some(context);
             cq.set_cursor(cursor);
             let prefetched = cq.prefetch(50).await?;
@@ -552,19 +525,8 @@ impl AppState {
         };
 
         let mut queue = self.queue.lock().await;
-        let cq = match &mut *queue {
-            ActiveQueue::Cursor(cq) => {
-                cq.clear();
-                cq
-            }
-            _ => {
-                *queue = ActiveQueue::new_cursor();
-                match &mut *queue {
-                    ActiveQueue::Cursor(cq) => cq,
-                    _ => unreachable!(),
-                }
-            }
-        };
+        let ActiveQueue::Cursor(cq) = &mut *queue;
+        cq.clear();
         cq.set_cursor(cursor);
 
         let mut found = false;
@@ -583,86 +545,6 @@ impl AppState {
         }
 
         cq.prefetch(50).await?;
-        Ok(())
-    }
-
-    /// Fetch more search results for pagination
-    async fn fetch_more_search_results(&self) -> Result<()> {
-        use crate::streaming::types::SearchResult as SR;
-
-        let (system, query, offset) = {
-            let queue = self.queue.lock().await;
-            match &*queue {
-                ActiveQueue::Search(sq) => (sq.system.clone(), sq.query.clone(), sq.search_offset),
-                _ => return Err(anyhow::anyhow!("Not in search queue mode")),
-            }
-        };
-
-        let results = self
-            .streaming
-            .search(&system, None, &query, 50, offset)
-            .await
-            .context("Search pagination failed")?;
-
-        let has_more = results.len() >= 50;
-        let items: Vec<SearchQueueItem> = results
-            .into_iter()
-            .map(|r| match r {
-                SR::Track(track) => SearchQueueItem::Track(track.into()),
-                SR::Album(album) => SearchQueueItem::Container {
-                    info: ContainerMeta {
-                        kind: ContainerKind::Album,
-                        id: album.id,
-                        system: album.service.to_string(),
-                        title: album.title,
-                        artist: album.artist,
-                        track_count: album.track_count,
-                        thumbnail: album.thumbnail,
-                    },
-                    expanded_tracks: if album.tracks.is_empty() {
-                        None
-                    } else {
-                        Some(album.tracks.into_iter().map(|t| t.into()).collect())
-                    },
-                    play_index: 0,
-                },
-                SR::Playlist(playlist) => SearchQueueItem::Container {
-                    info: ContainerMeta {
-                        kind: ContainerKind::Playlist,
-                        id: playlist.id,
-                        system: playlist.service.to_string(),
-                        title: playlist.title,
-                        artist: playlist.creator,
-                        track_count: playlist.track_count,
-                        thumbnail: playlist.thumbnail,
-                    },
-                    expanded_tracks: if playlist.tracks.is_empty() {
-                        None
-                    } else {
-                        Some(playlist.tracks.into_iter().map(|t| t.into()).collect())
-                    },
-                    play_index: 0,
-                },
-                _ => SearchQueueItem::Track(Track {
-                    id: 0,
-                    title: "Channel (unsupported)".to_string(),
-                    artist: None,
-                    album: None,
-                    duration: None,
-                    artwork_url: None,
-                    format: None,
-                    source: crate::audio::types::TrackSource::local("".to_string()),
-                    state: crate::audio::types::TrackState::Streaming,
-                    liked: false,
-                }),
-            })
-            .collect();
-
-        let mut queue = self.queue.lock().await;
-        if let ActiveQueue::Search(sq) = &mut *queue {
-            sq.append_results(items, has_more);
-        }
-
         Ok(())
     }
 }

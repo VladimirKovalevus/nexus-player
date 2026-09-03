@@ -153,6 +153,7 @@ const handleResultPlay = async (result: SearchResult, index: number) => {
       limit: limit.value,
       offset: offset.value,
       selectedIndex: index,
+      resultId: result.type === 'track' ? result.source?.url : result.id,
     });
   } catch (e) {
     console.warn('handle_search failed, falling back:', e);

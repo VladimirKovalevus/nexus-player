@@ -140,14 +140,8 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                         {
                             use nexus_player_backend::playlist::playback_queue::ActiveQueue;
                             let mut queue = state.lock_queue().await;
-                            match &mut *queue {
-                                ActiveQueue::Cursor(cq) => {
-                                    let _ = cq.next().await;
-                                }
-                                ActiveQueue::Search(sq) => {
-                                    sq.advance();
-                                }
-                            }
+                            let ActiveQueue::Cursor(cq) = &mut *queue;
+                            let _ = cq.next().await;
                         }
                         emit_state_update = true;
                         FrontendEvent::PlaybackStarted { track_id: track.id }

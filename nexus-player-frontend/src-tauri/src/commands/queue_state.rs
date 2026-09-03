@@ -79,53 +79,31 @@ pub(crate) fn build_queue_state_dto(
 ) -> Result<QueueStateDto> {
     use nexus_player_backend::playlist::playback_queue::ActiveQueue;
 
-    match queue {
-        ActiveQueue::Cursor(cq) => {
-            let (rows, current_index) = cq.snapshot();
-            let search_context = match &cq.context {
-                Some(ContainerContext::SearchQuery { system, query, .. }) => {
-                    Some(SearchContextDto {
-                        system: system.clone(),
-                        query: query.clone(),
-                    })
-                }
-                _ => None,
-            };
+    let ActiveQueue::Cursor(cq) = queue;
+    let (rows, current_index) = cq.snapshot();
+    let search_context = match &cq.context {
+        Some(ContainerContext::SearchQuery { system, query, .. }) => Some(SearchContextDto {
+            system: system.clone(),
+            query: query.clone(),
+        }),
+        _ => None,
+    };
 
-            Ok(QueueStateDto {
-                entries: rows.into_iter().map(entry_dto).collect(),
-                current_position: current_index.map(|idx| CurrentPositionDto {
-                    item_index: idx,
-                    track_within_container: None,
-                }),
-                repeat_mode: repeat_mode_label(cq.repeat_mode),
-                shuffle_enabled: cq.shuffle_enabled,
-                search_context,
-                radio_mode: radio_mode_label(cq),
-            })
-        }
-        ActiveQueue::Search(sq) => {
-            let (entries, position) = sq.snapshot();
-
-            Ok(QueueStateDto {
-                entries: entries.into_iter().map(entry_dto).collect(),
-                current_position: position.map(|p| CurrentPositionDto {
-                    item_index: p.item_index,
-                    track_within_container: p.track_within_container,
-                }),
-                repeat_mode: repeat_mode_label(sq.repeat_mode),
-                shuffle_enabled: sq.shuffle_enabled,
-                search_context: Some(SearchContextDto {
-                    system: sq.system.clone(),
-                    query: sq.query.clone(),
-                }),
-                radio_mode: None,
-            })
-        }
-    }
+    Ok(QueueStateDto {
+        entries: rows.into_iter().map(entry_dto).collect(),
+        current_position: current_index.map(|idx| CurrentPositionDto {
+            item_index: idx,
+            track_within_container: None,
+        }),
+        repeat_mode: repeat_mode_label(cq.repeat_mode),
+        shuffle_enabled: cq.shuffle_enabled,
+        search_context,
+        radio_mode: radio_mode_label(cq),
+    })
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_search(
     state: State<'_, Arc<AppState>>,
     system: String,
@@ -134,6 +112,7 @@ pub async fn handle_search(
     limit: Option<usize>,
     offset: Option<usize>,
     selected_index: usize,
+    result_id: Option<String>,
 ) -> Result<()> {
     use nexus_player_backend::streaming::types::ContentType;
 
@@ -153,6 +132,7 @@ pub async fn handle_search(
             limit.unwrap_or(50),
             offset.unwrap_or(0),
             selected_index,
+            result_id,
         )
         .await?;
 
@@ -164,7 +144,7 @@ pub async fn expand_queue_container(
     state: State<'_, Arc<AppState>>,
     item_index: usize,
 ) -> Result<QueueStateDto> {
-    state.expand_search_container(item_index).await?;
+    state.expand_queue_container(item_index).await?;
 
     let queue = state.lock_queue().await;
     build_queue_state_dto(&queue)

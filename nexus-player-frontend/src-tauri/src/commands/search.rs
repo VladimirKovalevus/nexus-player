@@ -113,20 +113,10 @@ pub async fn handle_streaming_track(
                         if should_play {
                             state.add_track_and_play(audio_track).await?;
                         } else {
-                            use nexus_player_backend::playlist::playback_queue::{
-                                ActiveQueue, CursorQueue,
-                            };
+                            use nexus_player_backend::playlist::playback_queue::ActiveQueue;
                             let mut queue = state.lock_queue().await;
-                            match &mut *queue {
-                                ActiveQueue::Cursor(cq) => {
-                                    cq.add_track(audio_track);
-                                }
-                                _ => {
-                                    let mut cq = CursorQueue::new();
-                                    cq.add_track(audio_track);
-                                    *queue = ActiveQueue::Cursor(Box::new(cq));
-                                }
-                            }
+                            let ActiveQueue::Cursor(cq) = &mut *queue;
+                            cq.add_track(audio_track);
                             tracing::info!("Track added to queue");
                         }
                     }

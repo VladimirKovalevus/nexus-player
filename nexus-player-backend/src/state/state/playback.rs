@@ -1,5 +1,5 @@
 use super::AppState;
-use crate::playlist::playback_queue::{ActiveQueue, NextResult, RepeatMode};
+use crate::playlist::playback_queue::{ActiveQueue, RepeatMode};
 
 impl AppState {
     // --- Playback Control ---
@@ -7,91 +7,51 @@ impl AppState {
     pub async fn play_next(&self) {
         let cancel = self.begin_exclusive_op().await;
         loop {
-            let result = {
+            let next = {
                 let mut queue = self.queue.lock().await;
-                match &mut *queue {
-                    ActiveQueue::Cursor(cq) => match cq.next().await {
-                        Ok(Some(track)) => NextResult::Track(track),
-                        Ok(None) => NextResult::End,
-                        Err(e) => {
-                            tracing::error!("Error fetching next track: {}", e);
-                            NextResult::End
-                        }
-                    },
-                    ActiveQueue::Search(sq) => sq.advance(),
+                let ActiveQueue::Cursor(cq) = &mut *queue;
+                match cq.next().await {
+                    Ok(next) => next,
+                    Err(e) => {
+                        tracing::error!("Error fetching next track: {}", e);
+                        None
+                    }
                 }
             };
 
-            match result {
-                NextResult::Track(track) => {
-                    tracing::info!("Next track: {}", track.id);
-                    self.play_cancellable(Some(track), cancel).await;
-                    return;
-                }
-                NextResult::NeedExpand(idx) => {
-                    if let Err(e) = self.expand_search_container(idx).await {
-                        tracing::error!("Failed to expand container {}: {}", idx, e);
-                        self.play_cancellable(None, cancel).await;
-                        return;
-                    }
-                    let track = {
-                        let queue = self.queue.lock().await;
-                        match &*queue {
-                            ActiveQueue::Search(sq) => sq.current_track(),
-                            _ => None,
-                        }
-                    };
-                    self.play_cancellable(track, cancel).await;
-                    return;
-                }
-                NextResult::NeedMorePages => {
-                    if let Err(e) = self.fetch_more_search_results().await {
-                        tracing::error!("Failed to fetch more pages: {}", e);
-                        self.play_cancellable(None, cancel).await;
-                        return;
-                    }
-                    // Loop again — sq.advance() will now find the newly loaded item at current+1
-                }
-                NextResult::End => {
-                    let (repeat_mode, context, is_search) = {
-                        let queue = self.queue.lock().await;
-                        match &*queue {
-                            ActiveQueue::Cursor(cq) => (cq.repeat_mode, cq.context.clone(), false),
-                            ActiveQueue::Search(sq) => (sq.repeat_mode, None, true),
-                        }
-                    };
+            if let Some(track) = next {
+                tracing::info!("Next track: {}", track.id);
+                self.play_cancellable(Some(track), cancel).await;
+                return;
+            }
 
-                    tracing::info!(
-                        "End of queue reached. Repeat mode: {:?}, is_search: {}",
-                        repeat_mode,
-                        is_search
+            let (repeat_mode, context) = {
+                let queue = self.queue.lock().await;
+                let ActiveQueue::Cursor(cq) = &*queue;
+                (cq.repeat_mode, cq.context.clone())
+            };
+
+            tracing::info!("End of queue reached. Repeat mode: {:?}", repeat_mode);
+
+            if repeat_mode == RepeatMode::All {
+                if let Some(ctx) = context {
+                    tracing::info!("Restarting context queue: {:?}", ctx);
+                    if let Err(e) = self.fill_context_queue(ctx, &cancel).await {
+                        tracing::error!("Failed to restart queue for Repeat::All: {}", e);
+                    } else {
+                        tracing::info!("Queue restarted successfully. Continuing loop...");
+                        continue; // Loop again to get the first track of the restarted queue
+                    }
+                } else {
+                    tracing::warn!(
+                        "End reached with Repeat::All but no context available to restart"
                     );
-
-                    if repeat_mode == RepeatMode::All {
-                        if is_search {
-                            // SearchQueue handles it internally in advance(),
-                            // but if it returned End, maybe something is wrong or items are empty
-                            tracing::warn!("SearchQueue returned End even with Repeat::All");
-                        } else if let Some(ctx) = context {
-                            tracing::info!("Restarting context queue: {:?}", ctx);
-                            if let Err(e) = self.fill_context_queue(ctx, &cancel).await {
-                                tracing::error!("Failed to restart queue for Repeat::All: {}", e);
-                            } else {
-                                tracing::info!("Queue restarted successfully. Continuing loop...");
-                                continue; // Loop again to get the first track of the restarted queue
-                            }
-                        } else {
-                            tracing::warn!(
-                                "End reached with Repeat::All but no context available to restart"
-                            );
-                        }
-                    }
-
-                    tracing::info!("Playback truly ended.");
-                    self.play_cancellable(None, cancel).await;
-                    return;
                 }
             }
+
+            tracing::info!("Playback truly ended.");
+            self.play_cancellable(None, cancel).await;
+            return;
         }
     }
 
@@ -113,10 +73,7 @@ impl AppState {
     pub async fn preload_next_track(&self) {
         let next_track = {
             let queue = self.queue.lock().await;
-            match &*queue {
-                ActiveQueue::Cursor(cq) => cq.peek_next(),
-                ActiveQueue::Search(sq) => sq.peek_next(),
-            }
+            queue.peek_next()
         };
 
         if let Some(track) = next_track {
@@ -143,41 +100,16 @@ impl AppState {
 
     pub async fn play_previous(&self) {
         let cancel = self.begin_exclusive_op().await;
-        let result = {
+        let previous = {
             let mut queue = self.queue.lock().await;
-            match &mut *queue {
-                ActiveQueue::Cursor(cq) => match cq.previous() {
-                    Some(track) => NextResult::Track(track),
-                    None => NextResult::End,
-                },
-                ActiveQueue::Search(sq) => sq.previous(),
-            }
+            let ActiveQueue::Cursor(cq) = &mut *queue;
+            cq.previous()
         };
 
-        match result {
-            NextResult::Track(track) => {
-                tracing::info!("Previous track: {}", track.id);
-                self.play_cancellable(Some(track), cancel).await;
-            }
-            NextResult::NeedExpand(idx) => {
-                if let Err(e) = self.expand_search_container(idx).await {
-                    tracing::error!("Failed to expand container {}: {}", idx, e);
-                    self.play_cancellable(None, cancel).await;
-                    return;
-                }
-                let track = {
-                    let queue = self.queue.lock().await;
-                    match &*queue {
-                        ActiveQueue::Search(sq) => sq.current_track(),
-                        _ => None,
-                    }
-                };
-                self.play_cancellable(track, cancel).await;
-            }
-            _ => {
-                self.play_cancellable(None, cancel).await;
-            }
+        if let Some(track) = &previous {
+            tracing::info!("Previous track: {}", track.id);
         }
+        self.play_cancellable(previous, cancel).await;
     }
 
     pub async fn handle_track_finished(&self, track_id: usize) {

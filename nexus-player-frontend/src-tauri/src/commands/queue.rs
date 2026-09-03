@@ -30,47 +30,22 @@ pub async fn clear_queue(state: State<'_, Arc<AppState>>) -> Result<()> {
 pub async fn get_queue(state: State<'_, Arc<AppState>>) -> Result<Vec<TrackDto>> {
     use nexus_player_backend::playlist::playback_queue::ActiveQueue;
     let queue = state.lock_queue().await;
-    match &*queue {
-        ActiveQueue::Cursor(cq) => {
-            let (rows, _) = cq.snapshot();
-            let mut tracks = Vec::new();
-            for row in rows {
-                match row {
-                    nexus_player_backend::playlist::playback_queue::QueueEntry::Track(t) => {
-                        tracks.push(TrackDto::from(t));
-                    }
-                    nexus_player_backend::playlist::playback_queue::QueueEntry::Container {
-                        tracks: Some(ts),
-                        ..
-                    } => tracks.extend(ts.into_iter().map(TrackDto::from)),
-                    _ => {}
-                }
+    let ActiveQueue::Cursor(cq) = &*queue;
+    let (rows, _) = cq.snapshot();
+    let mut tracks = Vec::new();
+    for row in rows {
+        match row {
+            nexus_player_backend::playlist::playback_queue::QueueEntry::Track(t) => {
+                tracks.push(TrackDto::from(t));
             }
-            Ok(tracks)
-        }
-        ActiveQueue::Search(sq) => {
-            // Return flat list of tracks for compatibility
-            let (entries, _) = sq.snapshot();
-            let mut tracks = Vec::new();
-            for entry in entries {
-                match entry {
-                    nexus_player_backend::playlist::playback_queue::QueueEntry::Track(t) => {
-                        tracks.push(TrackDto::from(t));
-                    }
-                    nexus_player_backend::playlist::playback_queue::QueueEntry::Container {
-                        tracks: Some(ts),
-                        ..
-                    } => {
-                        for t in ts {
-                            tracks.push(TrackDto::from(t));
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            Ok(tracks)
+            nexus_player_backend::playlist::playback_queue::QueueEntry::Container {
+                tracks: Some(ts),
+                ..
+            } => tracks.extend(ts.into_iter().map(TrackDto::from)),
+            _ => {}
         }
     }
+    Ok(tracks)
 }
 
 #[tauri::command]
