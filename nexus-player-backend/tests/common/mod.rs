@@ -240,3 +240,78 @@ pub fn channel_result(id: &str) -> SearchResult {
         description: None,
     })
 }
+
+/// A library on a temporary file database (not `sqlite::memory:`, where every pooled
+/// connection would get its own database).
+pub struct TempLibrary {
+    pub service: Arc<nexus_player_backend::library::LibraryService>,
+    _dir: tempfile::TempDir,
+}
+
+impl TempLibrary {
+    pub async fn new() -> Self {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let service =
+            nexus_player_backend::library::LibraryService::new(&dir.path().join("test.db"))
+                .await
+                .expect("open library");
+        Self {
+            service: Arc::new(service),
+            _dir: dir,
+        }
+    }
+
+    pub async fn track(&self, title: &str) -> nexus_player_backend::library::TrackId {
+        use nexus_player_backend::library::models::{Metadata, Track};
+        use nexus_player_backend::library::{CacheStatus, TrackId, TrackSource};
+        let now = chrono::Utc::now();
+        let track = Track {
+            id: TrackId(0),
+            metadata: Metadata {
+                title: title.into(),
+                description: None,
+                artwork: None,
+            },
+            artist: Some("Artist".into()),
+            album: None,
+            album_artist: None,
+            year: None,
+            genre: None,
+            track_number: None,
+            source: TrackSource::External {
+                system: "bandcamp".into(),
+                id: format!("lib-{title}"),
+            },
+            cache: CacheStatus::None,
+            audio_info: None,
+            play_count: 0,
+            last_played: None,
+            added_at: now,
+            updated_at: now,
+            liked: false,
+            liked_position: None,
+            unavailable: false,
+        };
+        self.service.add_track(track).await.expect("add track")
+    }
+
+    pub async fn playlist(&self, title: &str) -> nexus_player_backend::library::PlaylistId {
+        use nexus_player_backend::library::models::{Metadata, Playlist};
+        use nexus_player_backend::library::PlaylistId;
+        let now = chrono::Utc::now();
+        self.service
+            .create_playlist(Playlist {
+                id: PlaylistId(0),
+                metadata: Metadata {
+                    title: title.into(),
+                    description: None,
+                    artwork: None,
+                },
+                creator: None,
+                created_at: now,
+                updated_at: now,
+            })
+            .await
+            .expect("create playlist")
+    }
+}
