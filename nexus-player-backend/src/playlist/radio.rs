@@ -13,7 +13,10 @@ use std::collections::HashSet;
 use crate::library::models::PlaylistItemKind;
 use crate::library::types::PlaylistId;
 use crate::library::LibraryService;
-use crate::playlist::cursor::{AppCursorResolver, RadioMode};
+use crate::playlist::cursor::RadioMode;
+use anyhow::Context;
+use std::future::Future;
+use std::pin::Pin;
 
 /// Builds the frozen radio order for `mode`. Returns raw track ids in play order,
 /// already shuffled and with unavailable tracks removed.
@@ -52,14 +55,11 @@ async fn build_playlists_order(library: &LibraryService) -> Result<Vec<i64>> {
     let mut blocks: Vec<Vec<i64>> = Vec::new();
 
     for playlist_id in root_playlist_ids(library).await? {
-        // Reuse the resolver's cycle-guarded recursion instead of re-implementing it.
-        let mut visited = HashSet::new();
-        let track_ids =
-            AppCursorResolver::flatten_playlist_tracks(library, playlist_id, &mut visited).await?;
+        let mut path = Vec::new();
+        let track_ids = flatten_playlist_tracks(library, playlist_id, &mut path).await?;
 
         let block: Vec<i64> = track_ids
             .into_iter()
-            .map(|id| id.0)
             .filter(|id| !unavailable.contains(id))
             .collect();
 
@@ -124,4 +124,38 @@ async fn unavailable_track_ids(library: &LibraryService) -> Result<HashSet<i64>>
         .filter(|t| t.unavailable)
         .map(|t| t.id.0)
         .collect())
+}
+
+/// Flattens a playlist into track ids, expanding nested playlists in place. `path` holds
+/// the playlists on the way down: one already on it is skipped (cycle guard), while a
+/// playlist reached again through another branch is expanded again.
+fn flatten_playlist_tracks<'a>(
+    library: &'a LibraryService,
+    playlist_id: PlaylistId,
+    path: &'a mut Vec<i64>,
+) -> Pin<Box<dyn Future<Output = Result<Vec<i64>>> + Send + 'a>> {
+    Box::pin(async move {
+        if path.contains(&playlist_id.0) {
+            return Ok(vec![]);
+        }
+        let pwi = library
+            .get_playlist_with_items(playlist_id)
+            .await?
+            .context("Playlist not found")?;
+
+        path.push(playlist_id.0);
+        let mut track_ids = Vec::new();
+        for item in pwi.items {
+            match item.item_kind {
+                PlaylistItemKind::Track => track_ids.push(item.item_id),
+                PlaylistItemKind::Playlist => {
+                    let nested =
+                        flatten_playlist_tracks(library, PlaylistId(item.item_id), path).await?;
+                    track_ids.extend(nested);
+                }
+            }
+        }
+        path.pop();
+        Ok(track_ids)
+    })
 }

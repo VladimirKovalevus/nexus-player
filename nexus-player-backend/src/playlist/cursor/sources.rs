@@ -3,7 +3,8 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use super::{ContainerContext, ContainerKind, ContainerMeta, CursorItem, CursorSource};
-use crate::library::types::TrackId as LibTrackId;
+use crate::library::models::PlaylistItemKind;
+use crate::library::types::{PlaylistId, TrackId as LibTrackId};
 use crate::library::LibraryService;
 use crate::streaming::error::StreamResult;
 use crate::streaming::types::{ContentType, SearchResult};
@@ -53,6 +54,69 @@ impl CursorSource for DbTrackCursor {
 
     fn has_more(&self) -> bool {
         self.index < self.track_ids.len()
+    }
+}
+
+/// A cursor over one local playlist's own items. Tracks are yielded as tracks and nested
+/// playlists as containers; a child's items are fetched only when the cursor enters it.
+pub struct LocalPlaylistSource {
+    library: Arc<LibraryService>,
+    playlist_id: PlaylistId,
+    items: Option<Vec<(PlaylistItemKind, i64)>>,
+    index: usize,
+}
+
+impl LocalPlaylistSource {
+    pub fn new(library: Arc<LibraryService>, playlist_id: PlaylistId) -> Self {
+        Self {
+            library,
+            playlist_id,
+            items: None,
+            index: 0,
+        }
+    }
+}
+
+#[async_trait]
+impl CursorSource for LocalPlaylistSource {
+    async fn next_batch(&mut self, limit: usize) -> Result<Vec<CursorItem>> {
+        if self.items.is_none() {
+            let pwi = self
+                .library
+                .get_playlist_with_items(self.playlist_id)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Playlist not found"))?;
+            self.items = Some(
+                pwi.items
+                    .into_iter()
+                    .map(|i| (i.item_kind, i.item_id))
+                    .collect(),
+            );
+        }
+        let items = self.items.as_deref().unwrap_or_default();
+
+        let mut batch = Vec::new();
+        while batch.len() < limit && self.index < items.len() {
+            let (kind, id) = items[self.index];
+            self.index += 1;
+            match kind {
+                PlaylistItemKind::Playlist => {
+                    batch.push(CursorItem::Container(ContainerContext::LocalPlaylist(id)));
+                }
+                PlaylistItemKind::Track => match self.library.get_track(LibTrackId(id)).await? {
+                    Some(t) => batch.push(CursorItem::Track(t.into())),
+                    None => tracing::debug!("LocalPlaylistSource: skipping missing track {id}"),
+                },
+            }
+        }
+        Ok(batch)
+    }
+
+    fn has_more(&self) -> bool {
+        match &self.items {
+            Some(items) => self.index < items.len(),
+            None => true,
+        }
     }
 }
 

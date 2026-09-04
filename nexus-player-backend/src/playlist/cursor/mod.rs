@@ -9,7 +9,8 @@ pub mod types;
 pub use engine::{CursorResolver, PlayerCursor};
 pub use resolver::AppCursorResolver;
 pub use sources::{
-    search_result_to_item, DbTrackCursor, ProviderCursor, SearchPageSource, StreamingSearchCursor,
+    search_result_to_item, DbTrackCursor, LocalPlaylistSource, ProviderCursor, SearchPageSource,
+    StreamingSearchCursor,
 };
 pub use types::{ContainerContext, ContainerKind, ContainerMeta, CursorItem, CursorRow, RadioMode};
 
