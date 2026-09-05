@@ -315,3 +315,40 @@ impl TempLibrary {
             .expect("create playlist")
     }
 }
+
+/// Serves an endless run of track results, `page_size` per request, and remembers how many
+/// results it has handed out.
+pub struct EndlessPages {
+    page_size: usize,
+    served: std::sync::atomic::AtomicUsize,
+}
+
+impl EndlessPages {
+    pub fn new(page_size: usize) -> Arc<Self> {
+        Arc::new(Self {
+            page_size,
+            served: std::sync::atomic::AtomicUsize::new(0),
+        })
+    }
+
+    pub fn served(&self) -> usize {
+        self.served.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+#[async_trait]
+impl SearchPageSource for EndlessPages {
+    async fn search(
+        &self,
+        _system: &str,
+        _content_type: Option<ContentType>,
+        _query: &str,
+        limit: usize,
+        offset: usize,
+    ) -> StreamResult<Vec<SearchResult>> {
+        let count = self.page_size.min(limit);
+        self.served
+            .fetch_add(count, std::sync::atomic::Ordering::SeqCst);
+        Ok((offset..offset + count).map(track_result).collect())
+    }
+}

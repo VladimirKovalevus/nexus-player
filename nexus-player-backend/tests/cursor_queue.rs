@@ -3,9 +3,10 @@ mod common;
 use std::sync::Arc;
 
 use common::{
-    album_result, channel_result, playlist_result, track_item, track_result, FakeResolver,
-    RecordingPages, ScriptedPages, VecSource,
+    album_result, channel_result, playlist_result, track_info, track_item, track_result,
+    EndlessPages, FakeResolver, RecordingPages, ScriptedPages, VecSource,
 };
+use nexus_player_backend::audio::types::Track;
 use nexus_player_backend::playlist::cursor::{
     ContainerContext, CursorItem, PlayerCursor, StreamingSearchCursor,
 };
@@ -491,4 +492,217 @@ async fn snapshot_current_index_follows_playback() {
         queue.prefetch(10).await.unwrap();
         assert_eq!(queue.snapshot().1, Some(expected));
     }
+}
+
+fn user_track(n: usize) -> Track {
+    track_info(n).into()
+}
+
+fn title_number(title: &str) -> usize {
+    title
+        .trim_start_matches("Title ")
+        .parse()
+        .expect("numbered title")
+}
+
+#[tokio::test]
+async fn added_track_plays_next_even_after_a_deep_prefetch() {
+    let resolver = FakeResolver::new();
+    let mut queue = numbered_search(100, &resolver);
+    queue.next().await.unwrap();
+    queue.prefetch(50).await.unwrap();
+
+    queue.add_track(user_track(900));
+
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 900");
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 1");
+}
+
+#[tokio::test]
+async fn two_added_tracks_play_in_order_before_the_lookahead_resumes() {
+    let resolver = FakeResolver::new();
+    let mut queue = numbered_search(100, &resolver);
+    queue.next().await.unwrap();
+    queue.prefetch(50).await.unwrap();
+
+    queue.add_track(user_track(900));
+    queue.add_track(user_track(901));
+
+    assert_eq!(
+        queue.peek_upcoming_tracks(3)[..2]
+            .iter()
+            .map(|t| t.title.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Title 900", "Title 901"]
+    );
+    let mut played = Vec::new();
+    for _ in 0..3 {
+        played.push(queue.next().await.unwrap().unwrap().title);
+    }
+    assert_eq!(played, vec!["Title 900", "Title 901", "Title 1"]);
+}
+
+#[tokio::test]
+async fn shuffle_on_a_local_playlist_draws_from_the_whole_remainder_and_plays_each_track_once() {
+    let resolver = FakeResolver::new();
+    let mut queue = CursorQueue::new();
+    queue.context = Some(ContainerContext::LocalPlaylist(1));
+    queue.set_cursor(PlayerCursor::new(
+        Box::new(VecSource::new((0..200).map(track_item).collect())),
+        resolver.clone(),
+    ));
+    queue.shuffle_enabled = true;
+
+    let mut drawn = Vec::new();
+    while let Some(track) = queue.next().await.unwrap() {
+        drawn.push(title_number(&track.title));
+    }
+
+    let mut sorted = drawn.clone();
+    sorted.sort_unstable();
+    assert_eq!(sorted, (0..200).collect::<Vec<_>>());
+    assert!(
+        drawn.iter().take(30).any(|n| *n >= 50),
+        "the first draws never left the first window: {drawn:?}"
+    );
+}
+
+#[tokio::test]
+async fn shuffle_on_an_endless_search_picks_from_the_lookahead_window_without_draining() {
+    let resolver = FakeResolver::new();
+    let pages = EndlessPages::new(20);
+    let source = StreamingSearchCursor::with_source(
+        pages.clone(),
+        "bandcamp".into(),
+        "band".into(),
+        ContentType::Track,
+    );
+    let mut queue = CursorQueue::new();
+    queue.context = Some(ContainerContext::SearchQuery {
+        system: "bandcamp".into(),
+        query: "band".into(),
+        content_type: ContentType::Track,
+    });
+    queue.set_cursor(PlayerCursor::new(Box::new(source), resolver.clone()));
+    queue.shuffle_enabled = true;
+    queue.prefetch(20).await.unwrap();
+
+    let window: Vec<String> = queue
+        .peek_upcoming_tracks(20)
+        .into_iter()
+        .map(|t| t.title)
+        .collect();
+    let first = queue.next().await.unwrap().unwrap();
+
+    assert!(
+        window.contains(&first.title),
+        "{} not in window",
+        first.title
+    );
+    for _ in 0..5 {
+        assert!(queue.next().await.unwrap().is_some());
+    }
+    assert!(
+        pages.served() <= 200,
+        "shuffle drained the source: {} results served",
+        pages.served()
+    );
+}
+
+#[tokio::test]
+async fn shuffle_picking_a_container_row_expands_only_that_album_and_plays_its_first_track() {
+    let resolver = FakeResolver::new();
+    for k in 1..=5 {
+        album_tracks(
+            &resolver,
+            &format!("a{k}"),
+            &[k * 100 + 1, k * 100 + 2, k * 100 + 3],
+        );
+    }
+    let results: Vec<SearchResult> = (1..=5)
+        .map(|k| album_result(&format!("a{k}"), &format!("Album {k}"), 3))
+        .collect();
+    let mut queue = search_queue(results, &resolver);
+    queue.shuffle_enabled = true;
+
+    let played = queue.next().await.unwrap().expect("a track");
+
+    let k = title_number(&played.title) / 100;
+    assert_eq!(played.title, format!("Title {}", k * 100 + 1));
+    let resolved = resolver.resolved_contexts();
+    assert_eq!(resolved.len(), 1, "resolved: {resolved:?}");
+    assert!(matches!(&resolved[0],
+        ContainerContext::ExternalAlbum { id, .. } if *id == format!("a{k}")));
+    let rows = labels(&queue);
+    assert!(!rows.contains(&format!("[Album {k}]")));
+    assert!(rows.contains(&format!("Title {}", k * 100 + 2)));
+    assert!(rows.contains(&format!("Title {}", k * 100 + 3)));
+    assert_eq!(rows.iter().filter(|r| r.starts_with("[Album")).count(), 4);
+}
+
+/// Current Title 0, user rows 900 and 901, lookahead Title 1..=10.
+async fn queue_with_user_rows() -> CursorQueue {
+    let resolver = FakeResolver::new();
+    let mut queue = numbered_search(20, &resolver);
+    queue.next().await.expect("first track");
+    queue.prefetch(10).await.expect("prefetch");
+    queue.add_track(user_track(900));
+    queue.add_track(user_track(901));
+    queue
+}
+
+#[tokio::test]
+async fn user_queued_tracks_are_listed_before_the_lookahead_in_the_snapshot() {
+    let queue = queue_with_user_rows().await;
+
+    let rows = labels(&queue);
+    assert_eq!(
+        &rows[..5],
+        ["Title 0", "Title 900", "Title 901", "Title 1", "Title 2"]
+    );
+    assert_eq!(queue.snapshot().1, Some(0));
+}
+
+#[tokio::test]
+async fn removing_the_second_user_queued_row_removes_only_that_track() {
+    let mut queue = queue_with_user_rows().await;
+    let before = labels(&queue);
+
+    let removed = queue.remove_track(2).expect("a track");
+
+    assert_eq!(removed.title, "Title 901");
+    let mut expected = before;
+    expected.remove(2);
+    assert_eq!(labels(&queue), expected);
+}
+
+#[tokio::test]
+async fn removing_the_third_lookahead_row_removes_that_lookahead_track() {
+    let mut queue = queue_with_user_rows().await;
+    let before = labels(&queue);
+
+    let removed = queue.remove_track(5).expect("a track");
+
+    assert_eq!(removed.title, "Title 3");
+    let mut expected = before;
+    expected.remove(5);
+    assert_eq!(labels(&queue), expected);
+    assert_eq!(&labels(&queue)[1..3], ["Title 900", "Title 901"]);
+}
+
+#[tokio::test]
+async fn jumping_to_the_second_lookahead_row_moves_skipped_rows_to_history_in_order() {
+    let mut queue = queue_with_user_rows().await;
+
+    queue.jump_to(4);
+
+    assert_eq!(current_label(&queue).as_deref(), Some("Title 2"));
+    assert_eq!(queue.snapshot().1, Some(4));
+    let rows = labels(&queue);
+    assert_eq!(
+        &rows[..5],
+        ["Title 0", "Title 900", "Title 901", "Title 1", "Title 2"]
+    );
+    assert_eq!(queue.history.len(), 4);
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 3");
 }
