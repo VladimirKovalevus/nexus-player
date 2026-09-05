@@ -33,14 +33,18 @@ enum UpcomingRow {
 enum RowLocation {
     History(usize),
     Current,
-    Upcoming(usize),
+    User(usize),
+    Lookahead(usize),
 }
 
 pub struct CursorQueue {
     pub history: Vec<Track>,
     pub current_track: Option<Track>,
     pub cursor: Option<PlayerCursor>,
-    upcoming: VecDeque<UpcomingRow>,
+    /// Tracks the user added; they play before the lookahead.
+    user_queue: VecDeque<Track>,
+    /// Rows prefetched from the cursor.
+    lookahead: VecDeque<UpcomingRow>,
     pub repeat_mode: RepeatMode,
     pub shuffle_enabled: bool,
     pub context: Option<ContainerContext>,
@@ -63,7 +67,8 @@ impl CursorQueue {
             history: Vec::new(),
             current_track: None,
             cursor: None,
-            upcoming: VecDeque::new(),
+            user_queue: VecDeque::new(),
+            lookahead: VecDeque::new(),
             repeat_mode: RepeatMode::Off,
             shuffle_enabled: false,
             context: None,
@@ -85,8 +90,21 @@ impl CursorQueue {
             Some(RowLocation::Current)
         } else {
             let i = row - history_len - current_len;
-            (i < self.upcoming.len()).then_some(RowLocation::Upcoming(i))
+            if i < self.user_queue.len() {
+                Some(RowLocation::User(i))
+            } else {
+                let j = i - self.user_queue.len();
+                (j < self.lookahead.len()).then_some(RowLocation::Lookahead(j))
+            }
         }
+    }
+
+    /// A finite local source is flattened for shuffle; anything else is paged or endless.
+    fn is_finite_source(&self) -> bool {
+        matches!(
+            self.context,
+            None | Some(ContainerContext::LocalPlaylist(_))
+        )
     }
 
     /// Pulls one more row from the cursor into the upcoming part.
@@ -96,9 +114,9 @@ impl CursorQueue {
             return Ok(false);
         };
         match cursor.next_row(keep).await? {
-            Some(CursorRow::Track(track)) => self.upcoming.push_back(UpcomingRow::Track(track)),
+            Some(CursorRow::Track(track)) => self.lookahead.push_back(UpcomingRow::Track(track)),
             Some(CursorRow::Container { context, meta }) => {
-                self.upcoming.push_back(UpcomingRow::Container {
+                self.lookahead.push_back(UpcomingRow::Container {
                     context,
                     info: meta,
                     tracks: None,
@@ -113,7 +131,7 @@ impl CursorQueue {
     async fn container_tracks(&self, i: usize) -> Result<Vec<Track>> {
         let Some(UpcomingRow::Container {
             context, tracks, ..
-        }) = self.upcoming.get(i)
+        }) = self.lookahead.get(i)
         else {
             anyhow::bail!("Row is not a container");
         };
@@ -129,9 +147,9 @@ impl CursorQueue {
     async fn expand_in_place(&mut self, i: usize) -> Result<usize> {
         let tracks = self.container_tracks(i).await?;
         let count = tracks.len();
-        self.upcoming.remove(i);
+        self.lookahead.remove(i);
         for (offset, track) in tracks.into_iter().enumerate() {
-            self.upcoming.insert(i + offset, UpcomingRow::Track(track));
+            self.lookahead.insert(i + offset, UpcomingRow::Track(track));
         }
         Ok(count)
     }
@@ -139,10 +157,10 @@ impl CursorQueue {
     /// Takes upcoming row `i` as the current track. A container is replaced by its
     /// tracks and its first one is taken; an empty container yields `None`.
     async fn enter_row(&mut self, i: usize) -> Result<Option<Track>> {
-        if matches!(self.upcoming.get(i), Some(UpcomingRow::Container { .. })) {
+        if matches!(self.lookahead.get(i), Some(UpcomingRow::Container { .. })) {
             self.expand_in_place(i).await?;
         }
-        match self.upcoming.remove(i) {
+        match self.lookahead.remove(i) {
             Some(UpcomingRow::Track(track)) => Ok(Some(track)),
             _ => Ok(None),
         }
@@ -161,20 +179,30 @@ impl CursorQueue {
             self.history.push(track);
         }
 
+        if let Some(track) = self.user_queue.pop_front() {
+            self.current_track = Some(track.clone());
+            return Ok(Some(track));
+        }
+
+        if self.shuffle_enabled && self.is_finite_source() {
+            // Flatten the remainder so shuffle draws from all of it
+            self.prefetch(usize::MAX).await?;
+        }
+
         loop {
-            if self.upcoming.is_empty() {
+            if self.lookahead.is_empty() {
                 if self.shuffle_enabled {
                     // Prefetch a window so there is something to shuffle
                     self.prefetch(50).await?;
                 } else {
                     self.fetch_one().await?;
                 }
-                if self.upcoming.is_empty() {
+                if self.lookahead.is_empty() {
                     return Ok(None);
                 }
             }
             let idx = if self.shuffle_enabled {
-                thread_rng().gen_range(0..self.upcoming.len())
+                thread_rng().gen_range(0..self.lookahead.len())
             } else {
                 0
             };
@@ -198,7 +226,7 @@ impl CursorQueue {
 
         // Push current track back to the front of the upcoming rows to allow "going forward" again
         if let Some(current) = self.current_track.take() {
-            self.upcoming.push_front(UpcomingRow::Track(current));
+            self.user_queue.push_front(current);
         }
 
         self.current_track = Some(prev.clone());
@@ -206,19 +234,23 @@ impl CursorQueue {
     }
 
     pub fn peek_next(&self) -> Option<Track> {
-        match self.upcoming.front() {
+        if let Some(track) = self.user_queue.front() {
+            return Some(track.clone());
+        }
+        match self.lookahead.front() {
             Some(UpcomingRow::Track(track)) => Some(track.clone()),
             _ => None,
         }
     }
 
     pub fn peek_upcoming_tracks(&self, limit: usize) -> Vec<Track> {
-        self.upcoming
+        self.user_queue
             .iter()
-            .filter_map(|row| match row {
+            .cloned()
+            .chain(self.lookahead.iter().map_while(|row| match row {
                 UpcomingRow::Track(track) => Some(track.clone()),
                 UpcomingRow::Container { .. } => None,
-            })
+            }))
             .take(limit)
             .collect()
     }
@@ -228,7 +260,7 @@ impl CursorQueue {
     }
 
     pub fn add_track(&mut self, track: Track) {
-        self.upcoming.push_back(UpcomingRow::Track(track));
+        self.user_queue.push_back(track);
     }
 
     /// Removes snapshot row `index`; a container row removes the whole container.
@@ -237,7 +269,8 @@ impl CursorQueue {
         match self.locate(index)? {
             RowLocation::History(i) => Some(self.history.remove(i)),
             RowLocation::Current => self.current_track.take(),
-            RowLocation::Upcoming(i) => match self.upcoming.remove(i)? {
+            RowLocation::User(i) => self.user_queue.remove(i),
+            RowLocation::Lookahead(i) => match self.lookahead.remove(i)? {
                 UpcomingRow::Track(track) => Some(track),
                 UpcomingRow::Container { .. } => None,
             },
@@ -248,32 +281,44 @@ impl CursorQueue {
     /// Container rows are not valid targets (see `play_queue_item`) and, when jumped
     /// over, are dropped: history holds tracks only.
     pub fn jump_to(&mut self, index: usize) {
-        let is_track = match self.locate(index) {
-            Some(RowLocation::History(_)) => true,
-            Some(RowLocation::Upcoming(i)) => matches!(self.upcoming[i], UpcomingRow::Track(_)),
-            Some(RowLocation::Current) | None => false,
-        };
-        if !is_track {
-            return;
+        match self.locate(index) {
+            Some(RowLocation::History(i)) => {
+                // Replay order: the tracks after the target, then the old current.
+                let mut replay: Vec<Track> = self.history.split_off(i + 1);
+                let Some(target) = self.history.pop() else {
+                    return;
+                };
+                replay.extend(self.current_track.take());
+                for track in replay.into_iter().rev() {
+                    self.user_queue.push_front(track);
+                }
+                self.current_track = Some(target);
+            }
+            Some(RowLocation::User(i)) => {
+                let Some(target) = self.user_queue.remove(i) else {
+                    return;
+                };
+                self.history.extend(self.current_track.take());
+                self.history.extend(self.user_queue.drain(..i));
+                self.current_track = Some(target);
+            }
+            Some(RowLocation::Lookahead(j)) => {
+                if !matches!(self.lookahead.get(j), Some(UpcomingRow::Track(_))) {
+                    return;
+                }
+                self.history.extend(self.current_track.take());
+                self.history.extend(self.user_queue.drain(..));
+                for row in self.lookahead.drain(..j) {
+                    if let UpcomingRow::Track(track) = row {
+                        self.history.push(track);
+                    }
+                }
+                if let Some(UpcomingRow::Track(target)) = self.lookahead.pop_front() {
+                    self.current_track = Some(target);
+                }
+            }
+            Some(RowLocation::Current) | None => {}
         }
-        let mut tracks: Vec<Track> = std::mem::take(&mut self.history);
-        tracks.extend(self.current_track.take());
-        let upcoming: Vec<UpcomingRow> = self.upcoming.drain(..).collect();
-        let mut rows: Vec<UpcomingRow> = tracks.into_iter().map(UpcomingRow::Track).collect();
-        rows.extend(upcoming);
-        let after = rows.split_off(index + 1);
-        let Some(UpcomingRow::Track(target)) = rows.pop() else {
-            return;
-        };
-        self.history = rows
-            .into_iter()
-            .filter_map(|row| match row {
-                UpcomingRow::Track(track) => Some(track),
-                UpcomingRow::Container { .. } => None,
-            })
-            .collect();
-        self.current_track = Some(target);
-        self.upcoming = after.into();
     }
 
     /// Plays snapshot row `index`. A container row is replaced in place by its tracks and
@@ -285,8 +330,8 @@ impl CursorQueue {
         track_index: Option<usize>,
     ) -> Result<Option<Track>> {
         let mut target = index;
-        if let Some(RowLocation::Upcoming(i)) = self.locate(index) {
-            if matches!(self.upcoming.get(i), Some(UpcomingRow::Container { .. })) {
+        if let Some(RowLocation::Lookahead(i)) = self.locate(index) {
+            if matches!(self.lookahead.get(i), Some(UpcomingRow::Container { .. })) {
                 let count = self.expand_in_place(i).await?;
                 if count == 0 {
                     return Ok(None);
@@ -301,11 +346,11 @@ impl CursorQueue {
     /// Previews container row `index`: fetches its tracks and attaches them to the row
     /// without changing row indices or playback.
     pub async fn expand_container(&mut self, index: usize) -> Result<()> {
-        let Some(RowLocation::Upcoming(i)) = self.locate(index) else {
+        let Some(RowLocation::Lookahead(i)) = self.locate(index) else {
             anyhow::bail!("Row {index} is not a container");
         };
         let fetched = self.container_tracks(i).await?;
-        if let Some(UpcomingRow::Container { tracks, .. }) = self.upcoming.get_mut(i) {
+        if let Some(UpcomingRow::Container { tracks, .. }) = self.lookahead.get_mut(i) {
             *tracks = Some(fetched);
         }
         Ok(())
@@ -360,7 +405,7 @@ impl CursorQueue {
             anyhow::bail!("No search result at position {position}");
         }
         if let Some(expected) = expected_id {
-            let actual = match self.upcoming.front() {
+            let actual = match self.lookahead.front() {
                 Some(UpcomingRow::Track(track)) => match &track.source {
                     crate::audio::types::TrackSource::External { id, .. } => Some(id.clone()),
                     _ => None,
@@ -395,7 +440,7 @@ impl CursorQueue {
     /// row counts as one). Returns how many rows were added.
     pub async fn prefetch(&mut self, limit: usize) -> Result<usize> {
         let mut count = 0;
-        while self.upcoming.len() < limit && self.fetch_one().await? {
+        while self.lookahead.len() < limit && self.fetch_one().await? {
             count += 1;
         }
         Ok(count)
@@ -405,7 +450,8 @@ impl CursorQueue {
         self.history.clear();
         self.current_track = None;
         self.cursor = None;
-        self.upcoming.clear();
+        self.user_queue.clear();
+        self.lookahead.clear();
         // Must be reset too: a stale context would make Repeat::All resurrect the old
         // source, and would misreport the active radio session to the UI.
         self.context = None;
@@ -420,13 +466,16 @@ impl CursorQueue {
     /// the UI sends back (`remove_track`, `jump_to`, `play_queue_item`, `expand_container`)
     /// refers to this list.
     pub fn snapshot(&self) -> (Vec<QueueEntry>, Option<usize>) {
-        let mut rows = Vec::with_capacity(self.history.len() + 1 + self.upcoming.len());
+        let mut rows = Vec::with_capacity(
+            self.history.len() + 1 + self.user_queue.len() + self.lookahead.len(),
+        );
         rows.extend(self.history.iter().cloned().map(QueueEntry::Track));
         let current_index = self.current_track.as_ref().map(|current| {
             rows.push(QueueEntry::Track(current.clone()));
             rows.len() - 1
         });
-        rows.extend(self.upcoming.iter().map(|row| match row {
+        rows.extend(self.user_queue.iter().cloned().map(QueueEntry::Track));
+        rows.extend(self.lookahead.iter().map(|row| match row {
             UpcomingRow::Track(track) => QueueEntry::Track(track.clone()),
             UpcomingRow::Container { info, tracks, .. } => QueueEntry::Container {
                 info: info.clone(),
