@@ -29,6 +29,11 @@ enum UpcomingRow {
     },
 }
 
+/// History entries kept in memory; older ones are dropped.
+const HISTORY_CAP: usize = 500;
+/// History entries `snapshot()` sends to the UI.
+const HISTORY_WINDOW: usize = 50;
+
 /// Where a snapshot row index points.
 enum RowLocation {
     History(usize),
@@ -80,16 +85,31 @@ impl CursorQueue {
         matches!(self.context, Some(ContainerContext::SearchQuery { .. }))
     }
 
-    /// The one place that translates a snapshot row index (history, current, upcoming).
+    /// How many history rows a snapshot shows.
+    fn history_window_len(&self) -> usize {
+        self.history.len().min(HISTORY_WINDOW)
+    }
+
+    /// Drops the oldest history entries beyond the cap.
+    fn trim_history(&mut self) {
+        if self.history.len() > HISTORY_CAP {
+            let excess = self.history.len() - HISTORY_CAP;
+            self.history.drain(..excess);
+        }
+    }
+
+    /// The one place that translates a snapshot row index (windowed history, current,
+    /// upcoming) into a position in the queue.
     fn locate(&self, row: usize) -> Option<RowLocation> {
-        let history_len = self.history.len();
+        let window_len = self.history_window_len();
+        let offset = self.history.len() - window_len;
         let current_len = usize::from(self.current_track.is_some());
-        if row < history_len {
-            Some(RowLocation::History(row))
-        } else if row < history_len + current_len {
+        if row < window_len {
+            Some(RowLocation::History(row + offset))
+        } else if row < window_len + current_len {
             Some(RowLocation::Current)
         } else {
-            let i = row - history_len - current_len;
+            let i = row - window_len - current_len;
             if i < self.user_queue.len() {
                 Some(RowLocation::User(i))
             } else {
@@ -177,6 +197,7 @@ impl CursorQueue {
         // Save current track to history before moving to next
         if let Some(track) = self.current_track.take() {
             self.history.push(track);
+            self.trim_history();
         }
 
         if let Some(track) = self.user_queue.pop_front() {
@@ -189,6 +210,7 @@ impl CursorQueue {
             self.prefetch(usize::MAX).await?;
         }
 
+        let mut restarted = false;
         loop {
             if self.lookahead.is_empty() {
                 if self.shuffle_enabled {
@@ -198,6 +220,10 @@ impl CursorQueue {
                     self.fetch_one().await?;
                 }
                 if self.lookahead.is_empty() {
+                    if self.repeat_mode == RepeatMode::All && !restarted && self.restart().await? {
+                        restarted = true;
+                        continue;
+                    }
                     return Ok(None);
                 }
             }
@@ -212,6 +238,19 @@ impl CursorQueue {
                 return Ok(Some(track));
             }
         }
+    }
+
+    /// Repeat All: rebuilds the cursor from `context`. This is the only restart path.
+    /// It calls the resolver while the caller holds the queue lock, which is acceptable
+    /// because only local and search contexts restart and their roots resolve quickly.
+    async fn restart(&mut self) -> Result<bool> {
+        let (Some(context), Some(cursor)) = (self.context.clone(), &self.cursor) else {
+            return Ok(false);
+        };
+        let resolver = cursor.resolver();
+        self.cursor = Some(PlayerCursor::from_context(context, resolver).await?);
+        self.lookahead.clear();
+        Ok(true)
     }
 
     pub fn previous(&mut self) -> Option<Track> {
@@ -301,6 +340,7 @@ impl CursorQueue {
                 self.history.extend(self.current_track.take());
                 self.history.extend(self.user_queue.drain(..i));
                 self.current_track = Some(target);
+                self.trim_history();
             }
             Some(RowLocation::Lookahead(j)) => {
                 if !matches!(self.lookahead.get(j), Some(UpcomingRow::Track(_))) {
@@ -316,6 +356,7 @@ impl CursorQueue {
                 if let Some(UpcomingRow::Track(target)) = self.lookahead.pop_front() {
                     self.current_track = Some(target);
                 }
+                self.trim_history();
             }
             Some(RowLocation::Current) | None => {}
         }
@@ -466,10 +507,11 @@ impl CursorQueue {
     /// the UI sends back (`remove_track`, `jump_to`, `play_queue_item`, `expand_container`)
     /// refers to this list.
     pub fn snapshot(&self) -> (Vec<QueueEntry>, Option<usize>) {
+        let shown = &self.history[self.history.len() - self.history_window_len()..];
         let mut rows = Vec::with_capacity(
-            self.history.len() + 1 + self.user_queue.len() + self.lookahead.len(),
+            shown.len() + 1 + self.user_queue.len() + self.lookahead.len(),
         );
-        rows.extend(self.history.iter().cloned().map(QueueEntry::Track));
+        rows.extend(shown.iter().cloned().map(QueueEntry::Track));
         let current_index = self.current_track.as_ref().map(|current| {
             rows.push(QueueEntry::Track(current.clone()));
             rows.len() - 1

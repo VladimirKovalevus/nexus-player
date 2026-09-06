@@ -30,6 +30,11 @@ impl PlayerCursor {
         }
     }
 
+    /// The resolver this cursor expands containers with.
+    pub fn resolver(&self) -> Arc<dyn CursorResolver> {
+        self.resolver.clone()
+    }
+
     /// Helper to create a cursor starting from a context.
     pub async fn from_context(
         context: ContainerContext,

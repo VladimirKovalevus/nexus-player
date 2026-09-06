@@ -1,58 +1,29 @@
 use super::AppState;
-use crate::playlist::playback_queue::{ActiveQueue, RepeatMode};
+use crate::playlist::playback_queue::ActiveQueue;
 
 impl AppState {
     // --- Playback Control ---
 
     pub async fn play_next(&self) {
         let cancel = self.begin_exclusive_op().await;
-        loop {
-            let next = {
-                let mut queue = self.queue.lock().await;
-                let ActiveQueue::Cursor(cq) = &mut *queue;
-                match cq.next().await {
-                    Ok(next) => next,
-                    Err(e) => {
-                        tracing::error!("Error fetching next track: {}", e);
-                        None
-                    }
-                }
-            };
-
-            if let Some(track) = next {
-                tracing::info!("Next track: {}", track.id);
-                self.play_cancellable(Some(track), cancel).await;
-                return;
-            }
-
-            let (repeat_mode, context) = {
-                let queue = self.queue.lock().await;
-                let ActiveQueue::Cursor(cq) = &*queue;
-                (cq.repeat_mode, cq.context.clone())
-            };
-
-            tracing::info!("End of queue reached. Repeat mode: {:?}", repeat_mode);
-
-            if repeat_mode == RepeatMode::All {
-                if let Some(ctx) = context {
-                    tracing::info!("Restarting context queue: {:?}", ctx);
-                    if let Err(e) = self.fill_context_queue(ctx, &cancel).await {
-                        tracing::error!("Failed to restart queue for Repeat::All: {}", e);
-                    } else {
-                        tracing::info!("Queue restarted successfully. Continuing loop...");
-                        continue; // Loop again to get the first track of the restarted queue
-                    }
-                } else {
-                    tracing::warn!(
-                        "End reached with Repeat::All but no context available to restart"
-                    );
+        // Repeat All restarts inside `CursorQueue::next`, so there is one restart path.
+        let next = {
+            let mut queue = self.queue.lock().await;
+            let ActiveQueue::Cursor(cq) = &mut *queue;
+            match cq.next().await {
+                Ok(next) => next,
+                Err(e) => {
+                    tracing::error!("Error fetching next track: {}", e);
+                    None
                 }
             }
+        };
 
-            tracing::info!("Playback truly ended.");
-            self.play_cancellable(None, cancel).await;
-            return;
+        match &next {
+            Some(track) => tracing::info!("Next track: {}", track.id),
+            None => tracing::info!("Playback truly ended."),
         }
+        self.play_cancellable(next, cancel).await;
     }
 
     pub async fn play_current(&self) -> anyhow::Result<()> {
