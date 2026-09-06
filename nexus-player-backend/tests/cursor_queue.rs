@@ -706,3 +706,191 @@ async fn jumping_to_the_second_lookahead_row_moves_skipped_rows_to_history_in_or
     assert_eq!(queue.history.len(), 4);
     assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 3");
 }
+
+// === Repeat, previous inside containers, bounded history ===
+
+/// Local playlist 1 = `[Container(7), Title 2]`, playlist 7 = `[Title 10, Title 11]`.
+fn nested_local_queue(resolver: &Arc<FakeResolver>) -> CursorQueue {
+    resolver.serve_local_playlist(
+        1,
+        vec![
+            CursorItem::Container(ContainerContext::LocalPlaylist(7)),
+            track_item(2),
+        ],
+    );
+    resolver.serve_local_playlist(7, vec![track_item(10), track_item(11)]);
+    let source = VecSource::new(vec![
+        CursorItem::Container(ContainerContext::LocalPlaylist(7)),
+        track_item(2),
+    ]);
+    let mut queue = CursorQueue::new();
+    queue.context = Some(ContainerContext::LocalPlaylist(1));
+    queue.set_cursor(PlayerCursor::new(Box::new(source), resolver.clone()));
+    queue
+}
+
+#[tokio::test]
+async fn repeat_one_replays_the_current_track_on_every_next() {
+    let resolver = FakeResolver::new();
+    let mut queue = numbered_search(5, &resolver);
+    queue.next().await.unwrap();
+    queue.next().await.unwrap();
+    queue.repeat_mode = RepeatMode::One;
+
+    for _ in 0..3 {
+        assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 1");
+    }
+    assert_eq!(current_label(&queue).as_deref(), Some("Title 1"));
+}
+
+#[tokio::test]
+async fn repeat_all_wraps_to_the_first_track_of_a_nested_context() {
+    let resolver = FakeResolver::new();
+    let mut queue = nested_local_queue(&resolver);
+    queue.repeat_mode = RepeatMode::All;
+
+    let mut played = Vec::new();
+    for _ in 0..5 {
+        played.push(queue.next().await.unwrap().expect("a track").title);
+    }
+
+    assert_eq!(
+        played,
+        vec!["Title 10", "Title 11", "Title 2", "Title 10", "Title 11"]
+    );
+}
+
+#[tokio::test]
+async fn without_repeat_the_queue_ends_after_the_last_track() {
+    let resolver = FakeResolver::new();
+    let mut queue = nested_local_queue(&resolver);
+
+    for _ in 0..3 {
+        assert!(queue.next().await.unwrap().is_some());
+    }
+    assert!(queue.next().await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn previous_crosses_a_container_boundary_and_next_returns() {
+    let resolver = FakeResolver::new();
+    let mut queue = nested_local_queue(&resolver);
+    queue.next().await.unwrap();
+    queue.next().await.unwrap();
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 2");
+
+    assert_eq!(queue.previous().expect("previous").title, "Title 11");
+    assert_eq!(queue.previous().expect("previous").title, "Title 10");
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 11");
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 2");
+}
+
+#[tokio::test]
+async fn history_keeps_five_hundred_entries_and_the_snapshot_the_last_fifty() {
+    let resolver = FakeResolver::new();
+    let mut queue = numbered_search(700, &resolver);
+    for _ in 0..600 {
+        queue.next().await.unwrap().expect("a track");
+    }
+
+    assert_eq!(queue.history.len(), 500);
+    assert_eq!(queue.history[0].title, "Title 99");
+    let (rows, current) = queue.snapshot();
+    assert_eq!(current, Some(50));
+    let shown: Vec<String> = rows[..51].iter().map(label).collect();
+    let expected: Vec<String> = (549..=599).map(|n| format!("Title {n}")).collect();
+    assert_eq!(shown, expected);
+}
+
+/// 120 plays (current Title 119, history 0..=118), lookahead Title 120..=129 and a user
+/// track 900. Snapshot: rows 0..50 = Title 69..=118, row 50 current, row 51 = 900,
+/// row 52 = Title 120.
+async fn long_played_queue() -> CursorQueue {
+    let resolver = FakeResolver::new();
+    let mut queue = numbered_search(300, &resolver);
+    for _ in 0..120 {
+        queue.next().await.expect("next").expect("a track");
+    }
+    queue.prefetch(10).await.expect("prefetch");
+    queue.add_track(user_track(900));
+    queue
+}
+
+#[tokio::test]
+async fn snapshot_after_many_plays_is_windowed_and_reports_the_shifted_current_row() {
+    let queue = long_played_queue().await;
+
+    let (rows, current) = queue.snapshot();
+
+    assert_eq!(current, Some(50));
+    assert_eq!(label(&rows[0]), "Title 69");
+    assert_eq!(label(&rows[49]), "Title 118");
+    assert_eq!(label(&rows[50]), "Title 119");
+    assert_eq!(label(&rows[51]), "Title 900");
+    assert_eq!(label(&rows[52]), "Title 120");
+    assert_eq!(queue.history.len(), 119);
+}
+
+#[tokio::test]
+async fn removing_the_first_upcoming_row_after_many_plays_removes_that_track_only() {
+    let mut queue = long_played_queue().await;
+
+    let removed = queue.remove_track(51).expect("a track");
+
+    assert_eq!(removed.title, "Title 900");
+    assert_eq!(queue.history.len(), 119);
+    assert_eq!(labels(&queue)[51], "Title 120");
+}
+
+#[tokio::test]
+async fn removing_a_lookahead_row_after_many_plays_removes_that_track_only() {
+    let mut queue = long_played_queue().await;
+
+    let removed = queue.remove_track(52).expect("a track");
+
+    assert_eq!(removed.title, "Title 120");
+    assert_eq!(queue.history.len(), 119);
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 900");
+}
+
+#[tokio::test]
+async fn removing_history_row_ten_removes_the_track_shown_there() {
+    let mut queue = long_played_queue().await;
+    assert_eq!(labels(&queue)[10], "Title 79");
+
+    let removed = queue.remove_track(10).expect("a track");
+
+    assert_eq!(removed.title, "Title 79");
+    assert_eq!(queue.history.len(), 118);
+    assert_eq!(queue.history[0].title, "Title 0");
+    assert!(queue.history.iter().all(|t| t.title != "Title 79"));
+    assert_eq!(current_label(&queue).as_deref(), Some("Title 119"));
+}
+
+#[tokio::test]
+async fn jumping_to_a_history_row_keeps_hidden_older_history_and_replays_in_order() {
+    let mut queue = long_played_queue().await;
+    assert_eq!(labels(&queue)[3], "Title 72");
+    assert_eq!(labels(&queue)[4], "Title 73");
+
+    queue.jump_to(3);
+
+    assert_eq!(queue.current().expect("current").title, "Title 72");
+    assert_eq!(queue.history.len(), 72);
+    assert_eq!(queue.history[0].title, "Title 0");
+    assert_eq!(queue.history[71].title, "Title 71");
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 73");
+}
+
+#[tokio::test]
+async fn jumping_to_the_third_upcoming_row_after_many_plays_makes_it_current() {
+    let mut queue = long_played_queue().await;
+    assert_eq!(labels(&queue)[53], "Title 121");
+
+    queue.jump_to(53);
+
+    assert_eq!(queue.current().expect("current").title, "Title 121");
+    assert_eq!(queue.history.len(), 119 + 3);
+    assert_eq!(queue.history[0].title, "Title 0");
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 122");
+}
