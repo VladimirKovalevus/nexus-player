@@ -352,3 +352,85 @@ impl SearchPageSource for EndlessPages {
         Ok((offset..offset + count).map(track_result).collect())
     }
 }
+
+/// A resolver whose local-playlist resolution blocks until the test opens that playlist's
+/// gate. `entered` is notified each time a resolution starts waiting.
+pub struct GatedResolver {
+    inner: Arc<FakeResolver>,
+    gates: Mutex<HashMap<i64, Arc<tokio::sync::Semaphore>>>,
+    failing: Mutex<std::collections::HashSet<i64>>,
+    pub entered: tokio::sync::Notify,
+}
+
+impl GatedResolver {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            inner: FakeResolver::new(),
+            gates: Mutex::new(HashMap::new()),
+            failing: Mutex::new(Default::default()),
+            entered: tokio::sync::Notify::new(),
+        })
+    }
+
+    /// Serves `items` for local playlist `id`, behind a closed gate.
+    pub fn serve_gated(&self, id: i64, items: Vec<CursorItem>) {
+        self.inner.serve_local_playlist(id, items);
+        self.gates
+            .lock()
+            .expect("test mutex poisoned")
+            .insert(id, Arc::new(tokio::sync::Semaphore::new(0)));
+    }
+
+    /// Makes resolving local playlist `id` fail once its gate is open (or at once when it
+    /// has no gate).
+    pub fn fail_on(&self, id: i64) {
+        self.failing.lock().expect("test mutex poisoned").insert(id);
+    }
+
+    pub fn open(&self, id: i64) {
+        if let Some(gate) = self.gates.lock().expect("test mutex poisoned").get(&id) {
+            gate.add_permits(1);
+        }
+    }
+}
+
+#[async_trait]
+impl CursorResolver for GatedResolver {
+    async fn resolve(&self, context: ContainerContext) -> Result<Box<dyn CursorSource>> {
+        if let ContainerContext::LocalPlaylist(id) = &context {
+            let gate = self
+                .gates
+                .lock()
+                .expect("test mutex poisoned")
+                .get(id)
+                .cloned();
+            if let Some(gate) = gate {
+                self.entered.notify_one();
+                gate.acquire().await.expect("gate closed").forget();
+            }
+            if self.failing.lock().expect("test mutex poisoned").contains(id) {
+                anyhow::bail!("resolver failed for playlist {id}");
+            }
+        }
+        self.inner.resolve(context).await
+    }
+}
+
+/// Search pages that always fail.
+pub struct FailingPages;
+
+#[async_trait]
+impl SearchPageSource for FailingPages {
+    async fn search(
+        &self,
+        _system: &str,
+        _content_type: Option<ContentType>,
+        _query: &str,
+        _limit: usize,
+        _offset: usize,
+    ) -> StreamResult<Vec<SearchResult>> {
+        Err(nexus_player_backend::streaming::error::StreamError::Other(
+            "search backend down".into(),
+        ))
+    }
+}
