@@ -4,16 +4,47 @@ use crate::streaming::types::ContentType;
 use anyhow::{Context, Result};
 
 impl AppState {
+    /// Raw result position of the track with `track_id` in a search, for callers that were
+    /// not given the position. Scans at most `MAX_PAGES` pages.
+    pub async fn search_position_of(
+        &self,
+        system: &str,
+        query: &str,
+        content_type: ContentType,
+        track_id: usize,
+    ) -> Result<usize> {
+        use crate::streaming::types::SearchResult;
+        const PAGE: usize = 50;
+        const MAX_PAGES: usize = 10;
+        for page in 0..MAX_PAGES {
+            let results = self
+                .streaming
+                .search(system, Some(content_type), query, PAGE, page * PAGE)
+                .await
+                .map_err(|e| anyhow::anyhow!("Search failed: {e}"))?;
+            if let Some(i) = results.iter().position(|r| {
+                matches!(r, SearchResult::Track(t)
+                    if crate::audio::types::Track::from(t.clone()).id == track_id)
+            }) {
+                return Ok(page * PAGE + i);
+            }
+            if results.len() < PAGE {
+                break;
+            }
+        }
+        anyhow::bail!("Selected track {track_id} not found in search results")
+    }
+
     pub async fn load_search_to_queue(
         &self,
         system: String,
         query: String,
         content_type: ContentType,
-        selected_track_id: usize,
+        position: usize,
     ) -> Result<()> {
         tracing::info!("Loading search context: {} from {}", query, system);
         let cancel = self.begin_exclusive_op().await;
-        self.fill_search_queue(&system, &query, content_type, selected_track_id, &cancel)
+        self.fill_search_queue(&system, &query, content_type, position, &cancel)
             .await
     }
 
@@ -22,10 +53,10 @@ impl AppState {
         system: String,
         query: String,
         content_type: ContentType,
-        selected_track_id: usize,
+        position: usize,
     ) -> Result<()> {
         let cancel = self.begin_exclusive_op().await;
-        self.fill_search_queue(&system, &query, content_type, selected_track_id, &cancel)
+        self.fill_search_queue(&system, &query, content_type, position, &cancel)
             .await?;
         if cancel.is_cancelled() {
             return Ok(());

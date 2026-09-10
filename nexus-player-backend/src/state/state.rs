@@ -4,7 +4,7 @@ use crate::audio::types::Track as AudioTrack;
 use crate::config::ConfigManager;
 use crate::library::models::PlayHistoryEntry;
 use crate::library::{LibraryService, TrackId};
-use crate::playlist::cursor::{AppCursorResolver, ContainerContext, PlayerCursor};
+use crate::playlist::cursor::{AppCursorResolver, ContainerContext};
 use crate::playlist::playback_queue::ActiveQueue;
 use crate::streaming::artwork::ArtworkCache;
 use crate::streaming::types::ContentType;
@@ -28,6 +28,9 @@ pub struct AppState {
     audio_engine: Arc<AudioEngine>,
 
     pub queue: Arc<Mutex<ActiveQueue>>,
+
+    /// Bumped when a queue fill starts; only the latest fill may swap its queue in.
+    fill_generation: std::sync::atomic::AtomicU64,
 
     // NEW: Resolver for creating cursors
     pub cursor_resolver: Arc<AppCursorResolver>,
@@ -88,6 +91,7 @@ impl AppState {
         Ok(Self {
             audio_engine,
             queue: Arc::new(Mutex::new(ActiveQueue::new_cursor())),
+            fill_generation: std::sync::atomic::AtomicU64::new(0),
             cursor_resolver,
             library,
             streaming,
@@ -485,24 +489,18 @@ impl AppState {
     async fn fill_context_queue(
         &self,
         context: ContainerContext,
+        start_index: Option<usize>,
         cancel: &CancellationToken,
     ) -> Result<()> {
-        let cursor = tokio::select! {
-            r = PlayerCursor::from_context(context.clone(), self.cursor_resolver.clone()) => r?,
-            _ = cancel.cancelled() => return Ok(()),
-        };
-
-        {
-            let mut queue = self.queue.lock().await;
-            let ActiveQueue::Cursor(cq) = &mut *queue;
-            cq.clear();
-            cq.context = Some(context);
-            cq.set_cursor(cursor);
-            let prefetched = cq.prefetch(50).await?;
-            tracing::info!("Prefetched {} tracks from cursor", prefetched);
-        }
-
-        tracing::info!("Queue updated and pre-filled");
+        crate::playlist::queue_fill::fill_context_queue_at(
+            &self.queue,
+            &self.fill_generation,
+            self.cursor_resolver.clone(),
+            context,
+            start_index,
+            cancel,
+        )
+        .await?;
         Ok(())
     }
 
@@ -511,40 +509,21 @@ impl AppState {
         system: &str,
         query: &str,
         content_type: ContentType,
-        selected_track_id: usize,
+        position: usize,
         cancel: &CancellationToken,
     ) -> Result<()> {
-        let context = ContainerContext::SearchQuery {
-            system: system.to_string(),
-            query: query.to_string(),
+        crate::playlist::queue_fill::fill_search_queue(
+            &self.queue,
+            &self.fill_generation,
+            self.cursor_resolver.clone(),
+            self.streaming.clone(),
+            system,
+            query,
             content_type,
-        };
-        let cursor = tokio::select! {
-            r = PlayerCursor::from_context(context, self.cursor_resolver.clone()) => r?,
-            _ = cancel.cancelled() => return Ok(()),
-        };
-
-        let mut queue = self.queue.lock().await;
-        let ActiveQueue::Cursor(cq) = &mut *queue;
-        cq.clear();
-        cq.set_cursor(cursor);
-
-        let mut found = false;
-        while let Ok(Some(track)) = cq.next().await {
-            if track.id == selected_track_id {
-                found = true;
-                break;
-            }
-        }
-
-        if !found {
-            tracing::warn!(
-                "Selected track {} not found in search results initial batch",
-                selected_track_id
-            );
-        }
-
-        cq.prefetch(50).await?;
+            position,
+            cancel,
+        )
+        .await?;
         Ok(())
     }
 }

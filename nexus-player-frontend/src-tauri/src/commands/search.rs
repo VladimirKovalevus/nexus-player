@@ -66,6 +66,7 @@ pub async fn handle_streaming_track(
     query: Option<String>,
     search_type: Option<String>,
     play: Option<bool>,
+    position: Option<usize>,
 ) -> Result<Option<i64>> {
     use nexus_player_backend::library::types::DownloadStrategy;
     use nexus_player_backend::streaming::types::ContentType;
@@ -99,13 +100,21 @@ pub async fn handle_streaming_track(
                             _ => ContentType::Track,
                         };
 
+                        let position = match position {
+                            Some(p) => p,
+                            None => {
+                                state
+                                    .search_position_of(&system, &q, content_type, target_id)
+                                    .await?
+                            }
+                        };
                         if should_play {
                             state
-                                .load_search_and_play(system, q, content_type, target_id)
+                                .load_search_and_play(system, q, content_type, position)
                                 .await?;
                         } else {
                             state
-                                .load_search_to_queue(system, q, content_type, target_id)
+                                .load_search_to_queue(system, q, content_type, position)
                                 .await?;
                         }
                     } else {

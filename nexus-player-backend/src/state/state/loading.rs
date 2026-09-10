@@ -148,7 +148,7 @@ impl AppState {
     pub async fn load_context_to_queue(&self, context: ContainerContext) -> Result<()> {
         tracing::info!("Loading context to queue: {:?}", context);
         let cancel = self.begin_exclusive_op().await;
-        self.fill_context_queue(context, &cancel).await
+        self.fill_context_queue(context, None, &cancel).await
     }
 
     pub async fn load_context_and_play(
@@ -157,17 +157,14 @@ impl AppState {
         start_index: usize,
     ) -> Result<()> {
         let cancel = self.begin_exclusive_op().await;
-        self.fill_context_queue(context, &cancel).await?;
+        self.fill_context_queue(context, Some(start_index), &cancel)
+            .await?;
         if cancel.is_cancelled() {
             return Ok(());
         }
         let track = {
-            let mut queue = self.queue.lock().await;
-            let ActiveQueue::Cursor(cq) = &mut *queue;
-            cq.jump_to(start_index);
-            if cq.current_track.is_none() && start_index == 0 {
-                let _ = cq.next().await;
-            }
+            let queue = self.queue.lock().await;
+            let ActiveQueue::Cursor(cq) = &*queue;
             cq.current_track.clone()
         };
         self.play_cancellable(track, cancel).await;
