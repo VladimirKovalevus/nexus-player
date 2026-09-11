@@ -28,6 +28,10 @@
 //! ) -> anyhow::Result<FillOutcome>;
 //! ```
 //!
+//! `fill_search_queue_by_track_id` takes the same arguments but a `track_id: usize` (the
+//! `Track::id` of the chosen result) instead of `position`; it looks for the track only in the
+//! first page and fails when it is not there.
+//!
 //! A fill bumps `generation` when it starts, builds and prefetches into a fresh queue (repeat
 //! mode and shuffle copied from the current queue), positions it at `start_index` / `position`,
 //! and swaps it in only if its generation is still the latest. A discarded fill returns
@@ -39,11 +43,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use common::{track_item, FailingPages, GatedResolver};
+use common::{track_item, track_result, FailingPages, FlakyPages, GatedResolver, RecordingPages};
 use nexus_player_backend::playlist::cursor::{ContainerContext, CursorResolver};
 use nexus_player_backend::playlist::playback_queue::{ActiveQueue, CursorQueue, RepeatMode};
 use nexus_player_backend::playlist::queue_fill::{
-    fill_context_queue, fill_search_queue, FillOutcome,
+    fill_context_queue, fill_search_queue, fill_search_queue_by_track_id, FillOutcome,
 };
 use nexus_player_backend::streaming::types::ContentType;
 use tokio::sync::Mutex;
@@ -291,4 +295,102 @@ async fn failed_search_fill_reports_the_error_and_keeps_the_old_queue() {
     let (current, _) = titles(&queue).await;
     assert_eq!(current.as_deref(), Some("Title 1"));
     assert!(context_of(&queue).await.is_none());
+}
+
+fn hundred_tracks() -> Vec<nexus_player_backend::streaming::types::SearchResult> {
+    (0..100).map(track_result).collect()
+}
+
+const PRODUCTION_PREFETCH_PAGE_LIMIT: usize = 50;
+
+#[tokio::test]
+async fn search_fill_at_a_position_pages_only_as_far_as_needed() {
+    let pages = RecordingPages::new(hundred_tracks(), 20);
+    let queue = queue_with_current(1);
+    let generation = AtomicU64::new(0);
+
+    let outcome = fill_search_queue(
+        &queue,
+        &generation,
+        common::FakeResolver::new() as Arc<dyn CursorResolver>,
+        pages.clone(),
+        "bandcamp",
+        "band",
+        ContentType::Track,
+        47,
+        &CancellationToken::new(),
+    )
+    .await
+    .expect("fill");
+    assert!(matches!(outcome, FillOutcome::Applied));
+
+    let (current, upcoming) = titles(&queue).await;
+    assert_eq!(current.as_deref(), Some("Title 47"));
+    assert_eq!(upcoming.first().map(String::as_str), Some("Title 48"));
+    assert_eq!(upcoming.len(), PRODUCTION_PREFETCH_PAGE_LIMIT);
+
+    let requests = pages.recorded();
+    assert!(requests.len() <= 3, "too many page requests: {requests:?}");
+    for (offset, limit) in &requests {
+        let end = offset + (*limit).min(20);
+        assert!(
+            end > 40,
+            "request at {offset} only holds results before position 40: {requests:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn search_fill_whose_start_page_fails_keeps_the_previous_queue() {
+    let pages = FlakyPages::new(hundred_tracks(), 20, 47);
+    let queue = queue_with_current(1);
+    let generation = AtomicU64::new(0);
+
+    let result = fill_search_queue(
+        &queue,
+        &generation,
+        common::FakeResolver::new() as Arc<dyn CursorResolver>,
+        pages,
+        "bandcamp",
+        "band",
+        ContentType::Track,
+        47,
+        &CancellationToken::new(),
+    )
+    .await;
+
+    assert!(result.is_err());
+    let (current, upcoming) = titles(&queue).await;
+    assert_eq!(current.as_deref(), Some("Title 1"));
+    assert!(upcoming.is_empty());
+}
+
+#[tokio::test]
+async fn search_fill_by_track_id_missing_from_the_first_page_fails_after_one_request() {
+    let pages = RecordingPages::new(hundred_tracks(), 20);
+    let queue = queue_with_current(1);
+    let generation = AtomicU64::new(0);
+    let id_on_third_page = nexus_player_backend::audio::types::Track::from(match track_result(45) {
+        nexus_player_backend::streaming::types::SearchResult::Track(t) => t,
+        _ => panic!("track_result must produce a track"),
+    })
+    .id;
+
+    let result = fill_search_queue_by_track_id(
+        &queue,
+        &generation,
+        common::FakeResolver::new() as Arc<dyn CursorResolver>,
+        pages.clone(),
+        "bandcamp",
+        "band",
+        ContentType::Track,
+        id_on_third_page,
+        &CancellationToken::new(),
+    )
+    .await;
+
+    assert!(result.is_err());
+    assert_eq!(pages.recorded().len(), 1);
+    let (current, _) = titles(&queue).await;
+    assert_eq!(current.as_deref(), Some("Title 1"));
 }

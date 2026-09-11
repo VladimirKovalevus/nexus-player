@@ -434,3 +434,43 @@ impl SearchPageSource for FailingPages {
         ))
     }
 }
+
+/// Paged search results that record every request as `(offset, limit)` and fail any request
+/// whose page covers raw position `fail_at`.
+pub struct FlakyPages {
+    inner: Arc<RecordingPages>,
+    page_size: usize,
+    fail_at: usize,
+}
+
+impl FlakyPages {
+    pub fn new(results: Vec<SearchResult>, page_size: usize, fail_at: usize) -> Arc<Self> {
+        Arc::new(Self {
+            inner: RecordingPages::new(results, page_size),
+            page_size,
+            fail_at,
+        })
+    }
+}
+
+#[async_trait]
+impl SearchPageSource for FlakyPages {
+    async fn search(
+        &self,
+        system: &str,
+        content_type: Option<ContentType>,
+        query: &str,
+        limit: usize,
+        offset: usize,
+    ) -> StreamResult<Vec<SearchResult>> {
+        let end = offset + self.page_size.min(limit);
+        if (offset..end).contains(&self.fail_at) {
+            return Err(nexus_player_backend::streaming::error::StreamError::Other(
+                "page unavailable".into(),
+            ));
+        }
+        self.inner
+            .search(system, content_type, query, limit, offset)
+            .await
+    }
+}
