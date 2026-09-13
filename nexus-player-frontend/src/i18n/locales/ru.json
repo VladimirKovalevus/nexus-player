@@ -273,6 +273,7 @@
     "playFailed": "Не удалось воспроизвести файл: {error}"
   },
   "search": {
+    "playFailed": "Не удалось начать воспроизведение: {error}",
     "placeholder": "Название или ссылка",
     "submit": "Найти",
     "searching": "Ищем…",

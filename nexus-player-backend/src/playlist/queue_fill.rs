@@ -131,3 +131,46 @@ pub async fn fill_search_queue(
 
     Ok(swap_in(queue, generation, my_generation, fresh).await)
 }
+
+/// Like `fill_search_queue`, for callers that only know the chosen track's id: the id is
+/// looked up in the first page only and the fill fails when it is not there.
+#[allow(clippy::too_many_arguments)]
+pub async fn fill_search_queue_by_track_id(
+    queue: &Arc<Mutex<ActiveQueue>>,
+    generation: &AtomicU64,
+    resolver: Arc<dyn CursorResolver>,
+    pages: Arc<dyn SearchPageSource>,
+    system: &str,
+    query: &str,
+    content_type: ContentType,
+    track_id: usize,
+    cancel: &CancellationToken,
+) -> Result<FillOutcome> {
+    use crate::streaming::types::SearchResult;
+
+    let first_page = pages
+        .search(system, Some(content_type), query, PREFETCH, 0)
+        .await
+        .map_err(|e| anyhow::anyhow!("Search failed: {e}"))?;
+    let position = first_page
+        .iter()
+        .position(|r| {
+            matches!(r, SearchResult::Track(t)
+                if crate::audio::types::Track::from(t.clone()).id == track_id)
+        })
+        .ok_or_else(|| {
+            anyhow::anyhow!("Selected track {track_id} not found in the first page of results")
+        })?;
+    fill_search_queue(
+        queue,
+        generation,
+        resolver,
+        pages,
+        system,
+        query,
+        content_type,
+        position,
+        cancel,
+    )
+    .await
+}

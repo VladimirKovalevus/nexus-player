@@ -8,6 +8,7 @@ interface NexusAudioBridge {
   updateState: (title: string, artist: string, playing: boolean) => void;
 }
 import { invoke, requestProviderAuth } from '@/utils/providerAuth';
+import { errorMessage } from '@/utils/errorMessage';
 import { useNotificationStore } from './notifications';
 
 export const useAudioStore = defineStore('audio', () => {
@@ -333,6 +334,34 @@ export const useAudioStore = defineStore('audio', () => {
     currentPositionSecs.value = positionSecs;
   }
 
+  interface SearchPlayArgs {
+    system: string;
+    contentType?: string | null;
+    query: string;
+    limit: number;
+    offset: number;
+    selectedIndex: number;
+    resultId?: string | null;
+  }
+
+  /** Starts playback of a search result; failures become a notification and are not rethrown. */
+  async function searchAndPlay(args: SearchPlayArgs): Promise<boolean> {
+    const wasWaiting = isWaitingForAudio.value;
+    startLoading();
+    try {
+      await invoke('handle_search', { ...args });
+      return true;
+    } catch (e) {
+      console.error('Failed to play search result:', e);
+      isWaitingForAudio.value = wasWaiting;
+      useNotificationStore().addNotification(
+        i18n.global.t('search.playFailed', { error: errorMessage(e) }),
+        'error',
+      );
+      return false;
+    }
+  }
+
   function playNext() {
     startLoading();
     invoke('play_next').catch((e) => {
@@ -383,6 +412,7 @@ export const useAudioStore = defineStore('audio', () => {
     updateAudioState,
     updateQueueState,
     setPosition,
+    searchAndPlay,
     playNext,
     playPrevious,
   };

@@ -144,34 +144,16 @@ const handleResultPlay = async (result: SearchResult, index: number) => {
     return;
   }
 
-  audioStore.startLoading();
-  try {
-    await invoke('handle_search', {
-      system: activeProvider.value,
-      contentType: activeContentType.value?.toLowerCase(),
-      query: activeQuery.value,
-      limit: limit.value,
-      offset: offset.value,
-      selectedIndex: index,
-      resultId: result.type === 'track' ? result.source?.url : result.id,
-    });
-  } catch (e) {
-    console.warn('handle_search failed, falling back:', e);
-    try {
-      await invoke('handle_streaming_track', {
-        searchResult: result,
-        strategy: 'cache',
-        query: activeQuery.value,
-        searchType: activeContentType.value,
-        play: true,
-      });
-    } catch (fallbackError) {
-      console.error('Failed to play search result:', fallbackError);
-      audioStore.stopLoading();
-      error.value = t('common.error', { error: errorMessage(fallbackError) });
-      return;
-    }
-  }
+  const ok = await audioStore.searchAndPlay({
+    system: activeProvider.value,
+    contentType: activeContentType.value?.toLowerCase(),
+    query: activeQuery.value,
+    limit: limit.value,
+    offset: offset.value,
+    selectedIndex: index,
+    resultId: result.type === 'track' ? result.source?.url : result.id,
+  });
+  if (!ok) return;
   emit('refetch');
 };
 

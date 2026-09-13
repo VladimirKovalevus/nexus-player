@@ -245,22 +245,16 @@ const execSearchPlay: ExecFn = async ([idxStr]) => {
   const result  = results[n - 1];
   if (!result) { showFeedback(t('cmd.noResult', { n, total: results.length }), true, 1500); return; }
   if (result.type === 'channel') { showFeedback(t('search.channelUnsupported'), true, 1500); return; }
-  try {
-    await invoke('handle_search', {
-      system: streamingStore.activeProvider,
-      contentType: streamingStore.activeContentType?.toLowerCase() ?? null,
-      query: streamingStore.activeQuery,
-      limit: streamingStore.limit,
-      offset: streamingStore.offset,
-      selectedIndex: n - 1,
-      resultId: result.type === 'track' ? result.source?.url : result.id,
-    });
-  } catch {
-    await invoke('handle_streaming_track', {
-      searchResult: result, strategy: 'cache',
-      query: streamingStore.activeQuery, searchType: streamingStore.activeContentType,
-    });
-  }
+  const ok = await audioStore.searchAndPlay({
+    system: streamingStore.activeProvider,
+    contentType: streamingStore.activeContentType?.toLowerCase() ?? null,
+    query: streamingStore.activeQuery,
+    limit: streamingStore.limit,
+    offset: streamingStore.offset,
+    selectedIndex: n - 1,
+    resultId: result.type === 'track' ? result.source?.url : result.id,
+  });
+  if (!ok) return;
   showFeedback(t('cmd.queued', { title: result.title }));
 };
 

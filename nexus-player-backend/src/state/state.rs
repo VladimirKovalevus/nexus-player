@@ -509,21 +509,41 @@ impl AppState {
         system: &str,
         query: &str,
         content_type: ContentType,
-        position: usize,
+        position: Option<usize>,
+        track_id: usize,
         cancel: &CancellationToken,
     ) -> Result<()> {
-        crate::playlist::queue_fill::fill_search_queue(
-            &self.queue,
-            &self.fill_generation,
-            self.cursor_resolver.clone(),
-            self.streaming.clone(),
-            system,
-            query,
-            content_type,
-            position,
-            cancel,
-        )
-        .await?;
+        use crate::playlist::queue_fill as qf;
+        match position {
+            Some(position) => {
+                qf::fill_search_queue(
+                    &self.queue,
+                    &self.fill_generation,
+                    self.cursor_resolver.clone(),
+                    self.streaming.clone(),
+                    system,
+                    query,
+                    content_type,
+                    position,
+                    cancel,
+                )
+                .await?;
+            }
+            None => {
+                qf::fill_search_queue_by_track_id(
+                    &self.queue,
+                    &self.fill_generation,
+                    self.cursor_resolver.clone(),
+                    self.streaming.clone(),
+                    system,
+                    query,
+                    content_type,
+                    track_id,
+                    cancel,
+                )
+                .await?;
+            }
+        }
         Ok(())
     }
 }

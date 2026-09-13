@@ -273,6 +273,7 @@
     "playFailed": "Could not play the file: {error}"
   },
   "search": {
+    "playFailed": "Could not start playback: {error}",
     "placeholder": "Title or link",
     "submit": "Search",
     "searching": "Searching…",
