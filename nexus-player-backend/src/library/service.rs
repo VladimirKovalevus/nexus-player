@@ -368,21 +368,13 @@ impl LibraryService {
         playlist_id: PlaylistId,
         track_id: TrackId,
     ) -> Result<()> {
-        let playlist = self
-            .playlist_repo
-            .get_with_items(playlist_id)
+        self.playlist_repo
+            .get(playlist_id)
             .await?
             .context("Playlist not found")?;
 
-        let position = playlist.items.len() as u32;
-
         self.playlist_repo
-            .add_item(
-                playlist_id,
-                models::PlaylistItemKind::Track,
-                track_id.0,
-                position,
-            )
+            .add_item(playlist_id, models::PlaylistItemKind::Track, track_id.0)
             .await
     }
 
@@ -403,21 +395,13 @@ impl LibraryService {
         parent_id: PlaylistId,
         child_id: PlaylistId,
     ) -> Result<()> {
-        let playlist = self
-            .playlist_repo
-            .get_with_items(parent_id)
+        self.playlist_repo
+            .get(parent_id)
             .await?
             .context("Playlist not found")?;
 
-        let position = playlist.items.len() as u32;
-
         self.playlist_repo
-            .add_item(
-                parent_id,
-                models::PlaylistItemKind::Playlist,
-                child_id.0,
-                position,
-            )
+            .add_item(parent_id, models::PlaylistItemKind::Playlist, child_id.0)
             .await
     }
 

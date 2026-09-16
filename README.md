@@ -56,7 +56,7 @@ Remote audio is read through two paths. HLS streams are parsed and fetched segme
 
 ### Nested playlists with cycle detection
 
-Playlist items can be tracks or other playlists. When a playlist is added under another one, [`playlist_repo.rs`](nexus-player-backend/src/library/db_v2/playlist_repo.rs) runs a breadth-first search (`has_cycle`) to make sure the insert would not create a cycle.
+Playlist items can be tracks or other playlists. When a playlist is added under another one, [`playlist_repo.rs`](nexus-player-backend/src/library/db_v2/playlist_repo.rs) runs a single recursive query (`has_cycle`, `WITH RECURSIVE`) in the same write-locked transaction as the insert, so the insert cannot create a cycle even when two inserts race.
 
 ### Visualizer fed raw samples from Rust
 

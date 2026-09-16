@@ -508,9 +508,8 @@ impl CursorQueue {
     /// refers to this list.
     pub fn snapshot(&self) -> (Vec<QueueEntry>, Option<usize>) {
         let shown = &self.history[self.history.len() - self.history_window_len()..];
-        let mut rows = Vec::with_capacity(
-            shown.len() + 1 + self.user_queue.len() + self.lookahead.len(),
-        );
+        let mut rows =
+            Vec::with_capacity(shown.len() + 1 + self.user_queue.len() + self.lookahead.len());
         rows.extend(shown.iter().cloned().map(QueueEntry::Track));
         let current_index = self.current_track.as_ref().map(|current| {
             rows.push(QueueEntry::Track(current.clone()));

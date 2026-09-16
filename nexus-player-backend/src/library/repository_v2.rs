@@ -77,7 +77,6 @@ pub trait PlaylistRepositoryV2: Send + Sync {
         playlist_id: PlaylistId,
         item_kind: PlaylistItemKind,
         item_id: i64,
-        position: u32,
     ) -> Result<()>;
 
     async fn remove_item(
