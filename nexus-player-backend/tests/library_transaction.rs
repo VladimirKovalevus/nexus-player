@@ -153,7 +153,7 @@ async fn committed_writes_are_visible_in_item_order() {
     txn.toggle_liked(found.id).await.expect("like");
     step("commit", txn.commit()).await.expect("commit");
 
-    let tracks = step("list", lib.service.list_all_tracks())
+    let tracks = step("list", lib.service.list_all_tracks_flat())
         .await
         .expect("list tracks");
     assert_eq!(tracks.len(), 2);
