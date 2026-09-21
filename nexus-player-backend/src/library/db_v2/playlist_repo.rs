@@ -2,8 +2,8 @@ use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Statement, TransactionTrait,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -53,11 +53,10 @@ impl SeaOrmPlaylistRepository {
             .context("Failed to read cycle detection result")?;
         Ok(found != 0)
     }
-}
-
-#[async_trait]
-impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
-    async fn create(&self, mut domain_playlist: Playlist) -> Result<PlaylistId> {
+    pub async fn create_on<C: ConnectionTrait>(
+        conn: &C,
+        mut domain_playlist: Playlist,
+    ) -> Result<PlaylistId> {
         let now = Utc::now().timestamp();
         domain_playlist.updated_at =
             chrono::DateTime::from_timestamp(now, 0).context("Invalid timestamp")?;
@@ -75,11 +74,115 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
         };
 
         let result = active_model
-            .insert(&self.db)
+            .insert(conn)
             .await
             .context("Failed to create playlist")?;
 
         Ok(PlaylistId(result.id))
+    }
+
+    pub async fn delete_on<C: ConnectionTrait>(conn: &C, id: PlaylistId) -> Result<()> {
+        playlist::Entity::delete_by_id(id.0)
+            .exec(conn)
+            .await
+            .context("Failed to delete playlist")?;
+
+        Ok(())
+    }
+
+    pub async fn list_all_on<C: ConnectionTrait>(conn: &C) -> Result<Vec<Playlist>> {
+        let results = playlist::Entity::find()
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
+            .order_by_desc(playlist::Column::CreatedAt)
+            .all(conn)
+            .await
+            .context("Failed to list playlists with artwork")?;
+
+        let mut domain_playlists = Vec::new();
+        for (entity, artwork_entity) in results {
+            let mut domain_playlist: Playlist = entity.try_into()?;
+            if let Some(art_entity) = artwork_entity {
+                domain_playlist.metadata.artwork = Some(art_entity.try_into()?);
+            }
+            domain_playlists.push(domain_playlist);
+        }
+        Ok(domain_playlists)
+    }
+
+    /// Runs the cycle check and the insert in one transaction. On a connection
+    /// that is already a transaction this nests as a savepoint.
+    pub async fn add_item_on<C: ConnectionTrait + TransactionTrait>(
+        conn: &C,
+        playlist_id: PlaylistId,
+        item_kind: PlaylistItemKind,
+        item_id: i64,
+    ) -> Result<()> {
+        let item_type_str = match item_kind {
+            PlaylistItemKind::Track => "track",
+            PlaylistItemKind::Playlist => "playlist",
+        };
+
+        let now = Utc::now().timestamp();
+
+        // The first statement is a write, so the transaction holds the SQLite
+        // write lock before the cycle check reads anything.
+        let txn = conn.begin().await?;
+
+        let playlist_active = playlist::ActiveModel {
+            id: ActiveValue::Unchanged(playlist_id.0),
+            updated_at: ActiveValue::Set(now),
+            ..Default::default()
+        };
+        playlist_active
+            .update(&txn)
+            .await
+            .context("Failed to update playlist timestamp")?;
+
+        if item_kind == PlaylistItemKind::Playlist
+            && Self::has_cycle(&txn, playlist_id.0, item_id).await?
+        {
+            bail!("Cannot add playlist: would create a cycle");
+        }
+
+        let position = playlist_item::Entity::find()
+            .filter(playlist_item::Column::PlaylistId.eq(playlist_id.0))
+            .count(&txn)
+            .await
+            .context("Failed to count playlist items")?;
+
+        let item_active = playlist_item::ActiveModel {
+            id: ActiveValue::NotSet,
+            playlist_id: ActiveValue::Set(playlist_id.0),
+            item_type: ActiveValue::Set(item_type_str.to_string()),
+            item_id: ActiveValue::Set(item_id),
+            position: ActiveValue::Set(position as i64),
+            added_at: ActiveValue::Set(now),
+        };
+        item_active.insert(&txn).await?;
+
+        txn.commit().await?;
+
+        Ok(())
+    }
+    pub async fn is_track_in_any_playlist_on<C: ConnectionTrait>(
+        conn: &C,
+        track_id: crate::library::types::TrackId,
+    ) -> Result<bool> {
+        let count = playlist_item::Entity::find()
+            .filter(playlist_item::Column::ItemType.eq("track"))
+            .filter(playlist_item::Column::ItemId.eq(track_id.0))
+            .count(conn)
+            .await
+            .context("Failed to count track occurrences in playlists")?;
+
+        Ok(count > 0)
+    }
+}
+
+#[async_trait]
+impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
+    async fn create(&self, domain_playlist: Playlist) -> Result<PlaylistId> {
+        Self::create_on(&self.db, domain_playlist).await
     }
 
     async fn get(&self, id: PlaylistId) -> Result<Option<Playlist>> {
@@ -174,31 +277,11 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
     }
 
     async fn delete(&self, id: PlaylistId) -> Result<()> {
-        playlist::Entity::delete_by_id(id.0)
-            .exec(&self.db)
-            .await
-            .context("Failed to delete playlist")?;
-
-        Ok(())
+        Self::delete_on(&self.db, id).await
     }
 
     async fn list_all(&self) -> Result<Vec<Playlist>> {
-        let results = playlist::Entity::find()
-            .find_also_related(crate::library::entities_v2::artwork::Entity)
-            .order_by_desc(playlist::Column::CreatedAt)
-            .all(&self.db)
-            .await
-            .context("Failed to list playlists with artwork")?;
-
-        let mut domain_playlists = Vec::new();
-        for (entity, artwork_entity) in results {
-            let mut domain_playlist: Playlist = entity.try_into()?;
-            if let Some(art_entity) = artwork_entity {
-                domain_playlist.metadata.artwork = Some(art_entity.try_into()?);
-            }
-            domain_playlists.push(domain_playlist);
-        }
-        Ok(domain_playlists)
+        Self::list_all_on(&self.db).await
     }
 
     async fn add_item(
@@ -207,52 +290,7 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
         item_kind: PlaylistItemKind,
         item_id: i64,
     ) -> Result<()> {
-        let item_type_str = match item_kind {
-            PlaylistItemKind::Track => "track",
-            PlaylistItemKind::Playlist => "playlist",
-        };
-
-        let now = Utc::now().timestamp();
-
-        // The first statement is a write, so the transaction holds the SQLite
-        // write lock before the cycle check reads anything.
-        let txn = self.db.begin().await?;
-
-        let playlist_active = playlist::ActiveModel {
-            id: ActiveValue::Unchanged(playlist_id.0),
-            updated_at: ActiveValue::Set(now),
-            ..Default::default()
-        };
-        playlist_active
-            .update(&txn)
-            .await
-            .context("Failed to update playlist timestamp")?;
-
-        if item_kind == PlaylistItemKind::Playlist
-            && Self::has_cycle(&txn, playlist_id.0, item_id).await?
-        {
-            bail!("Cannot add playlist: would create a cycle");
-        }
-
-        let position = playlist_item::Entity::find()
-            .filter(playlist_item::Column::PlaylistId.eq(playlist_id.0))
-            .count(&txn)
-            .await
-            .context("Failed to count playlist items")?;
-
-        let item_active = playlist_item::ActiveModel {
-            id: ActiveValue::NotSet,
-            playlist_id: ActiveValue::Set(playlist_id.0),
-            item_type: ActiveValue::Set(item_type_str.to_string()),
-            item_id: ActiveValue::Set(item_id),
-            position: ActiveValue::Set(position as i64),
-            added_at: ActiveValue::Set(now),
-        };
-        item_active.insert(&txn).await?;
-
-        txn.commit().await?;
-
-        Ok(())
+        Self::add_item_on(&self.db, playlist_id, item_kind, item_id).await
     }
 
     async fn remove_item(
@@ -338,14 +376,7 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
         &self,
         track_id: crate::library::types::TrackId,
     ) -> Result<bool> {
-        let count = playlist_item::Entity::find()
-            .filter(playlist_item::Column::ItemType.eq("track"))
-            .filter(playlist_item::Column::ItemId.eq(track_id.0))
-            .count(&self.db)
-            .await
-            .context("Failed to count track occurrences in playlists")?;
-
-        Ok(count > 0)
+        Self::is_track_in_any_playlist_on(&self.db, track_id).await
     }
 
     async fn list_cached_albums(&self) -> Result<Vec<CachedAlbumSummary>> {

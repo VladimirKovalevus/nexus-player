@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    sea_query, ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait,
-    QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
+    sea_query, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection,
+    EntityTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
 };
 
 use crate::library::entities_v2::{artwork, playlist_item, track};
@@ -20,14 +20,14 @@ impl SeaOrmTrackRepository {
         Self { db }
     }
 
-    async fn get_next_liked_position(&self) -> Result<i64> {
+    pub async fn next_liked_position_on<C: ConnectionTrait>(conn: &C) -> Result<i64> {
         let max_position = track::Entity::find()
             .filter(track::Column::Liked.eq(1))
             .select_only()
             .column(track::Column::LikedPosition)
             .order_by_desc(track::Column::LikedPosition)
             .into_tuple::<(Option<i64>,)>()
-            .one(&self.db)
+            .one(conn)
             .await
             .context("Failed to find max liked_position")?
             .and_then(|t| t.0)
@@ -35,17 +35,16 @@ impl SeaOrmTrackRepository {
 
         Ok(max_position + 1)
     }
-}
-
-#[async_trait]
-impl TrackRepositoryV2 for SeaOrmTrackRepository {
-    async fn insert(&self, mut domain_track: Track) -> Result<TrackId> {
+    pub async fn insert_on<C: ConnectionTrait>(
+        conn: &C,
+        mut domain_track: Track,
+    ) -> Result<TrackId> {
         let now = Utc::now().timestamp();
         domain_track.updated_at =
             chrono::DateTime::from_timestamp(now, 0).context("Invalid timestamp")?;
 
         if domain_track.liked && domain_track.liked_position.is_none() {
-            domain_track.liked_position = Some(self.get_next_liked_position().await?);
+            domain_track.liked_position = Some(Self::next_liked_position_on(conn).await?);
         }
 
         let entity_model: track::Model = domain_track.into();
@@ -80,17 +79,132 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
         };
 
         let result = active_model
-            .insert(&self.db)
+            .insert(conn)
             .await
             .context("Failed to insert track")?;
 
         Ok(TrackId(result.id))
     }
 
-    async fn get(&self, id: TrackId) -> Result<Option<Track>> {
+    pub async fn delete_on<C: ConnectionTrait>(conn: &C, id: TrackId) -> Result<()> {
+        track::Entity::delete_by_id(id.0)
+            .exec(conn)
+            .await
+            .context("Failed to delete track")?;
+
+        Ok(())
+    }
+
+    pub async fn list_all_flat_on<C: ConnectionTrait>(conn: &C) -> Result<Vec<Track>> {
+        let results = track::Entity::find()
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
+            .order_by_desc(track::Column::AddedAt)
+            .all(conn)
+            .await
+            .context("Failed to list all tracks flat")?;
+
+        let mut domain_tracks = Vec::new();
+        for (entity, artwork_entity) in results {
+            let mut domain_track: Track = entity.try_into()?;
+            if let Some(art_entity) = artwork_entity {
+                domain_track.metadata.artwork = Some(art_entity.try_into()?);
+            }
+            domain_tracks.push(domain_track);
+        }
+        Ok(domain_tracks)
+    }
+
+    pub async fn find_by_source_on<C: ConnectionTrait>(
+        conn: &C,
+        source: &crate::library::types::TrackSource,
+    ) -> Result<Option<Track>> {
+        use serde::{Deserialize, Serialize};
+        #[derive(Debug, Serialize, Deserialize)]
+        #[serde(tag = "type", rename_all = "snake_case")]
+        enum TrackSourceData {
+            Local { path: String },
+            Http { url: String },
+            External { system: String, id: String },
+        }
+
+        let (source_type, source_data) = match source {
+            crate::library::types::TrackSource::Local(path) => {
+                let data = TrackSourceData::Local {
+                    path: path.display().to_string(),
+                };
+                ("local".to_string(), serde_json::to_string(&data).ok())
+            }
+            crate::library::types::TrackSource::Http(url) => {
+                let data = TrackSourceData::Http { url: url.clone() };
+                ("http".to_string(), serde_json::to_string(&data).ok())
+            }
+            crate::library::types::TrackSource::External { system, id } => {
+                let data = TrackSourceData::External {
+                    system: system.clone(),
+                    id: id.clone(),
+                };
+                ("external".to_string(), serde_json::to_string(&data).ok())
+            }
+            _ => ("unknown".to_string(), None),
+        };
+
+        let result = track::Entity::find()
+            .filter(track::Column::SourceType.eq(source_type))
+            .filter(track::Column::SourceData.eq(source_data))
+            .find_also_related(crate::library::entities_v2::artwork::Entity)
+            .one(conn)
+            .await
+            .context("Failed to find track by source")?;
+
+        match result {
+            Some((entity, artwork_entity)) => {
+                let mut domain_track: Track = entity.try_into()?;
+                if let Some(art_entity) = artwork_entity {
+                    domain_track.metadata.artwork = Some(art_entity.try_into()?);
+                }
+                Ok(Some(domain_track))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub async fn set_liked_on<C: ConnectionTrait>(
+        conn: &C,
+        id: TrackId,
+        liked: bool,
+    ) -> Result<()> {
+        if liked {
+            let position = Self::next_liked_position_on(conn).await?;
+
+            let active_model = track::ActiveModel {
+                id: ActiveValue::Unchanged(id.0),
+                liked: ActiveValue::Set(1),
+                liked_position: ActiveValue::Set(Some(position)),
+                ..Default::default()
+            };
+            active_model
+                .update(conn)
+                .await
+                .context("Failed to set liked=true")?;
+        } else {
+            let active_model = track::ActiveModel {
+                id: ActiveValue::Unchanged(id.0),
+                liked: ActiveValue::Set(0),
+                liked_position: ActiveValue::Set(None),
+                ..Default::default()
+            };
+            active_model
+                .update(conn)
+                .await
+                .context("Failed to set liked=false")?;
+        }
+        Ok(())
+    }
+
+    pub async fn get_on<C: ConnectionTrait>(conn: &C, id: TrackId) -> Result<Option<Track>> {
         let result = track::Entity::find_by_id(id.0)
             .find_also_related(crate::library::entities_v2::artwork::Entity)
-            .one(&self.db)
+            .one(conn)
             .await
             .context("Failed to fetch track with artwork")?;
 
@@ -104,6 +218,17 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
             }
             None => Ok(None),
         }
+    }
+}
+
+#[async_trait]
+impl TrackRepositoryV2 for SeaOrmTrackRepository {
+    async fn insert(&self, domain_track: Track) -> Result<TrackId> {
+        Self::insert_on(&self.db, domain_track).await
+    }
+
+    async fn get(&self, id: TrackId) -> Result<Option<Track>> {
+        Self::get_on(&self.db, id).await
     }
 
     async fn update(&self, domain_track: Track) -> Result<()> {
@@ -148,12 +273,7 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
     }
 
     async fn delete(&self, id: TrackId) -> Result<()> {
-        track::Entity::delete_by_id(id.0)
-            .exec(&self.db)
-            .await
-            .context("Failed to delete track")?;
-
-        Ok(())
+        Self::delete_on(&self.db, id).await
     }
 
     async fn list_all(&self) -> Result<Vec<Track>> {
@@ -183,22 +303,7 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
     }
 
     async fn list_all_flat(&self) -> Result<Vec<Track>> {
-        let results = track::Entity::find()
-            .find_also_related(crate::library::entities_v2::artwork::Entity)
-            .order_by_desc(track::Column::AddedAt)
-            .all(&self.db)
-            .await
-            .context("Failed to list all tracks flat")?;
-
-        let mut domain_tracks = Vec::new();
-        for (entity, artwork_entity) in results {
-            let mut domain_track: Track = entity.try_into()?;
-            if let Some(art_entity) = artwork_entity {
-                domain_track.metadata.artwork = Some(art_entity.try_into()?);
-            }
-            domain_tracks.push(domain_track);
-        }
-        Ok(domain_tracks)
+        Self::list_all_flat_on(&self.db).await
     }
 
     async fn search(&self, query: &str) -> Result<Vec<Track>> {
@@ -261,54 +366,7 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
         &self,
         source: &crate::library::types::TrackSource,
     ) -> Result<Option<Track>> {
-        use serde::{Deserialize, Serialize};
-        #[derive(Debug, Serialize, Deserialize)]
-        #[serde(tag = "type", rename_all = "snake_case")]
-        enum TrackSourceData {
-            Local { path: String },
-            Http { url: String },
-            External { system: String, id: String },
-        }
-
-        let (source_type, source_data) = match source {
-            crate::library::types::TrackSource::Local(path) => {
-                let data = TrackSourceData::Local {
-                    path: path.display().to_string(),
-                };
-                ("local".to_string(), serde_json::to_string(&data).ok())
-            }
-            crate::library::types::TrackSource::Http(url) => {
-                let data = TrackSourceData::Http { url: url.clone() };
-                ("http".to_string(), serde_json::to_string(&data).ok())
-            }
-            crate::library::types::TrackSource::External { system, id } => {
-                let data = TrackSourceData::External {
-                    system: system.clone(),
-                    id: id.clone(),
-                };
-                ("external".to_string(), serde_json::to_string(&data).ok())
-            }
-            _ => ("unknown".to_string(), None),
-        };
-
-        let result = track::Entity::find()
-            .filter(track::Column::SourceType.eq(source_type))
-            .filter(track::Column::SourceData.eq(source_data))
-            .find_also_related(crate::library::entities_v2::artwork::Entity)
-            .one(&self.db)
-            .await
-            .context("Failed to find track by source")?;
-
-        match result {
-            Some((entity, artwork_entity)) => {
-                let mut domain_track: Track = entity.try_into()?;
-                if let Some(art_entity) = artwork_entity {
-                    domain_track.metadata.artwork = Some(art_entity.try_into()?);
-                }
-                Ok(Some(domain_track))
-            }
-            None => Ok(None),
-        }
+        Self::find_by_source_on(&self.db, source).await
     }
 
     async fn list_liked(&self, order: TrackOrder) -> Result<Vec<Track>> {
@@ -378,32 +436,7 @@ impl TrackRepositoryV2 for SeaOrmTrackRepository {
     }
 
     async fn set_liked(&self, id: TrackId, liked: bool) -> Result<()> {
-        if liked {
-            let position = self.get_next_liked_position().await?;
-
-            let active_model = track::ActiveModel {
-                id: ActiveValue::Unchanged(id.0),
-                liked: ActiveValue::Set(1),
-                liked_position: ActiveValue::Set(Some(position)),
-                ..Default::default()
-            };
-            active_model
-                .update(&self.db)
-                .await
-                .context("Failed to set liked=true")?;
-        } else {
-            let active_model = track::ActiveModel {
-                id: ActiveValue::Unchanged(id.0),
-                liked: ActiveValue::Set(0),
-                liked_position: ActiveValue::Set(None),
-                ..Default::default()
-            };
-            active_model
-                .update(&self.db)
-                .await
-                .context("Failed to set liked=false")?;
-        }
-        Ok(())
+        Self::set_liked_on(&self.db, id, liked).await
     }
 
     async fn set_unavailable(&self, id: TrackId, unavailable: bool) -> Result<()> {

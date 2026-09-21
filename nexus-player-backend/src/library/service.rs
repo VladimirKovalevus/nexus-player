@@ -25,6 +25,41 @@ fn artwork_source_data(url: &str) -> String {
     format!(r#"{{"type":"url","url":"{}"}}"#, url)
 }
 
+pub(super) async fn ensure_artwork_on<C>(db: &C, url: &str) -> Result<i64>
+where
+    C: sea_orm::ConnectionTrait,
+{
+    use super::entities_v2::artwork;
+    use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
+
+    let source_data = artwork_source_data(url);
+
+    // Check if exists (simple check by source_data string match)
+    let existing = artwork::Entity::find()
+        .filter(artwork::Column::SourceType.eq("url"))
+        .filter(artwork::Column::SourceData.eq(&source_data))
+        .one(db)
+        .await?;
+
+    if let Some(art) = existing {
+        return Ok(art.id);
+    }
+
+    // Create new
+    let now = Utc::now().timestamp();
+    let active_art = artwork::ActiveModel {
+        id: ActiveValue::NotSet,
+        source_type: ActiveValue::Set("url".to_string()),
+        source_data: ActiveValue::Set(Some(source_data)),
+        width: ActiveValue::Set(None),
+        height: ActiveValue::Set(None),
+        created_at: ActiveValue::Set(now),
+    };
+
+    let res = active_art.insert(db).await?;
+    Ok(res.id)
+}
+
 /// Service for managing music library (tracks and playlists)
 pub struct LibraryService {
     pub(crate) pool: SqlitePool,
@@ -185,7 +220,7 @@ impl LibraryService {
             if art.id.0 == 0 {
                 if let crate::library::types::ArtworkSource::Url { url } = &art.source {
                     tracing::info!("Resolving artwork URL: {}", url);
-                    let real_id = self.ensure_artwork(url, &self.db).await?;
+                    let real_id = ensure_artwork_on(&self.db, url).await?;
                     if let Some(mut a) = track.metadata.artwork.take() {
                         a.id = crate::library::types::ArtworkId(real_id);
                         track.metadata.artwork = Some(a);
@@ -471,7 +506,7 @@ impl LibraryService {
             }
 
             let artwork_id = if let Some(url) = &audio_track.artwork_url {
-                let id = self.ensure_artwork(url, &txn).await?;
+                let id = ensure_artwork_on(&txn, url).await?;
                 if first_artwork.is_none() {
                     first_artwork = Some(id);
                     fallback_url = Some(url.clone());
@@ -537,7 +572,7 @@ impl LibraryService {
         };
 
         let playlist_artwork_id = if let Some(url) = &runtime_playlist.artwork {
-            Some(self.ensure_artwork(url, &txn).await?)
+            Some(ensure_artwork_on(&txn, url).await?)
         } else {
             first_artwork
         };
@@ -646,8 +681,16 @@ impl LibraryService {
         self.history_repo.clear().await
     }
 
+    /// Begins one transaction for a group of library writes; see [`LibraryWriteTxn`].
+    pub async fn begin_write(&self) -> Result<super::write_txn::LibraryWriteTxn> {
+        let txn = sea_orm::TransactionTrait::begin(&self.db)
+            .await
+            .context("Failed to begin write transaction")?;
+        Ok(super::write_txn::LibraryWriteTxn::new(txn))
+    }
+
     pub async fn ensure_artwork_url(&self, url: &str) -> Result<i64> {
-        self.ensure_artwork(url, &self.db).await
+        ensure_artwork_on(&self.db, url).await
     }
 
     /// Which of `urls` already belong to something saved in the library.
@@ -690,41 +733,6 @@ impl LibraryService {
         }
 
         Ok(known)
-    }
-
-    async fn ensure_artwork<C>(&self, url: &str, db: &C) -> Result<i64>
-    where
-        C: sea_orm::ConnectionTrait,
-    {
-        use super::entities_v2::artwork;
-        use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
-
-        let source_data = artwork_source_data(url);
-
-        // Check if exists (simple check by source_data string match)
-        let existing = artwork::Entity::find()
-            .filter(artwork::Column::SourceType.eq("url"))
-            .filter(artwork::Column::SourceData.eq(&source_data))
-            .one(db)
-            .await?;
-
-        if let Some(art) = existing {
-            return Ok(art.id);
-        }
-
-        // Create new
-        let now = Utc::now().timestamp();
-        let active_art = artwork::ActiveModel {
-            id: ActiveValue::NotSet,
-            source_type: ActiveValue::Set("url".to_string()),
-            source_data: ActiveValue::Set(Some(source_data)),
-            width: ActiveValue::Set(None),
-            height: ActiveValue::Set(None),
-            created_at: ActiveValue::Set(now),
-        };
-
-        let res = active_art.insert(db).await?;
-        Ok(res.id)
     }
 
     // ========================================================================

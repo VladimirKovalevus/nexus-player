@@ -10,6 +10,7 @@ pub mod repository;
 pub mod repository_v2;
 pub mod service;
 pub mod types;
+pub mod write_txn;
 
 pub use types::{ArtworkId, AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId, TrackSource};
 
@@ -19,3 +20,4 @@ pub use repository_v2::{PlaylistRepositoryV2, TrackRepositoryV2};
 pub use db_v2::{SeaOrmPlaylistRepository, SeaOrmTrackRepository};
 
 pub use service::LibraryService;
+pub use write_txn::LibraryWriteTxn;
