@@ -408,7 +408,12 @@ impl CursorResolver for GatedResolver {
                 self.entered.notify_one();
                 gate.acquire().await.expect("gate closed").forget();
             }
-            if self.failing.lock().expect("test mutex poisoned").contains(id) {
+            if self
+                .failing
+                .lock()
+                .expect("test mutex poisoned")
+                .contains(id)
+            {
                 anyhow::bail!("resolver failed for playlist {id}");
             }
         }

@@ -17,12 +17,30 @@ async fn playlist_reached_through_two_branches_is_expanded_twice() {
     let a = lib.playlist("A").await;
     let b = lib.playlist("B").await;
     let root = lib.playlist("root").await;
-    lib.service.add_track_to_playlist(shared, s_track).await.expect("s");
-    lib.service.add_track_to_playlist(a, a_track).await.expect("a track");
-    lib.service.add_playlist_to_playlist(a, shared).await.expect("a->s");
-    lib.service.add_playlist_to_playlist(b, shared).await.expect("b->s");
-    lib.service.add_playlist_to_playlist(root, a).await.expect("root->a");
-    lib.service.add_playlist_to_playlist(root, b).await.expect("root->b");
+    lib.service
+        .add_track_to_playlist(shared, s_track)
+        .await
+        .expect("s");
+    lib.service
+        .add_track_to_playlist(a, a_track)
+        .await
+        .expect("a track");
+    lib.service
+        .add_playlist_to_playlist(a, shared)
+        .await
+        .expect("a->s");
+    lib.service
+        .add_playlist_to_playlist(b, shared)
+        .await
+        .expect("b->s");
+    lib.service
+        .add_playlist_to_playlist(root, a)
+        .await
+        .expect("root->a");
+    lib.service
+        .add_playlist_to_playlist(root, b)
+        .await
+        .expect("root->b");
 
     let order = build_radio_order(&lib.service, RadioMode::Playlists)
         .await

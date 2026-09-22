@@ -370,11 +370,12 @@ async fn search_fill_by_track_id_missing_from_the_first_page_fails_after_one_req
     let pages = RecordingPages::new(hundred_tracks(), 20);
     let queue = queue_with_current(1);
     let generation = AtomicU64::new(0);
-    let id_on_third_page = nexus_player_backend::audio::types::Track::from(match track_result(45) {
-        nexus_player_backend::streaming::types::SearchResult::Track(t) => t,
-        _ => panic!("track_result must produce a track"),
-    })
-    .id;
+    let id_on_third_page =
+        nexus_player_backend::audio::types::Track::from(match track_result(45) {
+            nexus_player_backend::streaming::types::SearchResult::Track(t) => t,
+            _ => panic!("track_result must produce a track"),
+        })
+        .id;
 
     let result = fill_search_queue_by_track_id(
         &queue,

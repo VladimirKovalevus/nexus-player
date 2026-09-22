@@ -76,8 +76,12 @@ async fn dropping_the_write_handle_leaves_the_library_unchanged() {
         let txn = step("begin", lib.service.begin_write())
             .await
             .expect("begin write");
-        let t1 = step("add t1", txn.add_track(track("t1"))).await.expect("t1");
-        step("add t2", txn.add_track(track("t2"))).await.expect("t2");
+        let t1 = step("add t1", txn.add_track(track("t1")))
+            .await
+            .expect("t1");
+        step("add t2", txn.add_track(track("t2")))
+            .await
+            .expect("t2");
         let p1 = step("create p1", txn.create_playlist(playlist("p1")))
             .await
             .expect("p1");
@@ -100,7 +104,9 @@ async fn dropping_the_write_handle_leaves_the_library_unchanged() {
             .await
             .expect("find")
             .expect("t1 is visible inside the transaction");
-        step("like", txn.toggle_liked(found.id)).await.expect("like");
+        step("like", txn.toggle_liked(found.id))
+            .await
+            .expect("like");
         assert_eq!(
             step("list inside", txn.list_all_tracks())
                 .await
@@ -211,10 +217,16 @@ async fn a_cycle_through_the_handle_fails_and_the_handle_stays_usable() {
     assert!(err.to_string().contains("would create a cycle"), "{err}");
 
     // The failed insert must not poison the transaction.
-    let t = txn.add_track(track("after")).await.expect("add after error");
-    step("a->track", txn.add_item_to_playlist(a, PlaylistItemKind::Track, t.0))
+    let t = txn
+        .add_track(track("after"))
         .await
-        .expect("track after error");
+        .expect("add after error");
+    step(
+        "a->track",
+        txn.add_item_to_playlist(a, PlaylistItemKind::Track, t.0),
+    )
+    .await
+    .expect("track after error");
     step("commit", txn.commit()).await.expect("commit");
 
     let a_items = lib

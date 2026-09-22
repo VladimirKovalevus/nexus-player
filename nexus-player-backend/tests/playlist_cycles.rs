@@ -28,8 +28,7 @@ fn walk<'a>(
             .expect("load playlist")
             .expect("playlist exists");
         for item in with_items.items {
-            if item.item_kind == nexus_player_backend::library::models::PlaylistItemKind::Playlist
-            {
+            if item.item_kind == nexus_player_backend::library::models::PlaylistItemKind::Playlist {
                 walk(service, PlaylistId(item.item_id), path).await;
             }
         }
@@ -49,7 +48,10 @@ async fn adding_the_parent_under_its_child_fails() {
     let lib = TempLibrary::new().await;
     let a = lib.playlist("a").await;
     let b = lib.playlist("b").await;
-    lib.service.add_playlist_to_playlist(a, b).await.expect("a->b");
+    lib.service
+        .add_playlist_to_playlist(a, b)
+        .await
+        .expect("a->b");
     let err = lib
         .service
         .add_playlist_to_playlist(b, a)
@@ -65,8 +67,14 @@ async fn transitive_cycle_is_rejected() {
     let a = lib.playlist("a").await;
     let b = lib.playlist("b").await;
     let c = lib.playlist("c").await;
-    lib.service.add_playlist_to_playlist(a, b).await.expect("a->b");
-    lib.service.add_playlist_to_playlist(b, c).await.expect("b->c");
+    lib.service
+        .add_playlist_to_playlist(a, b)
+        .await
+        .expect("a->b");
+    lib.service
+        .add_playlist_to_playlist(b, c)
+        .await
+        .expect("b->c");
     assert!(lib.service.add_playlist_to_playlist(c, a).await.is_err());
     assert_acyclic(&lib.service, a).await;
 }

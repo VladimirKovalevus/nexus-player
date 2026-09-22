@@ -117,10 +117,22 @@ async fn local_playlist_source_yields_nested_playlist_as_container_in_order() {
     let t3 = lib.track("three").await;
     let child = lib.playlist("child").await;
     let root = lib.playlist("root").await;
-    lib.service.add_track_to_playlist(child, t3).await.expect("child track");
-    lib.service.add_track_to_playlist(root, t1).await.expect("t1");
-    lib.service.add_playlist_to_playlist(root, child).await.expect("nest");
-    lib.service.add_track_to_playlist(root, t2).await.expect("t2");
+    lib.service
+        .add_track_to_playlist(child, t3)
+        .await
+        .expect("child track");
+    lib.service
+        .add_track_to_playlist(root, t1)
+        .await
+        .expect("t1");
+    lib.service
+        .add_playlist_to_playlist(root, child)
+        .await
+        .expect("nest");
+    lib.service
+        .add_track_to_playlist(root, t2)
+        .await
+        .expect("t2");
 
     let mut source = LocalPlaylistSource::new(lib.service.clone(), root);
     let mut items = Vec::new();
