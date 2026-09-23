@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use anyhow::Result;
 use chrono::Utc;
 
-use crate::library::models::{Metadata, Playlist, Track};
+use crate::library::models::{Metadata, Playlist, PlaylistItemKind, Track};
 use crate::library::service::LibraryService;
 use crate::library::types::{
     Artwork, ArtworkId, ArtworkSource, AudioInfo, CacheStatus, CodecFormat, PlaylistId, TrackId,
 };
+use crate::library::LibraryWriteTxn;
 
 use super::types::{SyncFile, SyncPlaylistItem, SyncTrack, SyncType};
 
@@ -21,53 +22,58 @@ impl<'a> SyncApplier<'a> {
     }
 
     pub async fn apply(&self, file: SyncFile) -> Result<()> {
+        let txn = self.service.begin_write().await?;
         match file.sync_type {
-            SyncType::Full => self.apply_full(file).await,
-            SyncType::Diff => self.apply_diff(file).await,
+            SyncType::Full => Self::apply_full(&txn, file).await?,
+            SyncType::Diff => Self::apply_diff(&txn, file).await?,
         }
+        txn.commit().await
     }
 
-    async fn apply_full(&self, file: SyncFile) -> Result<()> {
+    async fn apply_full(txn: &LibraryWriteTxn, file: SyncFile) -> Result<()> {
         // Step 1: delete all playlists (CASCADE removes their items)
-        let playlists = self.service.get_all_playlists().await?;
+        let playlists = txn.get_all_playlists().await?;
         for playlist in playlists {
-            self.service.delete_playlist(playlist.id).await?;
+            txn.delete_playlist(playlist.id).await?;
         }
 
         // Step 2: delete all non-local tracks
-        let all_tracks = self.service.list_all_tracks().await?;
+        let all_tracks = txn.list_all_tracks().await?;
         for track in all_tracks {
             match &track.source {
                 crate::audio::types::TrackSource::Local(_) => continue,
-                _ => self.service.delete_track(track.id).await?,
+                _ => txn.delete_track(track.id).await?,
             }
         }
 
         // Step 3: insert all tracks from sync file, indexed same as file.tracks
-        let track_ids = self.insert_tracks(&file.tracks).await?;
+        let track_ids = Self::insert_tracks(txn, &file.tracks).await?;
 
         // Step 4: create playlists and add items
-        self.create_playlists(&file.playlists, &track_ids).await?;
+        Self::create_playlists(txn, &file.playlists, &track_ids).await?;
 
         Ok(())
     }
 
-    async fn apply_diff(&self, file: SyncFile) -> Result<()> {
+    async fn apply_diff(txn: &LibraryWriteTxn, file: SyncFile) -> Result<()> {
         // Step 1: ensure all tracks exist (insert if missing by source), update liked if needed
-        let track_ids = self.ensure_tracks(&file.tracks).await?;
+        let track_ids = Self::ensure_tracks(txn, &file.tracks).await?;
 
         // Step 2: create playlists (no dedup — duplicates are intentional in diff mode)
-        self.create_playlists(&file.playlists, &track_ids).await?;
+        Self::create_playlists(txn, &file.playlists, &track_ids).await?;
 
         Ok(())
     }
 
     /// Insert tracks from sync file with their full metadata. Returns TrackIds indexed same as input.
-    async fn insert_tracks(&self, sync_tracks: &[SyncTrack]) -> Result<Vec<TrackId>> {
+    async fn insert_tracks(
+        txn: &LibraryWriteTxn,
+        sync_tracks: &[SyncTrack],
+    ) -> Result<Vec<TrackId>> {
         let mut ids = Vec::with_capacity(sync_tracks.len());
         for st in sync_tracks {
             let model = sync_track_to_model(st);
-            let id = self.service.add_track(model).await?;
+            let id = txn.add_track(model).await?;
             ids.push(id);
         }
         Ok(ids)
@@ -75,18 +81,21 @@ impl<'a> SyncApplier<'a> {
 
     /// Ensure tracks exist (find by source or insert). Updates liked state if track already exists.
     /// Returns TrackIds indexed same as input.
-    async fn ensure_tracks(&self, sync_tracks: &[SyncTrack]) -> Result<Vec<TrackId>> {
+    async fn ensure_tracks(
+        txn: &LibraryWriteTxn,
+        sync_tracks: &[SyncTrack],
+    ) -> Result<Vec<TrackId>> {
         let mut ids = Vec::with_capacity(sync_tracks.len());
         for st in sync_tracks {
             let track_source = st.source.clone().into_track_source();
-            let id = if let Some(existing) = self.service.find_by_source(&track_source).await? {
+            let id = if let Some(existing) = txn.find_by_source(&track_source).await? {
                 if st.liked && !existing.liked {
-                    self.service.toggle_liked(existing.id).await?;
+                    txn.toggle_liked(existing.id).await?;
                 }
                 existing.id
             } else {
                 let model = sync_track_to_model(st);
-                self.service.add_track(model).await?
+                txn.add_track(model).await?
             };
             ids.push(id);
         }
@@ -96,7 +105,7 @@ impl<'a> SyncApplier<'a> {
     /// Create playlists from sync file and populate their items.
     /// Two-pass: first create all playlists (to get IDs), then add items.
     async fn create_playlists(
-        &self,
+        txn: &LibraryWriteTxn,
         sync_playlists: &[super::types::SyncPlaylist],
         track_ids: &[TrackId],
     ) -> Result<()> {
@@ -110,7 +119,7 @@ impl<'a> SyncApplier<'a> {
                 .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0))
                 .unwrap_or(now);
             let artwork = if let Some(url) = &sp.artwork_url {
-                let art_id = self.service.ensure_artwork_url(url).await?;
+                let art_id = txn.ensure_artwork_url(url).await?;
                 Some(Artwork {
                     id: ArtworkId(art_id),
                     source: ArtworkSource::Url { url: url.clone() },
@@ -132,7 +141,7 @@ impl<'a> SyncApplier<'a> {
                 created_at: playlist_created_at,
                 updated_at: now,
             };
-            let id = self.service.create_playlist(playlist).await?;
+            let id = txn.create_playlist(playlist).await?;
             sync_id_to_playlist_id.insert(sp.sync_id, id);
         }
 
@@ -147,9 +156,12 @@ impl<'a> SyncApplier<'a> {
                 match item {
                     SyncPlaylistItem::Track { track_index } => {
                         if let Some(&track_id) = track_ids.get(*track_index) {
-                            self.service
-                                .add_track_to_playlist(playlist_id, track_id)
-                                .await?;
+                            txn.add_item_to_playlist(
+                                playlist_id,
+                                PlaylistItemKind::Track,
+                                track_id.0,
+                            )
+                            .await?;
                         } else {
                             tracing::warn!(
                                 "Skipping track item in playlist '{}': track_index {} out of bounds",
@@ -160,9 +172,12 @@ impl<'a> SyncApplier<'a> {
                     }
                     SyncPlaylistItem::Playlist { sync_id } => {
                         if let Some(&child_id) = sync_id_to_playlist_id.get(sync_id) {
-                            self.service
-                                .add_playlist_to_playlist(playlist_id, child_id)
-                                .await?;
+                            txn.add_item_to_playlist(
+                                playlist_id,
+                                PlaylistItemKind::Playlist,
+                                child_id.0,
+                            )
+                            .await?;
                         } else {
                             tracing::warn!(
                                 "Skipping sub-playlist item in '{}': sync_id {} not found",
