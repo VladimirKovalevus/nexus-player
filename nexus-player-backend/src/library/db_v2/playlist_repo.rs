@@ -290,7 +290,10 @@ impl PlaylistRepositoryV2 for SeaOrmPlaylistRepository {
         item_kind: PlaylistItemKind,
         item_id: i64,
     ) -> Result<()> {
-        Self::add_item_on(&self.db, playlist_id, item_kind, item_id).await
+        let txn = self.db.begin().await?;
+        Self::add_item_on(&txn, playlist_id, item_kind, item_id).await?;
+        txn.commit().await?;
+        Ok(())
     }
 
     async fn remove_item(
