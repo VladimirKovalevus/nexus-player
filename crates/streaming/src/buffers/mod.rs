@@ -12,7 +12,6 @@ pub trait Buffer: Send + Sync + std::fmt::Debug {
     fn total_size(&self) -> Option<u64>;
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Option<usize>;
     fn progress(&self) -> f64;
-    fn profile(&self);
     fn waveform_enabled(&self) -> bool;
     fn get_waveforms(&self) -> Vec<crate::state::types::Waveform>;
 }
@@ -43,9 +42,6 @@ impl Buffer for chunked::ChunkedBuffer {
     fn total_size(&self) -> Option<u64> {
         (*self).total_size()
     }
-    fn profile(&self) {
-        (*self).profile();
-    }
 }
 
 impl Buffer for hls::HlsBuffer {
@@ -72,8 +68,5 @@ impl Buffer for hls::HlsBuffer {
     }
     fn progress(&self) -> f64 {
         (*self).progress()
-    }
-    fn profile(&self) {
-        (*self).profile();
     }
 }

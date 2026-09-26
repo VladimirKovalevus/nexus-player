@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     error::StreamingError,
-    state::types::{DownloadTask, ManagerCommand, ManagerConfig, Priority, TrackId, TrackState},
+    state::types::{DownloadTask, ManagerCommand, ManagerConfig, TrackId, TrackState},
 };
 
 use tokio::sync::{Mutex, RwLock};
@@ -76,13 +76,7 @@ impl DownloadManager {
                 println!("SEEK RECEIVED : {id} {pos:?}");
                 let mut q = queue.lock().await;
                 if let Some(task) = q.get_mut(&id) {
-                    task.priority = Priority::Critical;
                     task.downloader.seek(pos);
-                }
-                for (track_id, task) in q.iter_mut() {
-                    if *track_id != id {
-                        task.priority = Priority::High;
-                    }
                 }
             }
             ManagerCommand::Wake => {}
@@ -346,7 +340,6 @@ impl DownloadManager {
             match state {
                 TrackState::Pending {
                     url,
-                    priority: _,
                     buffer: _,
                     meta,
                 } => {
@@ -413,7 +406,6 @@ impl DownloadManager {
                     let start = std::time::Instant::now();
                     let result = task.downloader.download().await;
                     // let result: Result<usize, StreamingError> = Ok(0);
-                    // task.downloader.buffer().profile();
                     let duration = start.elapsed();
 
                     match result {
@@ -442,7 +434,6 @@ impl DownloadManager {
                             }
 
                             if task.downloader.is_complete() {
-                                task.downloader.buffer().profile();
                                 let mut called = false;
                                 let meta = meta.clone();
                                 if let Some(options) = &task.options {

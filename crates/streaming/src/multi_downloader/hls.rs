@@ -211,8 +211,6 @@ impl HlsDownloader {
             }
         }
 
-        self.buffer.profile();
-
         // Convert bytes to milliseconds using downloaded segments' duration
         let durations = self.buffer.durations();
         let downloaded_duration_ms = durations

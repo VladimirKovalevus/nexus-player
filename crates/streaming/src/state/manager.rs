@@ -12,8 +12,8 @@ use crate::{
     error::StreamingError,
     multi_downloader::{source::Source, TaskDownloader},
     state::types::{
-        format_bytes, DownloadOptions, DownloadTask, ManagerCommand, ManagerConfig, Priority,
-        TaskInfo, TrackId, TrackState,
+        format_bytes, DownloadOptions, DownloadTask, ManagerCommand, ManagerConfig, TaskInfo,
+        TrackId, TrackState,
     },
 };
 
@@ -392,7 +392,6 @@ impl DownloadManager {
         let meta = options.as_ref().and_then(|o| o.meta.clone());
         let download_task = DownloadTask {
             track_id,
-            priority: Priority::High,
             downloader: loader,
             options,
         };
@@ -401,7 +400,6 @@ impl DownloadManager {
             track_id,
             TrackState::Pending {
                 url: url.to_string(),
-                priority: Priority::High,
                 buffer: buffer.clone(),
                 meta,
             },

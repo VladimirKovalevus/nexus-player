@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     buffers::{chunked::ChunkedBuffer, hls::HlsBuffer},
@@ -82,12 +82,6 @@ impl BufferType {
         }
     }
 
-    pub fn profile(&self) {
-        match self {
-            BufferType::Chunked(b) => b.profile(),
-            BufferType::Hls(b) => b.profile(),
-        }
-    }
     pub fn container(&self) -> String {
         match self {
             BufferType::Chunked(_b) => "mp3".to_string(),
@@ -139,7 +133,6 @@ pub fn format_bytes(bytes: u64) -> String {
 
 pub struct DownloadTask {
     pub track_id: TrackId,
-    pub priority: Priority,
     pub downloader: Box<dyn TrackDownloader>,
     pub options: Option<DownloadOptions>,
 }
@@ -163,32 +156,10 @@ pub struct DownloadOptions {
     pub on_finish: Option<Arc<TaskCallback>>,
 }
 
-impl PartialEq for DownloadTask {
-    fn eq(&self, other: &Self) -> bool {
-        self.priority == other.priority && self.track_id == other.track_id
-    }
-}
-impl Eq for DownloadTask {}
-
-impl PartialOrd for DownloadTask {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for DownloadTask {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.priority
-            .cmp(&other.priority)
-            .then_with(|| self.track_id.cmp(&other.track_id))
-    }
-}
-
 #[derive(Debug)]
 pub enum TrackState {
     Pending {
         url: String,
-        priority: Priority,
         buffer: Arc<BufferType>,
         meta: Option<StreamMetadata>,
     },
@@ -216,14 +187,8 @@ pub enum TrackState {
 impl Clone for TrackState {
     fn clone(&self) -> Self {
         match self {
-            TrackState::Pending {
-                url,
-                priority,
-                buffer,
-                meta,
-            } => TrackState::Pending {
+            TrackState::Pending { url, buffer, meta } => TrackState::Pending {
                 url: url.clone(),
-                priority: priority.clone(),
                 buffer: Arc::clone(buffer),
                 meta: meta.clone(),
             },
@@ -249,13 +214,6 @@ impl Clone for TrackState {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Priority {
-    Low = 0,
-    High = 1,
-    Critical = 2,
-}
-
 pub enum ManagerCommand {
     Cancel(TrackId),
     Seek(TrackId, SeekPos),

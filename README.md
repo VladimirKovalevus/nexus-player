@@ -44,7 +44,7 @@ Remote audio is read through two paths. HLS streams are parsed and fetched segme
 
 ### Download manager
 
-[`state/manager.rs`](crates/streaming/src/state/manager.rs) is an event loop that owns the download queue. Tasks carry priorities, and the manager advances them in small steps so playback prefetch can be scheduled ahead of background downloads. It also includes a bandwidth monitor, and its background work lives in a child module next to it.
+[`state/manager.rs`](crates/streaming/src/state/manager.rs) is an event loop that owns the download queue. Downloads run in order: the current track downloads first, then the preloads of upcoming tracks, and idle time goes to background downloads. The order is rebuilt when the user picks another track or album, and a seek moves the sought track's downloader to the requested position. It also includes a bandwidth monitor, and its background work lives in a child module next to it.
 
 ### Artwork cache
 
