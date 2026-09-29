@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use lofty::{prelude::*, probe::Probe};
 
 mod readers;
-pub use readers::{HlsBufferReader, HlsSequentialReader};
+pub use readers::HlsSequentialReader;
 
 #[derive(Debug, Clone)]
 struct Segment {
@@ -159,101 +159,6 @@ impl HlsBuffer {
                     .map(|segment| (index as u64, segment.data.clone()))
             })
             .collect()
-    }
-
-    pub fn read_at(&self, offset: u64, buf: &mut [u8]) -> Option<usize> {
-        let inner = lock_recover(&self.inner);
-
-        if inner.segments.is_empty() {
-            return None;
-        }
-
-        // 1. Determine the layout of segments in the virtual file
-        let init_len = if inner.has_init_segment {
-            inner.segments[0]
-                .as_ref()
-                .map(|s| s.data.len() as u64)
-                .unwrap_or(0)
-        } else {
-            0
-        };
-
-        // If offset is within init segment
-        if inner.has_init_segment && offset < init_len {
-            if let Some(init_seg) = &inner.segments[0] {
-                let available = init_seg.data.len() as u64 - offset;
-                let to_copy = (buf.len() as u64).min(available) as usize;
-                buf[..to_copy]
-                    .copy_from_slice(&init_seg.data[offset as usize..offset as usize + to_copy]);
-                return Some(to_copy);
-            }
-        }
-
-        // 2. Map offset to media segments (after init)
-        let media_offset = if inner.has_init_segment {
-            offset.saturating_sub(init_len)
-        } else {
-            offset
-        };
-
-        // Use bitrate estimation to find which segment we are in
-        let bitrate = if inner.bitrate > 0 {
-            inner.bitrate
-        } else {
-            128_000
-        }; // Fallback to 128kbps
-
-        let mut accumulated_bytes = 0u64;
-        let init_offset = if inner.has_init_segment { 1 } else { 0 };
-
-        for (i, &duration) in inner.durations.iter().enumerate() {
-            let seg_idx = i + init_offset;
-            let estimated_seg_size = (duration * bitrate as f64 / 8.0) as u64;
-
-            // If the segment is downloaded, we know its actual size.
-            // BUT: using actual size here would make the offset of subsequent segments unstable.
-            // For a seekable "file", we must use a STABLE mapping.
-            // So we use estimated size for all media segments to define their boundaries.
-
-            let seg_start = accumulated_bytes;
-            let seg_end = seg_start + estimated_seg_size;
-
-            if media_offset >= seg_start && media_offset < seg_end {
-                // We found the segment!
-                if let Some(Some(segment)) = inner.segments.get(seg_idx) {
-                    let internal_offset = media_offset - seg_start;
-                    if internal_offset < segment.data.len() as u64 {
-                        let available = segment.data.len() as u64 - internal_offset;
-                        let to_copy = (buf.len() as u64).min(available) as usize;
-                        buf[..to_copy].copy_from_slice(
-                            &segment.data
-                                [internal_offset as usize..internal_offset as usize + to_copy],
-                        );
-                        return Some(to_copy);
-                    } else {
-                        // We are in the "padding" area of the estimated segment size.
-                        // If the buffer is not complete, we should wait for the next segment
-                        // rather than returning 0 (EOF).
-                        if !self.is_complete() {
-                            return None; // Wait for data
-                        }
-                        return Some(0);
-                    }
-                } else {
-                    // Segment not yet downloaded - WAIT
-                    return None;
-                }
-            }
-
-            accumulated_bytes = seg_end;
-        }
-
-        // If we reached here, the offset is beyond the last segment
-        if self.is_complete() {
-            Some(0) // Real EOF
-        } else {
-            None // Might be more data coming
-        }
     }
 
     pub fn bitrate(&self) -> u64 {
@@ -532,7 +437,7 @@ impl HlsBuffer {
 
         if inner.bitrate == 0 {
             // If bitrate is unknown, we can't reliably map offset to segment.
-            // Return true to allow read_at to try its best.
+            // Return true to let callers try their best.
             return true;
         }
 

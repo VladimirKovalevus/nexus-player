@@ -104,22 +104,6 @@ impl HlsSource {
         }
     }
 
-    // Kept for compatibility but deprecated for this use case
-    pub fn read_at(&self, offset: u64, buf: &mut [u8]) -> std::io::Result<usize> {
-        match self.buffer.read_at(offset, buf) {
-            Some(n) => Ok(n),
-            None => {
-                if self.buffer.is_complete() {
-                    return Ok(0);
-                }
-                Err(io::Error::new(
-                    io::ErrorKind::WouldBlock,
-                    "Segment not ready",
-                ))
-            }
-        }
-    }
-
     pub fn seek_to_byte_approx(
         &mut self,
         byte_offset: u64,
