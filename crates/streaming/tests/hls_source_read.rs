@@ -163,3 +163,95 @@ fn many_small_and_odd_reads_match_one_large_read() {
     R(source).read_to_end(&mut via_read).expect("read_to_end");
     assert_eq!(via_read, expected);
 }
+
+#[test]
+fn repeated_segment_access_shares_storage_instead_of_copying() {
+    let buffer = buffer_with(&three_segments(), Some(vec![0xAA, 0xBB]));
+    let (init_a, seg_a) = buffer.segment_parts(1).expect("segment 1 is stored");
+    let (init_b, seg_b) = buffer.segment_parts(1).expect("segment 1 is stored");
+    assert_eq!(&seg_a[..], &[6, 7, 8]);
+    assert_eq!(seg_a.as_ptr(), seg_b.as_ptr());
+    let (init_a, init_b) = (init_a.expect("init"), init_b.expect("init"));
+    assert_eq!(&init_a[..], &[0xAA, 0xBB]);
+    assert_eq!(init_a.as_ptr(), init_b.as_ptr());
+}
+
+#[test]
+fn segment_access_without_init_reports_no_init_and_missing_segments() {
+    let buffer = buffer_with(&[Some(vec![1]), None], None);
+    let (init, seg) = buffer.segment_parts(0).expect("stored");
+    assert!(init.is_none());
+    assert_eq!(&seg[..], &[1]);
+    assert!(buffer.segment_parts(1).is_none());
+}
+
+#[test]
+fn byte_by_byte_read_of_stream_with_init_matches_recorded_layout() {
+    let init = vec![0xAA, 0xBB];
+    let (mut source, _rx) = source_over(buffer_with(&three_segments(), Some(init)));
+    let mut got = Vec::new();
+    let mut one = [0u8; 1];
+    loop {
+        let n = source.read(&mut one).expect("read failed");
+        if n == 0 {
+            break;
+        }
+        got.push(one[0]);
+    }
+    let expected: Vec<u8> = [
+        vec![0xAA, 0xBB, 1, 2, 3, 4, 5],
+        vec![0xAA, 0xBB, 6, 7, 8],
+        vec![0xAA, 0xBB, 9, 10, 11, 12, 13, 14, 15],
+    ]
+    .concat();
+    assert_eq!(got, expected);
+}
+
+#[test]
+fn small_reads_fetch_from_buffer_about_once_per_segment() {
+    let segments = three_segments();
+    let buffer = buffer_with(&segments, Some(vec![0xAA, 0xBB]));
+    let (mut source, _rx) = source_over(buffer.clone());
+    let before = buffer.segment_fetch_count();
+    let mut one = [0u8; 1];
+    let mut reads = 0u64;
+    loop {
+        let n = source.read(&mut one).expect("read failed");
+        reads += 1;
+        if n == 0 {
+            break;
+        }
+    }
+    let fetches = buffer.segment_fetch_count() - before;
+    assert!(reads > 20, "expected many reads, got {reads}");
+    assert!(fetches >= 1, "source never asked the buffer for data");
+    assert!(
+        fetches <= segments.len() as u64 + 1,
+        "{fetches} fetches for {reads} reads"
+    );
+}
+
+#[test]
+fn would_block_then_retry_after_write_returns_correct_bytes_with_init() {
+    let buffer = buffer_with(&[Some(vec![1, 2]), None], Some(vec![0xAA]));
+    let (mut source, _rx) = source_over(buffer.clone());
+    let mut got = Vec::new();
+    let mut one = [0u8; 1];
+    for _ in 0..3 {
+        assert_eq!(source.read(&mut one).expect("first segment"), 1);
+        got.push(one[0]);
+    }
+    assert_eq!(
+        source.read(&mut one).expect_err("not loaded").kind(),
+        ErrorKind::WouldBlock
+    );
+    buffer.write_chunk(1, vec![3, 4]);
+    loop {
+        let n = source.read(&mut one).expect("after write");
+        if n == 0 {
+            break;
+        }
+        got.push(one[0]);
+    }
+    assert_eq!(got, vec![0xAA, 1, 2, 0xAA, 3, 4]);
+}
