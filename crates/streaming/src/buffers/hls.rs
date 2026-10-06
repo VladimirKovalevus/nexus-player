@@ -2,7 +2,10 @@ use super::sync::lock_recover;
 use std::fs::{self, File};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+
+use bytes::Bytes;
 
 use lofty::{prelude::*, probe::Probe};
 
@@ -11,7 +14,7 @@ pub use readers::HlsSequentialReader;
 
 #[derive(Debug, Clone)]
 struct Segment {
-    data: Vec<u8>,
+    data: Bytes,
     waveform: Option<crate::state::types::Waveform>,
 }
 
@@ -26,6 +29,7 @@ struct BufferInner {
 pub struct HlsBuffer {
     inner: Mutex<BufferInner>,
     waveform_enabled: bool,
+    segment_fetches: AtomicU64,
 }
 
 impl std::fmt::Debug for HlsBuffer {
@@ -47,6 +51,7 @@ impl HlsBuffer {
                 container: None,
             }),
             waveform_enabled,
+            segment_fetches: AtomicU64::new(0),
         }
     }
 
@@ -89,7 +94,7 @@ impl HlsBuffer {
             Some(data) => {
                 inner.segments.resize(segment_count + 1, None);
                 inner.segments[0] = Some(Segment {
-                    data,
+                    data: Bytes::from(data),
                     waveform: None,
                 });
                 inner.has_init_segment = true
@@ -122,11 +127,14 @@ impl HlsBuffer {
         if let Some(slot) = inner.segments.get_mut(index as usize) {
             match slot {
                 Some(existing_chunk) => {
-                    existing_chunk.data.extend_from_slice(&data);
+                    let mut joined = Vec::with_capacity(existing_chunk.data.len() + data.len());
+                    joined.extend_from_slice(&existing_chunk.data);
+                    joined.extend_from_slice(&data);
+                    existing_chunk.data = Bytes::from(joined);
                 }
                 None => {
                     *slot = Some(Segment {
-                        data,
+                        data: Bytes::from(data),
                         waveform: None,
                     });
                 }
@@ -156,7 +164,7 @@ impl HlsBuffer {
             .filter_map(|(index, segment_opt)| {
                 segment_opt
                     .as_ref()
-                    .map(|segment| (index as u64, segment.data.clone()))
+                    .map(|segment| (index as u64, segment.data.to_vec()))
             })
             .collect()
     }
@@ -406,8 +414,28 @@ impl HlsBuffer {
                 None
             }
         } else {
-            Some((segment.data.clone(), duration))
+            Some((segment.data.to_vec(), duration))
         }
+    }
+
+    /// Returns the optional init segment and the media segment as shared `Bytes`
+    /// (no copy). `None` when the segment is not stored yet.
+    pub fn segment_parts(&self, index: usize) -> Option<(Option<Bytes>, Bytes)> {
+        self.segment_fetches.fetch_add(1, Ordering::Relaxed);
+        let inner = lock_recover(&self.inner);
+        let init_offset = if inner.has_init_segment { 1 } else { 0 };
+        let segment = inner.segments.get(index + init_offset)?.as_ref()?;
+        let init = if inner.has_init_segment {
+            Some(inner.segments[0].as_ref()?.data.clone())
+        } else {
+            None
+        };
+        Some((init, segment.data.clone()))
+    }
+
+    /// Number of `segment_parts` calls so far.
+    pub fn segment_fetch_count(&self) -> u64 {
+        self.segment_fetches.load(Ordering::Relaxed)
     }
 
     pub fn offset_to_segment_index(&self, byte_offset: u64) -> Option<usize> {
@@ -691,7 +719,6 @@ impl HlsBuffer {
 
         let properties = probe.properties();
         let duration_millis = properties.duration().as_millis() as f64;
-        println!("lofty properties: {:?}", properties);
         Some(duration_millis / 1000.0)
     }
 }

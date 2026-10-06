@@ -1,6 +1,8 @@
 use std::io::{self};
 use std::sync::Arc;
 
+use bytes::Bytes;
+
 use crate::buffers::hls::HlsBuffer;
 use crate::error::StreamingError;
 use crate::state::types::ManagerCommand;
@@ -12,6 +14,7 @@ pub struct HlsSource {
     sender: Arc<tokio::sync::mpsc::UnboundedSender<ManagerCommand>>,
     read_segment_idx: usize,
     read_segment_off: usize,
+    current: Option<(usize, Option<Bytes>, Bytes)>,
 }
 
 impl HlsSource {
@@ -27,6 +30,7 @@ impl HlsSource {
             sender,
             read_segment_idx: 0,
             read_segment_off: 0,
+            current: None,
         }
     }
 
@@ -58,27 +62,51 @@ impl HlsSource {
             return Ok(0);
         }
 
-        // Try to get the current segment data
-        match self.buffer.get_segment(self.read_segment_idx) {
-            Some((data, _)) => {
-                if self.read_segment_off >= data.len() {
-                    // We exhausted this segment, move to next
+        let idx = self.read_segment_idx;
+        let fetched = match &self.current {
+            Some((cached_idx, _, _)) if *cached_idx == idx => true,
+            _ => match self.buffer.segment_parts(idx) {
+                Some((init, seg)) => {
+                    self.current = Some((idx, init, seg));
+                    true
+                }
+                None => false,
+            },
+        };
+
+        match fetched.then_some(()) {
+            Some(()) => {
+                let (_, init, seg) = self
+                    .current
+                    .as_ref()
+                    .expect("current segment was just fetched");
+                let init_len = init.as_ref().map_or(0, |i| i.len());
+                let total = init_len + seg.len();
+                if self.read_segment_off >= total {
+                    // Segment exhausted, move to the next one
                     self.read_segment_idx += 1;
                     self.read_segment_off = 0;
-                    // Tail call / loop to try next segment immediately
+                    self.current = None;
                     return self.read(buf);
                 }
 
-                let available = data.len() - self.read_segment_off;
-                let to_copy = std::cmp::min(available, buf.len());
-
-                buf[..to_copy]
-                    .copy_from_slice(&data[self.read_segment_off..self.read_segment_off + to_copy]);
-                self.read_segment_off += to_copy;
-
-                // println!("HlsSource read: {} bytes from seg {} (off {})", to_copy, self.read_segment_idx, self.read_segment_off);
-
-                Ok(to_copy)
+                let off = self.read_segment_off;
+                let mut copied = 0;
+                if off < init_len {
+                    if let Some(init) = init {
+                        let n = std::cmp::min(init_len - off, buf.len());
+                        buf[..n].copy_from_slice(&init[off..off + n]);
+                        copied = n;
+                    }
+                }
+                if copied < buf.len() {
+                    let seg_off = off + copied - init_len;
+                    let n = std::cmp::min(seg.len() - seg_off, buf.len() - copied);
+                    buf[copied..copied + n].copy_from_slice(&seg[seg_off..seg_off + n]);
+                    copied += n;
+                }
+                self.read_segment_off += copied;
+                Ok(copied)
             }
             None => {
                 if self.buffer.is_complete() {
@@ -159,6 +187,7 @@ impl HlsSource {
         }
         self.read_segment_idx = target_idx;
         self.read_segment_off = local_offset;
+        self.current = None;
 
         Ok(byte_offset)
     }
@@ -245,6 +274,7 @@ impl Clone for HlsSource {
             sender: Arc::clone(&self.sender),
             read_segment_idx: self.read_segment_idx,
             read_segment_off: self.read_segment_off,
+            current: self.current.clone(),
         }
     }
 }
