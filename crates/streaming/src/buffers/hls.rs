@@ -492,6 +492,8 @@ impl HlsBuffer {
     }
 
     pub fn profile(&self) {
+        use std::fmt::Write as _;
+        let mut out = String::new();
         let inner = lock_recover(&self.inner);
 
         let total_segments = inner.segments.len();
@@ -505,23 +507,36 @@ impl HlsBuffer {
             .map(|s| s.data.len() as u64)
             .sum::<u64>();
 
-        println!("╔═══════════════════════════════════════════════════════════════╗");
-        println!("║               HLS BUFFER PROFILE                              ║");
-        println!("╠═══════════════════════════════════════════════════════════════╣");
-        println!(
+        let _ = writeln!(
+            out,
+            "╔═══════════════════════════════════════════════════════════════╗"
+        );
+        let _ = writeln!(
+            out,
+            "║               HLS BUFFER PROFILE                              ║"
+        );
+        let _ = writeln!(
+            out,
+            "╠═══════════════════════════════════════════════════════════════╣"
+        );
+        let _ = writeln!(
+            out,
             "║ Total segments:  {:<10} │ Filled: {:<10}              ║",
             total_segments, filled_segments
         );
-        println!(
+        let _ = writeln!(
+            out,
             "║ Duration:        {:<10.2}s│ Bitrate: {:<10} kbps     ║",
             total_duration,
             inner.bitrate / 1000
         );
-        println!(
+        let _ = writeln!(
+            out,
             "║ Downloaded:      {:<10} bytes                             ║",
             downloaded
         );
-        println!(
+        let _ = writeln!(
+            out,
             "║ Progress:        {:.2}%                                        ║",
             if total_segments > 0 {
                 (filled_segments as f64 / total_segments as f64) * 100.0
@@ -529,41 +544,71 @@ impl HlsBuffer {
                 0.0
             }
         );
-        println!(
+        let _ = writeln!(
+            out,
             "║ Has init seg:    {:<10}                                   ║",
             if inner.has_init_segment { "Yes" } else { "No" }
         );
-        println!("╠═══════════════════════════════════════════════════════════════╣");
-        println!("║ Segment Map (■ = filled, □ = empty):                         ║");
-        println!("╠═══════════════════════════════════════════════════════════════╣");
+        let _ = writeln!(
+            out,
+            "╠═══════════════════════════════════════════════════════════════╣"
+        );
+        let _ = writeln!(
+            out,
+            "║ Segment Map (■ = filled, □ = empty):                         ║"
+        );
+        let _ = writeln!(
+            out,
+            "╠═══════════════════════════════════════════════════════════════╣"
+        );
 
         const SEGMENTS_PER_ROW: usize = 50;
 
         for (row_idx, row) in inner.segments.chunks(SEGMENTS_PER_ROW).enumerate() {
             let start_idx = row_idx * SEGMENTS_PER_ROW;
-            print!("║ {:04}-{:04} │ ", start_idx, start_idx + row.len() - 1);
+            let _ = write!(
+                out,
+                "║ {:04}-{:04} │ ",
+                start_idx,
+                start_idx + row.len() - 1
+            );
 
             for segment_opt in row {
                 let symbol = match segment_opt {
                     None => '□',
                     Some(_) => '■',
                 };
-                print!("{}", symbol);
+                let _ = write!(out, "{}", symbol);
             }
 
             let padding = SEGMENTS_PER_ROW.saturating_sub(row.len());
             for _ in 0..padding {
-                print!(" ");
+                let _ = write!(out, " ");
             }
 
-            println!(" ║");
+            let _ = writeln!(out, " ║");
         }
 
-        println!("╠═══════════════════════════════════════════════════════════════╣");
-        println!("║ Detailed Segment Info:                                       ║");
-        println!("╠═════════╦══════════════╦═══════════════╦═════════════════════╣");
-        println!("║  Index  ║    Status    ║  Size (bytes) ║  Duration (s)       ║");
-        println!("╠═════════╬══════════════╬═══════════════╬═════════════════════╣");
+        let _ = writeln!(
+            out,
+            "╠═══════════════════════════════════════════════════════════════╣"
+        );
+        let _ = writeln!(
+            out,
+            "║ Detailed Segment Info:                                       ║"
+        );
+        let _ = writeln!(
+            out,
+            "╠═════════╦══════════════╦═══════════════╦═════════════════════╣"
+        );
+        let _ = writeln!(
+            out,
+            "║  Index  ║    Status    ║  Size (bytes) ║  Duration (s)       ║"
+        );
+        let _ = writeln!(
+            out,
+            "╠═════════╬══════════════╬═══════════════╬═════════════════════╣"
+        );
 
         for (idx, segment_opt) in inner.segments.iter().enumerate() {
             let duration = if idx == 0 && inner.has_init_segment {
@@ -575,7 +620,8 @@ impl HlsBuffer {
 
             match segment_opt {
                 None => {
-                    println!(
+                    let _ = writeln!(
+                        out,
                         "║ {:>7} ║ Empty        ║ {:>13} ║ {:>7.2}             ║",
                         idx, 0, duration
                     );
@@ -586,7 +632,8 @@ impl HlsBuffer {
                     } else {
                         "Filled"
                     };
-                    println!(
+                    let _ = writeln!(
+                        out,
                         "║ {:>7} ║ {:<12} ║ {:>13} ║ {:>7.2}             ║",
                         idx,
                         status,
@@ -597,7 +644,11 @@ impl HlsBuffer {
             }
         }
 
-        println!("╚═════════╩══════════════╩═══════════════╩═════════════════════╝");
+        let _ = writeln!(
+            out,
+            "╚═════════╩══════════════╩═══════════════╩═════════════════════╝"
+        );
+        tracing::debug!("{out}");
     }
 
     pub fn save_to_folder<P: AsRef<Path>>(&self, folder_path: P) -> std::io::Result<()> {

@@ -175,10 +175,7 @@ impl HlsSource {
             local_offset = 0;
         }
 
-        println!(
-            "HlsSource seek_to_byte_approx: byte_off={} -> seg_idx={}, local_off={}",
-            byte_offset, target_idx, local_offset
-        );
+        tracing::debug!(byte_offset, target_idx, local_offset, "seek_to_byte_approx");
 
         // Update read state ONLY. Do NOT trigger download seek here.
         // Download seek will be triggered by `read()` when it actually needs data.

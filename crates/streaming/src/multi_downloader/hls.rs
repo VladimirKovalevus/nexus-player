@@ -66,23 +66,20 @@ impl HlsDownloader {
                 let playlist_type = match Self::fetch_and_parse(&client, &self.playlist_url).await {
                     Ok(p) => p,
                     Err(e) => {
-                        eprintln!("Failed to fetch playlist: {}", e);
+                        tracing::error!(error = %e, "failed to fetch playlist");
                         return Err(InitializationError::Error(e.to_string()));
                     }
                 };
 
                 match playlist_type {
                     HlsPlaylistType::Master(master) => {
-                        println!(
-                            "Master playlist detected with {} variants",
-                            master.variants.len()
+                        tracing::debug!(
+                            variants = master.variants.len(),
+                            "master playlist detected"
                         );
                         let variant = master.select_variant(self.bandwidth_bps);
 
-                        println!(
-                            "Selected variant: bandwidth={}, uri={}",
-                            variant.bandwidth, variant.uri
-                        );
+                        tracing::debug!(bandwidth = variant.bandwidth, uri = %variant.uri, "selected variant");
 
                         match Self::fetch_and_parse(&client, &variant.uri).await {
                             Ok(HlsPlaylistType::Media(media)) => media,
@@ -97,7 +94,7 @@ impl HlsDownloader {
                         }
                     }
                     HlsPlaylistType::Media(media) => {
-                        println!("Media playlist detected directly");
+                        tracing::debug!("media playlist detected directly");
                         media
                     }
                 }
@@ -206,7 +203,7 @@ impl HlsDownloader {
 
         if !combined_data.is_empty() {
             if let Some(bitrate) = Self::extract_bitrate(&combined_data) {
-                println!("Detected bitrate: {} kbps", bitrate);
+                tracing::debug!(kbps = bitrate, "detected bitrate");
                 self.buffer.set_bitrate(bitrate * 1000);
             }
         }
@@ -332,10 +329,10 @@ impl HlsDownloader {
                     return Ok(len);
                 }
                 Err(e) => {
-                    eprintln!("Failed to download segment {}: {}", segment_index, e);
+                    tracing::warn!(index = segment_index, error = %e, "failed to download segment");
                     retries += 1;
                     if retries >= 3 {
-                        eprintln!("Max retries reached for segment {}", segment_index);
+                        tracing::error!(index = segment_index, "max retries reached for segment");
                         return Err(e);
                     }
                     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -402,11 +399,7 @@ impl HlsDownloader {
             .await
             .map_err(|e| StreamingError::Http(e.to_string()))?;
 
-        println!(
-            "HLS FETCH PLAYLIST HEADERS: {:?} for URL: {}",
-            response.headers(),
-            url
-        );
+        tracing::trace!(headers = ?response.headers(), %url, "HLS playlist response");
 
         if !response.status().is_success() {
             return Err(StreamingError::Http(format!(
@@ -420,7 +413,7 @@ impl HlsDownloader {
             .await
             .map_err(|e| StreamingError::Http(e.to_string()))?;
 
-        println!("HLS FETCH PLAYLIST CONTENT:\n{}", content);
+        tracing::trace!(%content, "HLS playlist content");
 
         parse_playlist(&content, url)
     }

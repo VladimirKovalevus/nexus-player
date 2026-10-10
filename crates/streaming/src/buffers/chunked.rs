@@ -280,6 +280,8 @@ impl ChunkedBuffer {
 
     /// Logs a visual profile of chunk fill levels
     pub fn profile(&self) {
+        use std::fmt::Write as _;
+        let mut out = String::new();
         let inner = lock_recover(&self.inner);
 
         let total_chunks = inner.chunks.len();
@@ -292,18 +294,30 @@ impl ChunkedBuffer {
             .map(|c| c.data.len() as u64)
             .sum::<u64>();
 
-        println!("╔═══════════════════════════════════════════════════════════════╗");
-        println!("║               BUFFER PROFILE                                  ║");
-        println!("╠═══════════════════════════════════════════════════════════════╣");
-        println!(
+        let _ = writeln!(
+            out,
+            "╔═══════════════════════════════════════════════════════════════╗"
+        );
+        let _ = writeln!(
+            out,
+            "║               BUFFER PROFILE                                  ║"
+        );
+        let _ = writeln!(
+            out,
+            "╠═══════════════════════════════════════════════════════════════╣"
+        );
+        let _ = writeln!(
+            out,
             "║ Total chunks:    {:<10} │ Filled: {:<10}              ║",
             total_chunks, filled_chunks
         );
-        println!(
+        let _ = writeln!(
+            out,
             "║ Total size:      {:<10} │ Downloaded: {:<10}         ║",
             total_size, downloaded
         );
-        println!(
+        let _ = writeln!(
+            out,
             "║ Progress:        {:.2}%                                        ║",
             if total_size > 0 {
                 (downloaded as f64 / total_size as f64) * 100.0
@@ -311,16 +325,30 @@ impl ChunkedBuffer {
                 0.0
             }
         );
-        println!("╠═══════════════════════════════════════════════════════════════╣");
-        println!("║ Chunk Map (■ = full, ▓ = partial, □ = empty):                ║");
-        println!("╠═══════════════════════════════════════════════════════════════╣");
+        let _ = writeln!(
+            out,
+            "╠═══════════════════════════════════════════════════════════════╣"
+        );
+        let _ = writeln!(
+            out,
+            "║ Chunk Map (■ = full, ▓ = partial, □ = empty):                ║"
+        );
+        let _ = writeln!(
+            out,
+            "╠═══════════════════════════════════════════════════════════════╣"
+        );
 
         // Display chunks in rows of 50
         const CHUNKS_PER_ROW: usize = 50;
 
         for (row_idx, row) in inner.chunks.chunks(CHUNKS_PER_ROW).enumerate() {
             let start_idx = row_idx * CHUNKS_PER_ROW;
-            print!("║ {:04}-{:04} │ ", start_idx, start_idx + row.len() - 1);
+            let _ = write!(
+                out,
+                "║ {:04}-{:04} │ ",
+                start_idx,
+                start_idx + row.len() - 1
+            );
 
             for chunk_opt in row {
                 let symbol = match chunk_opt {
@@ -336,28 +364,44 @@ impl ChunkedBuffer {
                         }
                     }
                 };
-                print!("{}", symbol);
+                let _ = write!(out, "{}", symbol);
             }
 
             // Pad the rest with spaces if needed
             let padding = CHUNKS_PER_ROW.saturating_sub(row.len());
             for _ in 0..padding {
-                print!(" ");
+                let _ = write!(out, " ");
             }
 
-            println!(" ║");
+            let _ = writeln!(out, " ║");
         }
 
-        println!("╠═══════════════════════════════════════════════════════════════╣");
-        println!("║ Detailed Chunk Info:                                         ║");
-        println!("╠═════════╦══════════════╦═══════════════╦═════════════════════╣");
-        println!("║  Index  ║    Status    ║  Size (bytes) ║   Fill %            ║");
-        println!("╠═════════╬══════════════╬═══════════════╬═════════════════════╣");
+        let _ = writeln!(
+            out,
+            "╠═══════════════════════════════════════════════════════════════╣"
+        );
+        let _ = writeln!(
+            out,
+            "║ Detailed Chunk Info:                                         ║"
+        );
+        let _ = writeln!(
+            out,
+            "╠═════════╦══════════════╦═══════════════╦═════════════════════╣"
+        );
+        let _ = writeln!(
+            out,
+            "║  Index  ║    Status    ║  Size (bytes) ║   Fill %            ║"
+        );
+        let _ = writeln!(
+            out,
+            "╠═════════╬══════════════╬═══════════════╬═════════════════════╣"
+        );
 
         for (idx, chunk_opt) in inner.chunks.iter().enumerate() {
             match chunk_opt {
                 None => {
-                    println!(
+                    let _ = writeln!(
+                        out,
                         "║ {:>7} ║ Empty        ║ {:>13} ║ {:>7.2}%            ║",
                         idx, 0, 0.0
                     );
@@ -369,7 +413,8 @@ impl ChunkedBuffer {
                     } else {
                         "Partial"
                     };
-                    println!(
+                    let _ = writeln!(
+                        out,
                         "║ {:>7} ║ {:<12} ║ {:>13} ║ {:>7.2}%            ║",
                         idx,
                         status,
@@ -380,7 +425,11 @@ impl ChunkedBuffer {
             }
         }
 
-        println!("╚═════════╩══════════════╩═══════════════╩═════════════════════╝");
+        let _ = writeln!(
+            out,
+            "╚═════════╩══════════════╩═══════════════╩═════════════════════╝"
+        );
+        tracing::debug!("{out}");
     }
 }
 

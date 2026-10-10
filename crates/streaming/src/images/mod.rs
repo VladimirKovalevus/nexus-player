@@ -16,7 +16,7 @@
 //!
 //! match cache.path_if_cached(url, ImageVariant::Thumb) {
 //!     // Hand the local file to the UI.
-//!     Some(path) => println!("{}", path.display()),
+//!     Some(path) => { let _ = path.display(); }
 //!     // Fetched in the background, whenever audio isn't using the network.
 //!     None => cache.request(url, ImageVariant::Thumb),
 //! }

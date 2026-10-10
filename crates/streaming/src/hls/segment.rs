@@ -121,9 +121,10 @@ impl MasterPlaylist {
         let mut max_bandwidth = 0;
 
         for variant in &self.variants {
-            println!(
-                "BANDWIDTH {} variant {}",
-                available_bandwidth_bps, variant.bandwidth
+            tracing::trace!(
+                available_bandwidth_bps,
+                variant = variant.bandwidth,
+                "considering variant"
             );
             if variant.bandwidth <= target_bandwidth && variant.bandwidth > max_bandwidth {
                 max_bandwidth = variant.bandwidth;
@@ -142,7 +143,7 @@ impl MasterPlaylist {
             }
         }
 
-        println!("BESt variant {:?}", best_variant);
+        tracing::debug!(?best_variant, "selected best variant");
 
         best_variant
     }

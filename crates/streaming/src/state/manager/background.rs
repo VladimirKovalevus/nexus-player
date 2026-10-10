@@ -73,7 +73,7 @@ impl DownloadManager {
                 playback.active_ids = active_ids;
             }
             ManagerCommand::Seek(id, pos) => {
-                println!("SEEK RECEIVED : {id} {pos:?}");
+                tracing::debug!(%id, ?pos, "seek received");
                 let mut q = queue.lock().await;
                 if let Some(task) = q.get_mut(&id) {
                     task.downloader.seek(pos);

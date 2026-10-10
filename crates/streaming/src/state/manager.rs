@@ -333,7 +333,7 @@ impl DownloadManager {
             {
                 let mut states = self.states.lock().await;
                 if matches!(states.get(&candidate_id), Some(TrackState::Complete { .. })) {
-                    println!("LRU EVICT: track_id={candidate_id} (total_bytes={total_bytes})");
+                    tracing::debug!(track_id = %candidate_id, total_bytes, "LRU evict");
                     states.remove(&candidate_id);
                 }
             }
