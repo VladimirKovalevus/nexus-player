@@ -3,12 +3,22 @@ use std::path::Path;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TelegramConfig {
     pub bot_token: String,
     pub chat_id: String,
     #[serde(default)]
     pub last_message_id: Option<i64>,
+}
+
+impl std::fmt::Debug for TelegramConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TelegramConfig")
+            .field("bot_token", &"***")
+            .field("chat_id", &self.chat_id)
+            .field("last_message_id", &self.last_message_id)
+            .finish()
+    }
 }
 
 impl TelegramConfig {

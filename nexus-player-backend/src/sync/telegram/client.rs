@@ -5,6 +5,7 @@ use reqwest::{multipart, Client};
 use serde::Deserialize;
 
 const TIMEOUT_SECS: u64 = 30;
+const DEFAULT_BASE_URL: &str = "https://api.telegram.org";
 
 #[derive(Deserialize)]
 struct TgResponse<T> {
@@ -37,10 +38,20 @@ pub struct TgFile {
 pub struct TelegramClient {
     http: Client,
     token: String,
+    base_url: String,
+}
+
+/// Request errors embed the URL, which contains the bot token.
+fn strip_url(e: reqwest::Error) -> anyhow::Error {
+    anyhow::Error::new(e.without_url())
 }
 
 impl TelegramClient {
     pub fn new(token: impl Into<String>) -> Result<Self> {
+        Self::with_base_url(token, DEFAULT_BASE_URL)
+    }
+
+    pub fn with_base_url(token: impl Into<String>, base_url: impl Into<String>) -> Result<Self> {
         let http = Client::builder()
             .use_rustls_tls()
             .timeout(Duration::from_secs(TIMEOUT_SECS))
@@ -48,15 +59,16 @@ impl TelegramClient {
         Ok(Self {
             http,
             token: token.into(),
+            base_url: base_url.into().trim_end_matches('/').to_string(),
         })
     }
 
     fn api_url(&self, method: &str) -> String {
-        format!("https://api.telegram.org/bot{}/{}", self.token, method)
+        format!("{}/bot{}/{}", self.base_url, self.token, method)
     }
 
     async fn check<T: for<'de> Deserialize<'de>>(&self, resp: reqwest::Response) -> Result<T> {
-        let tg: TgResponse<T> = resp.json().await?;
+        let tg: TgResponse<T> = resp.json().await.map_err(strip_url)?;
         if tg.ok {
             tg.result
                 .ok_or_else(|| anyhow!("Telegram: ok=true but result is null"))
@@ -87,7 +99,8 @@ impl TelegramClient {
             .post(self.api_url("sendDocument"))
             .multipart(form)
             .send()
-            .await?;
+            .await
+            .map_err(strip_url)?;
 
         self.check(resp).await
     }
@@ -103,10 +116,11 @@ impl TelegramClient {
             .post(self.api_url("deleteMessage"))
             .json(&body)
             .send()
-            .await?;
+            .await
+            .map_err(strip_url)?;
 
         // deleteMessage returns True (bool) on success
-        let tg: TgResponse<serde_json::Value> = resp.json().await?;
+        let tg: TgResponse<serde_json::Value> = resp.json().await.map_err(strip_url)?;
         if tg.ok {
             Ok(())
         } else {
@@ -129,9 +143,10 @@ impl TelegramClient {
             .post(self.api_url("pinChatMessage"))
             .json(&body)
             .send()
-            .await?;
+            .await
+            .map_err(strip_url)?;
 
-        let tg: TgResponse<serde_json::Value> = resp.json().await?;
+        let tg: TgResponse<serde_json::Value> = resp.json().await.map_err(strip_url)?;
         if tg.ok {
             Ok(())
         } else {
@@ -148,7 +163,8 @@ impl TelegramClient {
             .get(self.api_url("getChat"))
             .query(&[("chat_id", chat_id)])
             .send()
-            .await?;
+            .await
+            .map_err(strip_url)?;
 
         self.check(resp).await
     }
@@ -159,20 +175,18 @@ impl TelegramClient {
             .get(self.api_url("getFile"))
             .query(&[("file_id", file_id)])
             .send()
-            .await?;
+            .await
+            .map_err(strip_url)?;
 
         self.check(resp).await
     }
 
     pub async fn download_file(&self, file_path: &str) -> Result<Vec<u8>> {
-        let url = format!(
-            "https://api.telegram.org/file/bot{}/{}",
-            self.token, file_path
-        );
-        let resp = self.http.get(&url).send().await?;
+        let url = format!("{}/file/bot{}/{}", self.base_url, self.token, file_path);
+        let resp = self.http.get(&url).send().await.map_err(strip_url)?;
         if !resp.status().is_success() {
             return Err(anyhow!("download_file HTTP {}", resp.status()));
         }
-        Ok(resp.bytes().await?.to_vec())
+        Ok(resp.bytes().await.map_err(strip_url)?.to_vec())
     }
 }
