@@ -31,8 +31,7 @@ async fn download_file_error_does_not_contain_token() {
     let err = client()
         .download_file("documents/file.json")
         .await
-        .err()
-        .expect("connection to port 1 must fail");
+        .expect_err("connection to port 1 must fail");
     assert_no_token(&err);
 }
 
