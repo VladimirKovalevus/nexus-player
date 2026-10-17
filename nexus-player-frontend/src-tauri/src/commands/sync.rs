@@ -53,10 +53,18 @@ fn telegram_config_path(app: &AppHandle) -> Result<std::path::PathBuf> {
         .join("telegram_config.json"))
 }
 
+fn telegram_store(
+    app: &AppHandle,
+) -> Result<Box<dyn nexus_player_backend::sync::telegram::token_store::TokenStore>> {
+    let dir = app.path().app_data_dir()?.join("sync");
+    Ok(nexus_player_backend::sync::telegram::token_store::default_token_store(&dir))
+}
+
 #[tauri::command]
 pub async fn telegram_get_config(app: AppHandle) -> Result<Option<serde_json::Value>> {
     let path = telegram_config_path(&app)?;
-    match TelegramConfig::load(&path)? {
+    let store = telegram_store(&app)?;
+    match TelegramConfig::load_with_store(&path, store.as_ref())? {
         Some(cfg) => Ok(Some(serde_json::json!({ "chatId": cfg.chat_id }))),
         None => Ok(None),
     }
@@ -74,13 +82,17 @@ pub async fn telegram_save_config(
         chat_id,
         last_message_id: None,
     };
-    config.save(&path).map_err(crate::error::CommandError::from)
+    let store = telegram_store(&app)?;
+    config
+        .save_with_store(&path, store.as_ref())
+        .map_err(crate::error::CommandError::from)
 }
 
 #[tauri::command]
 pub async fn telegram_check_config(app: AppHandle) -> Result<bool> {
     let path = telegram_config_path(&app)?;
-    match TelegramSync::load(&path)? {
+    let store = telegram_store(&app)?;
+    match TelegramSync::load(&path, store.as_ref())? {
         Some(tg) => Ok(tg.check().await),
         None => Ok(false),
     }
@@ -94,8 +106,9 @@ pub async fn telegram_push(
     device_name: Option<String>,
 ) -> Result<()> {
     let path = telegram_config_path(&app)?;
-    let mut tg =
-        TelegramSync::load(&path)?.ok_or_else(|| "Telegram is not configured".to_string())?;
+    let store = telegram_store(&app)?;
+    let mut tg = TelegramSync::load(&path, store.as_ref())?
+        .ok_or_else(|| "Telegram is not configured".to_string())?;
 
     let builder = SyncBuilder::new(state.library());
     let file = match sync_type {
@@ -111,7 +124,9 @@ pub async fn telegram_push(
 #[tauri::command]
 pub async fn telegram_pull(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<()> {
     let path = telegram_config_path(&app)?;
-    let tg = TelegramSync::load(&path)?.ok_or_else(|| "Telegram is not configured".to_string())?;
+    let store = telegram_store(&app)?;
+    let tg = TelegramSync::load(&path, store.as_ref())?
+        .ok_or_else(|| "Telegram is not configured".to_string())?;
 
     let file = tg.pull().await?;
     let applier = SyncApplier::new(state.library());

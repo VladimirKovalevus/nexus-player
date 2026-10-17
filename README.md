@@ -105,13 +105,13 @@ npm run tauri build   # release build
 Debian or Ubuntu:
 
 ```sh
-sudo apt install clang mold cmake pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libasound2-dev
+sudo apt install clang mold cmake pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libasound2-dev libdbus-1-dev
 ```
 
 Arch:
 
 ```sh
-sudo pacman -S clang mold cmake pkgconf webkit2gtk-4.1 gtk3 libsoup3 alsa-lib
+sudo pacman -S clang mold cmake pkgconf webkit2gtk-4.1 gtk3 libsoup3 alsa-lib dbus
 ```
 
 `.cargo/config.toml` links x86_64 Linux builds with clang and mold, and the C dependencies need cmake and pkg-config.

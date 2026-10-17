@@ -1,5 +1,6 @@
 pub mod client;
 pub mod config;
+pub mod token_store;
 
 use std::path::PathBuf;
 
@@ -7,6 +8,7 @@ use anyhow::{anyhow, Result};
 
 use client::TelegramClient;
 pub use config::TelegramConfig;
+use token_store::TokenStore;
 
 use super::types::SyncFile;
 
@@ -26,9 +28,9 @@ impl TelegramSync {
         })
     }
 
-    pub fn load(config_path: impl Into<PathBuf>) -> Result<Option<Self>> {
+    pub fn load(config_path: impl Into<PathBuf>, store: &dyn TokenStore) -> Result<Option<Self>> {
         let path = config_path.into();
-        match TelegramConfig::load(&path)? {
+        match TelegramConfig::load_with_store(&path, store)? {
             Some(config) => Ok(Some(Self::new(config, path)?)),
             None => Ok(None),
         }
