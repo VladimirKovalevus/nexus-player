@@ -9,6 +9,9 @@ use sha2::{Digest, Sha256};
 use super::ImageVariant;
 use crate::error::StreamingError;
 
+/// Subdirectory of the artwork root holding covers the user picked from disk.
+pub const CUSTOM_DIR: &str = "custom";
+
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// On-disk artwork store, laid out as `<root>/<variant>/<ab>/<sha256(url)>.webp`.
@@ -131,6 +134,10 @@ impl Store {
                 };
 
                 if meta.is_dir() {
+                    // User-picked covers live here and are never evicted.
+                    if dir == self.root && path.file_name().is_some_and(|n| n == CUSTOM_DIR) {
+                        continue;
+                    }
                     dirs.push(path);
                 } else if path.extension().is_some_and(|ext| ext == "webp") {
                     let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
@@ -171,10 +178,35 @@ impl Store {
     }
 
     pub(crate) async fn clear(&self) -> Result<(), StreamingError> {
-        match tokio::fs::remove_dir_all(&self.root).await {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        let mut entries = match tokio::fs::read_dir(&self.root).await {
+            Ok(entries) => Some(entries),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
             Err(e) => return Err(StreamingError::Io(e.to_string())),
+        };
+        while let Some(entries) = entries.as_mut() {
+            let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|e| StreamingError::Io(e.to_string()))?
+            else {
+                break;
+            };
+            let path = entry.path();
+            // User-picked covers live here and are never cleared.
+            if path.file_name().is_some_and(|n| n == CUSTOM_DIR) {
+                continue;
+            }
+            let is_dir = entry.metadata().await.map(|m| m.is_dir()).unwrap_or(false);
+            let result = if is_dir {
+                tokio::fs::remove_dir_all(&path).await
+            } else {
+                tokio::fs::remove_file(&path).await
+            };
+            match result {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(StreamingError::Io(e.to_string())),
+            }
         }
 
         if let Ok(mut known) = self.known.lock() {
@@ -319,6 +351,20 @@ mod tests {
         store.prune(u64::MAX).await.unwrap();
 
         assert!(!stray.exists());
+    }
+
+    #[tokio::test]
+    async fn prune_and_clear_keep_custom_covers() {
+        let (store, dir) = store();
+        let custom = dir.path().join("artwork").join(CUSTOM_DIR);
+        tokio::fs::create_dir_all(&custom).await.unwrap();
+        let cover = custom.join("abc.webp");
+        tokio::fs::write(&cover, vec![0u8; 5000]).await.unwrap();
+
+        store.prune(0).await.unwrap();
+        assert!(cover.exists());
+        store.clear().await.unwrap();
+        assert!(cover.exists());
     }
 
     #[tokio::test]

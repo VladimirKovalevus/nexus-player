@@ -24,7 +24,7 @@
       "csp": "default-src 'self'; script-src 'self' 'unsafe-eval'; img-src 'self' asset: http://asset.localhost https: http: data:; video-src 'self' asset: http://asset.localhost https: http:; connect-src 'self' https: http:; frame-src https: http:",
       "assetProtocol": {
         "enable": true,
-        "scope": ["**/*"]
+        "scope": ["$APPDATA/cache/artwork/**"]
       }
     }
   },

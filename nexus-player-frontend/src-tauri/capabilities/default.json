@@ -9,17 +9,11 @@
     "core:window:allow-is-fullscreen",
     "opener:default",
     "dialog:default",
-    "fs:allow-read",
-    "fs:allow-exists",
     "soundCloudChallenge:allow-open",
     "soundCloudChallenge:allow-close",
     "core:event:default",
     "core:window:allow-destroy",
     "core:webview:default",
-    "core:webview:allow-create-webview-window",
-    {
-      "identifier": "fs:scope",
-      "allow": [{ "path": "**/*" }]
-    }
+    "core:webview:allow-create-webview-window"
   ]
 }

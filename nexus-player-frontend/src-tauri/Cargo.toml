@@ -34,6 +34,7 @@ tracing-subscriber = "0.3"
 chrono = { workspace = true }
 streaming = { workspace = true }
 rand = "0.8"
+sha2 = "0.10"
 
 # Vendored OpenSSL for Android build
 
@@ -43,3 +44,6 @@ openssl = { version = "0.10", features = ["vendored"] }
 
 [lints.clippy]
 unwrap_used = "deny"
+
+[dev-dependencies]
+tempfile = "3"
