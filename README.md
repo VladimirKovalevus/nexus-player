@@ -114,7 +114,7 @@ Arch:
 sudo pacman -S clang mold cmake pkgconf webkit2gtk-4.1 gtk3 libsoup3 alsa-lib dbus
 ```
 
-`.cargo/config.toml` links x86_64 Linux builds with clang and mold, and the C dependencies need cmake and pkg-config.
+The C dependencies need cmake and pkg-config. clang and mold are optional and only speed up linking. To enable mold, set `RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=mold"` before running cargo; CI does the same through its environment.
 
 To build an AppImage, run `npm run build:appimage` from `nexus-player-frontend`. It sets `NO_STRIP=true` because the `strip` bundled with linuxdeploy fails on Arch, whose libraries use newer ELF sections.
 

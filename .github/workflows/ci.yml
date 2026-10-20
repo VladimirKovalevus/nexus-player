@@ -13,16 +13,20 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
       - name: Download gitleaks
         run: |
           curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
           echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
-      - name: Scan the checkout
-        run: '"$RUNNER_TEMP/gitleaks" dir . --no-banner --redact --exit-code 1'
+      - name: Scan the git history
+        run: '"$RUNNER_TEMP/gitleaks" git --no-banner --redact --exit-code 1'
 
   checks:
     runs-on: ubuntu-24.04
+    env:
+      RUSTFLAGS: "-C linker=clang -C link-arg=-fuse-ld=mold"
     steps:
       - name: Check out
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -33,6 +37,8 @@ jobs:
       - name: Install Rust toolchain
         run: |
           rustup toolchain install
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Create frontend dist stub
         run: |
           mkdir -p nexus-player-frontend/dist
@@ -45,6 +51,40 @@ jobs:
         run: cargo test -p nexus-player-backend -p nexus-player-frontend -p streaming --locked
       - name: File sizes
         run: python3 scripts/check_file_sizes.py
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install
+          rustup target add aarch64-linux-android
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
+        with:
+          ndk-version: r27c
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake pkg-config
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Create frontend dist stub
+        run: |
+          mkdir -p nexus-player-frontend/dist
+          echo '<!doctype html><title>stub</title>' > nexus-player-frontend/dist/index.html
+      - name: Check Android target
+        env:
+          ANDROID_PLATFORM: android-24
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.ndk.outputs.ndk-path }}
+          CC_aarch64_linux_android: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
+          AR_aarch64_linux_android: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
+        run: cargo check -p nexus-player-frontend --target aarch64-linux-android --locked
 
   frontend:
     runs-on: ubuntu-24.04
