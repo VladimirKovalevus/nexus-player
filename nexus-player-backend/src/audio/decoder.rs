@@ -108,7 +108,9 @@ impl AudioDecoder {
         hint: Option<Hint>,
         output_sample_rate: u32,
     ) -> Result<Self, AudioError> {
-        let reader_clone = reader.clone_box();
+        let reader_clone = reader.clone_box().map_err(|e| {
+            AudioError::DecodingError(format!("Failed to clone media source: {}", e))
+        })?;
         let mss = MediaSourceStream::new(reader, Default::default());
         let format_opts = FormatOptions {
             enable_gapless: true,

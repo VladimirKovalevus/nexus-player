@@ -80,8 +80,8 @@ impl symphonia::core::io::MediaSource for HlsReaderAdapter {
 }
 
 impl MediaSource for HlsReaderAdapter {
-    fn clone_box(&self) -> Box<dyn MediaSource> {
-        Box::new(self.clone())
+    fn clone_box(&self) -> std::io::Result<Box<dyn MediaSource>> {
+        Ok(Box::new(self.clone()))
     }
 
     fn get_waveforms(&self) -> Vec<crate::audio::types::Waveform> {

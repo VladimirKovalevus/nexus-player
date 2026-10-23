@@ -85,8 +85,8 @@ impl std::fmt::Debug for StreamingMediaSource {
 }
 
 impl crate::audio::types::MediaSource for StreamingMediaSource {
-    fn clone_box(&self) -> Box<dyn crate::audio::types::MediaSource> {
-        Box::new(StreamingMediaSource(self.0.clone()))
+    fn clone_box(&self) -> std::io::Result<Box<dyn crate::audio::types::MediaSource>> {
+        Ok(Box::new(StreamingMediaSource(self.0.clone())))
     }
 
     fn get_waveforms(&self) -> Vec<crate::audio::types::Waveform> {

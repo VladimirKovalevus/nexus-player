@@ -38,7 +38,7 @@ impl SampleRate {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum AudioCommand {
     Play(Track),
 
@@ -247,7 +247,7 @@ pub enum TrackState {
     Cached,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct EngineTrack {
     pub track: Track,
     pub audio_source: AudioSource,
@@ -352,25 +352,19 @@ use std::fs::File;
 use std::io::{Read, Seek};
 
 pub trait MediaSource: SymphoniaSource + Read + Seek + Send + std::fmt::Debug {
-    fn clone_box(&self) -> Box<dyn MediaSource>;
+    fn clone_box(&self) -> std::io::Result<Box<dyn MediaSource>>;
     fn get_waveforms(&self) -> Vec<Waveform> {
         Vec::new()
     }
 }
 
-impl Clone for Box<dyn MediaSource> {
-    fn clone(&self) -> Self {
-        self.clone_box()
-    }
-}
-
 impl MediaSource for File {
-    fn clone_box(&self) -> Box<dyn MediaSource> {
-        Box::new(self.try_clone().expect("Failed to clone file descriptor"))
+    fn clone_box(&self) -> std::io::Result<Box<dyn MediaSource>> {
+        Ok(Box::new(self.try_clone()?))
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AudioSource {
     pub reader: Box<dyn MediaSource>,
     pub format: Option<AudioFormat>,
