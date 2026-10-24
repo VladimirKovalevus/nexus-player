@@ -5,7 +5,7 @@ async function load() {
   return await import('./index');
 }
 
-describe('pickInitialLocale (R4)', () => {
+describe('pickInitialLocale', () => {
   it('stored supported locale wins over any language', async () => {
     const { pickInitialLocale } = await load();
     expect(pickInitialLocale('ru', 'en-US')).toBe('ru');
@@ -34,7 +34,7 @@ describe('pickInitialLocale (R4)', () => {
   });
 });
 
-describe('i18n module initial locale (R4)', () => {
+describe('i18n module initial locale', () => {
   beforeEach(() => {
     localStorage.clear();
   });

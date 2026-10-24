@@ -49,8 +49,8 @@ beforeEach(() => {
   i18n.global.locale.value = 'en';
 });
 
-describe('HomeView mobile Playlists row (R11, R13, R14)', () => {
-  it('R13: 0 playlists hides the block and keeps the "+ playlist" button', async () => {
+describe('HomeView mobile Playlists row', () => {
+  it('0 playlists hides the block and keeps the "+ playlist" button', async () => {
     const w = await mountHome([], true);
     expect(w.find('[data-testid="home-playlists"]').exists()).toBe(false);
     const header = w.find('.view-header');
@@ -58,7 +58,7 @@ describe('HomeView mobile Playlists row (R11, R13, R14)', () => {
     expect(header.find('button.deck-btn').exists()).toBe(true);
   });
 
-  it('R11: 5 playlists show 5 tiles, no All tile, and a link with 5', async () => {
+  it('5 playlists show 5 tiles, no All tile, and a link with 5', async () => {
     const w = await mountHome(makePlaylists(5), true);
     const block = w.find('[data-testid="home-playlists"]');
     expect(block.exists()).toBe(true);
@@ -69,7 +69,7 @@ describe('HomeView mobile Playlists row (R11, R13, R14)', () => {
     expect(link.text()).toContain('5');
   });
 
-  it('R11: 30 playlists show the first 12 in order plus an All tile with 30', async () => {
+  it('30 playlists show the first 12 in order plus an All tile with 30', async () => {
     const all = makePlaylists(30);
     const w = await mountHome(all, true);
     const tiles = w.findAll('[data-testid="home-playlist-tile"]');
@@ -82,13 +82,13 @@ describe('HomeView mobile Playlists row (R11, R13, R14)', () => {
     expect(w.find('[data-testid="home-playlists-all-link"]').text()).toContain('30');
   });
 
-  it('R11: exactly 12 playlists show all of them with no All tile', async () => {
+  it('exactly 12 playlists show all of them with no All tile', async () => {
     const w = await mountHome(makePlaylists(12), true);
     expect(w.findAll('[data-testid="home-playlist-tile"]')).toHaveLength(12);
     expect(w.find('[data-testid="home-playlists-all-tile"]').exists()).toBe(false);
   });
 
-  it('R14: desktop renders no Playlists block even with 30 playlists', async () => {
+  it('desktop renders no Playlists block even with 30 playlists', async () => {
     const w = await mountHome(makePlaylists(30), false);
     expect(w.find('[data-testid="home-playlists"]').exists()).toBe(false);
     expect(w.find('[data-testid="home-playlist-tile"]').exists()).toBe(false);

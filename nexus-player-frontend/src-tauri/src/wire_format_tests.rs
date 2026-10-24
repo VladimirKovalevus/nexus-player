@@ -1,4 +1,4 @@
-//! T3 R4: the DTO wire format, pinned against the unsplit `dto.rs`.
+//! The DTO wire format, pinned against the original `dto.rs` layout.
 //!
 //! Each serialization test compares `serde_json::to_value` with a full JSON literal, so keys,
 //! tags, enum spellings, nesting and how `None` is written are all fixed. Each deserialization

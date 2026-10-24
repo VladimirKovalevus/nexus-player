@@ -21,7 +21,7 @@ function emptyKeys(map: Map<string, unknown>): string[] {
   return [...map].filter(([, v]) => typeof v !== 'string' || v.trim() === '').map(([k]) => k);
 }
 
-describe('locale files (R5)', () => {
+describe('locale files', () => {
   const ruKeys = flatten(ru);
   const enKeys = flatten(en);
 

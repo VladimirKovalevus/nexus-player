@@ -31,7 +31,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe.each(LOCALES)('cache download toasts in %s (R9)', (locale, messages) => {
+describe.each(LOCALES)('cache download toasts in %s', (locale, messages) => {
   beforeEach(() => {
     i18n.global.locale.value = locale;
   });
@@ -79,7 +79,7 @@ describe.each(LOCALES)('cache download toasts in %s (R9)', (locale, messages) =>
   });
 });
 
-describe('ru and en toasts differ (R9)', () => {
+describe('ru and en toasts differ', () => {
   it.each(['cacheStarted', 'cacheFinished', 'cacheFailed'])('%s', (key) => {
     expect((ru as unknown as Messages).downloads[key]).not.toBe(
       (en as unknown as Messages).downloads[key],
@@ -87,7 +87,7 @@ describe('ru and en toasts differ (R9)', () => {
   });
 });
 
-describe('dead listeners and keys removed (R9)', () => {
+describe('dead listeners and keys removed', () => {
   it.each(['download-started', 'download-finished', 'download-start', 'download-finish'])(
     'App.vue has no %s',
     (name) => {

@@ -19,7 +19,7 @@ const tFor = (loc: Loc) => {
   return (key: string) => i18n.global.t(key);
 };
 
-describe('sourceLabel helper (R3)', () => {
+describe('sourceLabel helper', () => {
   it.each(['ru', 'en'] as const)('keeps brand names in %s', (loc) => {
     const t = tFor(loc);
     expect(sourceLabel('soundcloud', t)).toBe('SoundCloud');
@@ -65,7 +65,7 @@ const track = (system?: string) => ({
   ...(system ? { source: { system, id: '1' } } : {}),
 });
 
-describe('MediaRow source text (R3)', () => {
+describe('MediaRow source text', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
   });
@@ -99,7 +99,7 @@ describe('MediaRow source text (R3)', () => {
   });
 });
 
-describe('call sites (R3)', () => {
+describe('call sites', () => {
   it('HistoryView no longer renders source.system directly', () => {
     expect(historySource).not.toMatch(/\{\{[^}]*source\.system[^}]*\}\}/);
   });

@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.mocked(invoke).mockClear();
 });
 
-describe('eq store ids (R2)', () => {
+describe('eq store ids', () => {
   it('defaults to the flat preset id', () => {
     expect(useEqStore().settings.presetName).toBe('flat');
   });

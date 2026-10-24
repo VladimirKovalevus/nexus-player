@@ -54,8 +54,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('HomeView All playlists grid (R12, R15)', () => {
-  it('R12: the All tile opens a grid with all 30 playlists and hides the row', async () => {
+describe('HomeView All playlists grid', () => {
+  it('the All tile opens a grid with all 30 playlists and hides the row', async () => {
     const w = await mountHome();
     await w.find('[data-testid="home-playlists-all-tile"]').trigger('click');
     await flushPromises();
@@ -68,7 +68,7 @@ describe('HomeView All playlists grid (R12, R15)', () => {
     w.unmount();
   });
 
-  it('R12: opening pushes exactly one history entry', async () => {
+  it('opening pushes exactly one history entry', async () => {
     const push = vi.spyOn(history, 'pushState');
     const w = await mountHome();
     await w.find('[data-testid="home-playlists-all-link"]').trigger('click');
@@ -77,7 +77,7 @@ describe('HomeView All playlists grid (R12, R15)', () => {
     w.unmount();
   });
 
-  it('R12: Back button returns to the row, via history.back, with no navigate event', async () => {
+  it('Back button returns to the row, via history.back, with no navigate event', async () => {
     const back = vi.spyOn(history, 'back');
     const w = await mountHome();
     await w.find('[data-testid="home-playlists-all-tile"]').trigger('click');
@@ -93,7 +93,7 @@ describe('HomeView All playlists grid (R12, R15)', () => {
     w.unmount();
   });
 
-  it('R12: a popstate closes the grid', async () => {
+  it('a popstate closes the grid', async () => {
     const w = await mountHome();
     await w.find('[data-testid="home-playlists-all-link"]').trigger('click');
     await flushPromises();
@@ -106,7 +106,7 @@ describe('HomeView All playlists grid (R12, R15)', () => {
     w.unmount();
   });
 
-  it('R12: .home-scroll scrollTop is restored after Back', async () => {
+  it('.home-scroll scrollTop is restored after Back', async () => {
     const w = await mountHome();
     const scroller = w.find('.home-scroll').element as HTMLElement;
     let top = 0;
@@ -131,7 +131,7 @@ describe('HomeView All playlists grid (R12, R15)', () => {
     w.unmount();
   });
 
-  it('R12: unmounting with the grid open steps back once and leaves no listener', async () => {
+  it('unmounting with the grid open steps back once and leaves no listener', async () => {
     const back = vi.spyOn(history, 'back');
     const w = await mountHome();
     await w.find('[data-testid="home-playlists-all-tile"]').trigger('click');
@@ -145,14 +145,14 @@ describe('HomeView All playlists grid (R12, R15)', () => {
     expect(back).toHaveBeenCalledTimes(1);
   });
 
-  it('R12: unmounting with the grid closed does not touch history', async () => {
+  it('unmounting with the grid closed does not touch history', async () => {
     const back = vi.spyOn(history, 'back');
     const w = await mountHome();
     w.unmount();
     expect(back).not.toHaveBeenCalled();
   });
 
-  it('R12: becoming desktop closes the grid', async () => {
+  it('becoming desktop closes the grid', async () => {
     const w = await mountHome();
     await w.find('[data-testid="home-playlists-all-tile"]').trigger('click');
     await flushPromises();
@@ -162,7 +162,7 @@ describe('HomeView All playlists grid (R12, R15)', () => {
     w.unmount();
   });
 
-  it('R15: the grid text renders in both locales', async () => {
+  it('the grid text renders in both locales', async () => {
     for (const locale of ['en', 'ru'] as const) {
       i18n.global.locale.value = locale;
       const w = await mountHome();

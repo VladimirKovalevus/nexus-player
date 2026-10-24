@@ -1,4 +1,4 @@
-//! EQ presets use stable ids; legacy Russian names migrate on deserialize (R1).
+//! EQ presets use stable ids; legacy Russian names migrate on deserialize.
 
 use nexus_player_backend::audio::eq::{builtin_presets, EqSettings};
 use nexus_player_backend::config::AppConfig;
@@ -33,20 +33,17 @@ const LEGACY: [(&str, &str); 7] = [
 
 const GAINS: [f32; 10] = [1.0, 2.0, 3.0, 4.0, 5.0, -1.0, -2.0, -3.0, -4.0, -5.0];
 
-// R1
 #[test]
 fn eq_default_preset_is_flat() {
     assert_eq!(EqSettings::default().preset_name.as_deref(), Some("flat"));
 }
 
-// R1
 #[test]
 fn eq_builtin_preset_ids_are_the_seven_in_order() {
     let ids: Vec<&str> = builtin_presets().iter().map(|(id, _)| *id).collect();
     assert_eq!(ids, IDS);
 }
 
-// R1
 #[test]
 fn eq_all_legacy_names_migrate_to_ids() {
     for (legacy, id) in LEGACY {
@@ -59,7 +56,6 @@ fn eq_all_legacy_names_migrate_to_ids() {
     }
 }
 
-// R1
 #[test]
 fn eq_known_id_is_kept() {
     for id in IDS {
@@ -68,7 +64,6 @@ fn eq_known_id_is_kept() {
     }
 }
 
-// R1
 #[test]
 fn eq_unknown_name_becomes_custom_with_gains_kept() {
     let s: EqSettings = serde_json::from_value(
@@ -80,7 +75,6 @@ fn eq_unknown_name_becomes_custom_with_gains_kept() {
     assert!(!s.enabled);
 }
 
-// R1
 #[test]
 fn eq_explicit_null_stays_none() {
     let s: EqSettings =
@@ -89,7 +83,6 @@ fn eq_explicit_null_stays_none() {
     assert_eq!(s.gains, GAINS);
 }
 
-// R1
 #[test]
 fn eq_missing_preset_field_gives_flat() {
     let s: EqSettings = serde_json::from_value(json!({ "gains": GAINS })).unwrap();
@@ -98,7 +91,6 @@ fn eq_missing_preset_field_gives_flat() {
     assert_eq!(s.preset_name.as_deref(), Some("flat"));
 }
 
-// R1
 #[test]
 fn eq_migrated_value_round_trips() {
     let (legacy, _) = LEGACY[5];
@@ -112,7 +104,6 @@ fn eq_migrated_value_round_trips() {
     assert_eq!(back.enabled, s.enabled);
 }
 
-// R1
 #[test]
 fn eq_old_app_config_migrates_eq_object() {
     let (legacy, _) = LEGACY[1];
@@ -122,7 +113,6 @@ fn eq_old_app_config_migrates_eq_object() {
     assert_eq!(cfg.eq.gains, GAINS);
 }
 
-// R1
 #[test]
 fn eq_source_has_no_cyrillic() {
     let src = include_str!("../src/audio/eq.rs");
