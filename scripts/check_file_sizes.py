@@ -224,14 +224,14 @@ def main(argv=None):
     arguments = sys.argv[1:] if argv is None else argv
     paths, issues = argument_paths(arguments) if arguments else default_paths()
     for issue in issues:
-        print(f"FAIL [R1]: {issue}", file=sys.stderr)
+        print(f"FAIL: {issue}", file=sys.stderr)
     found = offenders({path: _read(path) for path in paths})
     for path, count in found:
-        print(f"FAIL [R1]: {path} has {count} lines, the limit is {LIMIT}", file=sys.stderr)
+        print(f"FAIL: {path} has {count} lines, the limit is {LIMIT}", file=sys.stderr)
     if issues or found:
         return 1
     rs = sum(1 for p in paths if p.endswith(".rs"))
-    print(f"ok [R1]: {rs} .rs and {len(paths) - rs} .vue files are within {LIMIT} lines")
+    print(f"ok: {rs} .rs and {len(paths) - rs} .vue files are within {LIMIT} lines")
     return 0
 
 
