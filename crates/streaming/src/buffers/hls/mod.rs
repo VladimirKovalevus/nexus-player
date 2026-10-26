@@ -1,15 +1,15 @@
 use super::sync::lock_recover;
-use std::fs::{self, File};
-use std::io::Cursor;
-use std::path::{Path, PathBuf};
+use std::fs::File;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use bytes::Bytes;
 
-use lofty::{prelude::*, probe::Probe};
-
+mod persistence;
+mod profile;
 mod readers;
+mod waveform;
 pub use readers::HlsSequentialReader;
 
 #[derive(Debug, Clone)]
@@ -59,15 +59,6 @@ impl HlsBuffer {
         self.waveform_enabled
     }
 
-    pub fn get_waveforms(&self) -> Vec<crate::state::types::Waveform> {
-        let inner = lock_recover(&self.inner);
-        inner
-            .segments
-            .iter()
-            .filter_map(|s| s.as_ref().and_then(|seg| seg.waveform.clone()))
-            .collect()
-    }
-
     pub fn byte_size(&self) -> u64 {
         let inner = lock_recover(&self.inner);
         inner
@@ -78,15 +69,6 @@ impl HlsBuffer {
             .sum()
     }
 
-    pub fn set_segment_waveform(&self, index: usize, waveform: crate::state::types::Waveform) {
-        let mut inner = lock_recover(&self.inner);
-        let init_offset = if inner.has_init_segment { 1 } else { 0 };
-        let real_index = index + init_offset;
-
-        if let Some(Some(segment)) = inner.segments.get_mut(real_index) {
-            segment.waveform = Some(waveform);
-        }
-    }
     pub fn init(&self, segment_count: usize, durations: Vec<f64>, init_segment: Option<Vec<u8>>) {
         let mut inner = lock_recover(&self.inner);
 
@@ -489,287 +471,5 @@ impl HlsBuffer {
         }
 
         false
-    }
-
-    pub fn profile(&self) {
-        use std::fmt::Write as _;
-        let mut out = String::new();
-        let inner = lock_recover(&self.inner);
-
-        let total_segments = inner.segments.len();
-        let filled_segments = inner.segments.iter().filter(|s| s.is_some()).count();
-
-        let total_duration: f64 = inner.durations.iter().sum();
-        let downloaded = inner
-            .segments
-            .iter()
-            .filter_map(|s| s.as_ref())
-            .map(|s| s.data.len() as u64)
-            .sum::<u64>();
-
-        let _ = writeln!(
-            out,
-            "╔═══════════════════════════════════════════════════════════════╗"
-        );
-        let _ = writeln!(
-            out,
-            "║               HLS BUFFER PROFILE                              ║"
-        );
-        let _ = writeln!(
-            out,
-            "╠═══════════════════════════════════════════════════════════════╣"
-        );
-        let _ = writeln!(
-            out,
-            "║ Total segments:  {:<10} │ Filled: {:<10}              ║",
-            total_segments, filled_segments
-        );
-        let _ = writeln!(
-            out,
-            "║ Duration:        {:<10.2}s│ Bitrate: {:<10} kbps     ║",
-            total_duration,
-            inner.bitrate / 1000
-        );
-        let _ = writeln!(
-            out,
-            "║ Downloaded:      {:<10} bytes                             ║",
-            downloaded
-        );
-        let _ = writeln!(
-            out,
-            "║ Progress:        {:.2}%                                        ║",
-            if total_segments > 0 {
-                (filled_segments as f64 / total_segments as f64) * 100.0
-            } else {
-                0.0
-            }
-        );
-        let _ = writeln!(
-            out,
-            "║ Has init seg:    {:<10}                                   ║",
-            if inner.has_init_segment { "Yes" } else { "No" }
-        );
-        let _ = writeln!(
-            out,
-            "╠═══════════════════════════════════════════════════════════════╣"
-        );
-        let _ = writeln!(
-            out,
-            "║ Segment Map (■ = filled, □ = empty):                         ║"
-        );
-        let _ = writeln!(
-            out,
-            "╠═══════════════════════════════════════════════════════════════╣"
-        );
-
-        const SEGMENTS_PER_ROW: usize = 50;
-
-        for (row_idx, row) in inner.segments.chunks(SEGMENTS_PER_ROW).enumerate() {
-            let start_idx = row_idx * SEGMENTS_PER_ROW;
-            let _ = write!(
-                out,
-                "║ {:04}-{:04} │ ",
-                start_idx,
-                start_idx + row.len() - 1
-            );
-
-            for segment_opt in row {
-                let symbol = match segment_opt {
-                    None => '□',
-                    Some(_) => '■',
-                };
-                let _ = write!(out, "{}", symbol);
-            }
-
-            let padding = SEGMENTS_PER_ROW.saturating_sub(row.len());
-            for _ in 0..padding {
-                let _ = write!(out, " ");
-            }
-
-            let _ = writeln!(out, " ║");
-        }
-
-        let _ = writeln!(
-            out,
-            "╠═══════════════════════════════════════════════════════════════╣"
-        );
-        let _ = writeln!(
-            out,
-            "║ Detailed Segment Info:                                       ║"
-        );
-        let _ = writeln!(
-            out,
-            "╠═════════╦══════════════╦═══════════════╦═════════════════════╣"
-        );
-        let _ = writeln!(
-            out,
-            "║  Index  ║    Status    ║  Size (bytes) ║  Duration (s)       ║"
-        );
-        let _ = writeln!(
-            out,
-            "╠═════════╬══════════════╬═══════════════╬═════════════════════╣"
-        );
-
-        for (idx, segment_opt) in inner.segments.iter().enumerate() {
-            let duration = if idx == 0 && inner.has_init_segment {
-                0.0
-            } else {
-                let duration_idx = if inner.has_init_segment { idx - 1 } else { idx };
-                inner.durations.get(duration_idx).copied().unwrap_or(0.0)
-            };
-
-            match segment_opt {
-                None => {
-                    let _ = writeln!(
-                        out,
-                        "║ {:>7} ║ Empty        ║ {:>13} ║ {:>7.2}             ║",
-                        idx, 0, duration
-                    );
-                }
-                Some(segment) => {
-                    let status = if idx == 0 && inner.has_init_segment {
-                        "Init"
-                    } else {
-                        "Filled"
-                    };
-                    let _ = writeln!(
-                        out,
-                        "║ {:>7} ║ {:<12} ║ {:>13} ║ {:>7.2}             ║",
-                        idx,
-                        status,
-                        segment.data.len(),
-                        duration
-                    );
-                }
-            }
-        }
-
-        let _ = writeln!(
-            out,
-            "╚═════════╩══════════════╩═══════════════╩═════════════════════╝"
-        );
-        tracing::debug!("{out}");
-    }
-
-    pub fn save_to_folder<P: AsRef<Path>>(&self, folder_path: P) -> std::io::Result<()> {
-        let inner = lock_recover(&self.inner);
-
-        fs::create_dir_all(&folder_path)?;
-
-        for (index, segment_opt) in inner.segments.iter().enumerate() {
-            if let Some(segment) = segment_opt {
-                let file_path = if index == 0 && inner.has_init_segment {
-                    folder_path.as_ref().join("init.m4a")
-                } else {
-                    let segment_index = if inner.has_init_segment {
-                        index - 1
-                    } else {
-                        index
-                    };
-                    folder_path
-                        .as_ref()
-                        .join(format!("segment{}.m4a", segment_index))
-                };
-
-                fs::write(file_path, &segment.data)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn load_from_folder<P: AsRef<Path>>(&self, folder_path: P) -> std::io::Result<()> {
-        let folder = folder_path.as_ref();
-
-        let init_path = folder.join("init.m4a");
-        let init_segment = if init_path.exists() {
-            Some(fs::read(init_path.clone())?)
-        } else {
-            None
-        };
-
-        let mut segments_data: Vec<Vec<u8>> = Vec::new();
-        let mut durations: Vec<f64> = Vec::new();
-        let mut segment_index = 0;
-
-        loop {
-            let segment_path = folder.join(format!("segment{}.m4a", segment_index));
-            if segment_path.exists() {
-                let data = fs::read(&segment_path)?;
-
-                let actual_data = match &init_segment {
-                    Some(init) => [init.as_slice(), data.as_slice()].concat(),
-                    None => data.clone(),
-                };
-
-                if let Some(duration) = Self::extract_duration(&actual_data) {
-                    if duration > 0.0 {
-                        durations.push(duration);
-                    } else {
-                        durations.push(10.0);
-                    }
-                } else {
-                    durations.push(10.0);
-                }
-
-                segments_data.push(data);
-                segment_index += 1;
-            } else {
-                break;
-            }
-        }
-
-        if segments_data.is_empty() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "No segment files found in folder",
-            ));
-        }
-
-        let bitrate = {
-            let mut combined_data = Vec::new();
-            if let Some(ref init_data) = init_segment {
-                combined_data.extend_from_slice(init_data);
-            }
-            if let Some(first_segment) = segments_data.first() {
-                combined_data.extend_from_slice(first_segment);
-            }
-
-            if !combined_data.is_empty() {
-                Self::extract_bitrate(&combined_data).unwrap_or(0)
-            } else {
-                0
-            }
-        };
-
-        let segment_count = segments_data.len();
-        self.init(segment_count, durations, init_segment);
-
-        for (idx, data) in segments_data.into_iter().enumerate() {
-            self.write_chunk(idx as u64, data);
-        }
-
-        if bitrate > 0 {
-            self.set_bitrate(bitrate * 1000);
-        }
-
-        Ok(())
-    }
-
-    fn extract_bitrate(data: &[u8]) -> Option<u64> {
-        let cursor = Cursor::new(data);
-        let probe = Probe::new(cursor).guess_file_type().ok()?.read().ok()?;
-
-        let properties = probe.properties();
-        Some(properties.audio_bitrate()? as u64)
-    }
-
-    fn extract_duration(data: &[u8]) -> Option<f64> {
-        let cursor = Cursor::new(data);
-        let probe = Probe::new(cursor).guess_file_type().ok()?.read().ok()?;
-
-        let properties = probe.properties();
-        let duration_millis = properties.duration().as_millis() as f64;
-        Some(duration_millis / 1000.0)
     }
 }

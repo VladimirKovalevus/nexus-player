@@ -9,6 +9,8 @@ use rand::{thread_rng, Rng};
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+pub use crate::playlist::cursor::{ContainerKind, ContainerMeta};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RepeatMode {
     #[default]
@@ -527,10 +529,6 @@ impl CursorQueue {
         (rows, current_index)
     }
 }
-
-// === Queue row types ===
-
-pub use crate::playlist::cursor::{ContainerKind, ContainerMeta};
 
 /// Entry for the UI snapshot
 #[derive(Debug, Clone)]
