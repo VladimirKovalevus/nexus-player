@@ -6,6 +6,12 @@
 
 Nexus Player is a desktop and Android music player built with Rust, Tauri 2 and Vue 3. It plays a local library and streams from SoundCloud and Bandcamp.
 
+## Why
+
+Music today is spread across platforms: one artist is on SoundCloud, another only on Bandcamp, and the rest of a collection sits in local files. Nexus Player puts all of these sources in one app, so there is no juggling of several subscriptions and no managing of downloaded files across devices.
+
+Playlists are not limited to tracks. A playlist can contain whole albums, which play one after another, and other playlists.
+
 ## Architecture
 
 ```mermaid
@@ -36,11 +42,17 @@ flowchart TD
 
 ### Cursor-based playback queue
 
-Playback does not hold a flat list of tracks. A [`PlayerCursor`](nexus-player-backend/src/playlist/cursor/engine.rs) keeps a stack of lazy `CursorSource`s and walks nested content depth-first, asking each source for the next batch only when needed. A source can yield a track or a container (a playlist, a radio session, a search), and containers are resolved into new sources on demand. [`playback_queue.rs`](nexus-player-backend/src/playlist/playback_queue.rs) builds the queue on top of the cursor: history, a manual queue, repeat modes and shuffle inside a prefetch window. Code is in [`playlist/cursor/`](nexus-player-backend/src/playlist/cursor) and [`playback_queue.rs`](nexus-player-backend/src/playlist/playback_queue.rs).
+Playback does not hold a flat list of tracks. A [`PlayerCursor`](nexus-player-backend/src/playlist/cursor/engine.rs) keeps a stack of lazy `CursorSource`s and walks nested content lazily and depth-first: a nested playlist is loaded only when playback reaches it, all of its tracks play before the next item of the parent, and a playlist nested twice plays twice. A source can yield a track or a container (a playlist, a radio session, a search), and containers are resolved into new sources on demand.
+
+[`playback_queue.rs`](nexus-player-backend/src/playlist/playback_queue.rs) builds the queue on top of the cursor. Tracks added by the user live in a separate user queue and play right after the current track, before the prefetched lookahead. Playback history is bounded, and the UI receives only its most recent entries. Repeat modes work inside nested containers too.
+
+Shuffle depends on the source. On a finite local source (a library playlist or album) the source is flattened and shuffle picks from the whole remainder. On an infinite source (search, radio) the rest is unknown, so shuffle picks from the lookahead window. Code is in [`playlist/cursor/`](nexus-player-backend/src/playlist/cursor) and [`playback_queue.rs`](nexus-player-backend/src/playlist/playback_queue.rs).
 
 ### HLS and chunked streaming
 
-Remote audio is read through two paths. HLS streams are parsed and fetched segment by segment in [`crates/streaming/src/hls/`](crates/streaming/src/hls) and held in [`buffers/hls/`](crates/streaming/src/buffers/hls/mod.rs); plain HTTP audio is held in fixed-size chunks in [`buffers/chunked.rs`](crates/streaming/src/buffers/chunked.rs). On the backend side, [`hls_decoder.rs`](nexus-player-backend/src/audio/hls_decoder.rs) decodes HLS segments with Symphonia through [`hls_reader.rs`](nexus-player-backend/src/audio/playback/hls_reader.rs), which adapts the segment source to a seekable reader.
+Remote audio is read through two paths. HLS streams are parsed and fetched segment by segment in [`crates/streaming/src/hls/`](crates/streaming/src/hls) and held in [`buffers/hls/`](crates/streaming/src/buffers/hls/mod.rs) as segments of bytes; plain HTTP audio is held in fixed-size chunks in [`buffers/chunked.rs`](crates/streaming/src/buffers/chunked.rs). On the backend side, [`hls_decoder.rs`](nexus-player-backend/src/audio/hls_decoder.rs) decodes HLS segments with Symphonia through [`hls_reader.rs`](nexus-player-backend/src/audio/playback/hls_reader.rs), which adapts the segment source to a seekable reader.
+
+Reading is segment-based. The reader keeps the current segment and asks the buffer for data once per segment, returning `WouldBlock` while the next segment is not loaded yet and end of stream after the last one. There is no virtual file sized from duration and bitrate estimates.
 
 ### Download manager
 
@@ -98,7 +110,9 @@ npm run tauri dev     # development
 npm run tauri build   # release build
 ```
 
-`npm run setup` installs and builds `vendor/butterchurn`; it needs network access once. Later `npm run dev` and `npm run build` reuse the built copy.
+`npm run setup` installs and builds `vendor/butterchurn`; it needs network access once. Later `npm run dev` and `npm run build` reuse the built copy. Until `npm run setup` has run, imports of `butterchurn` fail because `vendor/butterchurn/dist` does not exist.
+
+`cargo build` (any Rust build of the Tauri crate, including clippy and tests) needs `nexus-player-frontend/dist/index.html` to exist at compile time. Without a frontend build, create a stub: `mkdir -p nexus-player-frontend/dist && echo '<!doctype html>' > nexus-player-frontend/dist/index.html`.
 
 ### Linux
 
@@ -176,7 +190,7 @@ npx vue-tsc --noEmit
 npm test
 ```
 
-The Tauri crate needs `nexus-player-frontend/dist/index.html` to exist at compile time. For Rust-only checks without a frontend build, CI creates a stub: `mkdir -p nexus-player-frontend/dist && echo '<!doctype html>' > nexus-player-frontend/dist/index.html`.
+For Rust-only checks without a frontend build, create the `dist/index.html` stub described in the build section.
 
 ## Repository layout
 
