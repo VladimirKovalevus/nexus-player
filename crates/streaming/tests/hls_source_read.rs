@@ -13,10 +13,7 @@ fn source_over(buffer: Arc<HlsBuffer>) -> (HlsSource, Rx) {
     (HlsSource::new(buffer, 7, Arc::new(tx)), rx)
 }
 
-fn buffer_with(
-    segments: &[Option<Vec<u8>>],
-    init_segment: Option<Vec<u8>>,
-) -> Arc<HlsBuffer> {
+fn buffer_with(segments: &[Option<Vec<u8>>], init_segment: Option<Vec<u8>>) -> Arc<HlsBuffer> {
     let buffer = Arc::new(HlsBuffer::new(false));
     buffer.init(segments.len(), vec![1.0; segments.len()], init_segment);
     buffer.set_container("opus".to_string());

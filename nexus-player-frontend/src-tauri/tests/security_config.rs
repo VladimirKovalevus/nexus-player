@@ -67,7 +67,9 @@ fn remaining_fs_scope_paths_stay_in_app_directories() {
     let caps = load("capabilities/default.json");
     for p in fs_scope_paths(&caps) {
         assert!(
-            p.starts_with("$AUDIO") || p.starts_with("$APPDATA") || p.starts_with("$CACHE/nexus-downloads"),
+            p.starts_with("$AUDIO")
+                || p.starts_with("$APPDATA")
+                || p.starts_with("$CACHE/nexus-downloads"),
             "fs scope path outside allowed bases: {p}"
         );
     }

@@ -119,9 +119,7 @@ fn files_containing_token(dir: &Path) -> Vec<PathBuf> {
 
 fn write_legacy_config(path: &Path) {
     std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
-    let json = format!(
-        r#"{{"bot_token":"{TOKEN}","chat_id":"-100777","last_message_id":42}}"#
-    );
+    let json = format!(r#"{{"bot_token":"{TOKEN}","chat_id":"-100777","last_message_id":42}}"#);
     std::fs::write(path, json).expect("write legacy config");
 }
 
@@ -154,10 +152,7 @@ fn load_with_nothing_stored_returns_none() {
 fn unavailable_keyring_falls_back_to_file_and_reads_it_back() {
     let dir = tempfile::tempdir().expect("tempdir");
     let file = dir.path().join("sync/telegram_token");
-    let store = FallbackTokenStore::new(
-        Box::new(UnavailableKeyring),
-        FileTokenStore::new(&file),
-    );
+    let store = FallbackTokenStore::new(Box::new(UnavailableKeyring), FileTokenStore::new(&file));
     store.save(TOKEN).expect("save falls back to file");
     assert!(file.exists(), "fallback file should be created");
     assert!(std::fs::read_to_string(&file)
@@ -235,7 +230,10 @@ fn failed_store_write_keeps_token_in_json_for_retry() {
 
     assert!(store.save_attempts.load(Ordering::SeqCst) >= 1);
     let json = std::fs::read_to_string(&config_path).expect("read json");
-    assert!(json.contains(TOKEN), "token lost before store write: {json}");
+    assert!(
+        json.contains(TOKEN),
+        "token lost before store write: {json}"
+    );
 
     // Next start with a working store succeeds.
     let good = FileTokenStore::new(dir.path().join("sync/telegram_token"));

@@ -44,5 +44,8 @@ fn telegram_config_debug_masks_token() {
     };
     let text = format!("{config:?}");
     assert!(!text.contains(TOKEN), "Debug leaks token: {text}");
-    assert!(text.contains("-100777"), "Debug should keep chat id: {text}");
+    assert!(
+        text.contains("-100777"),
+        "Debug should keep chat id: {text}"
+    );
 }
