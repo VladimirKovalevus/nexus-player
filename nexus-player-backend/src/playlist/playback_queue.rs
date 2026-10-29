@@ -300,6 +300,15 @@ impl CursorQueue {
         self.current_track.as_ref()
     }
 
+    /// Replaces the queue with a finite list of tracks. They go to the lookahead, so a track
+    /// added later by `add_track` plays right after the current one, and shuffle draws
+    /// from the whole list.
+    pub fn load_tracks(&mut self, tracks: Vec<Track>) {
+        self.clear();
+        self.lookahead
+            .extend(tracks.into_iter().map(UpcomingRow::Track));
+    }
+
     pub fn add_track(&mut self, track: Track) {
         self.user_queue.push_back(track);
     }

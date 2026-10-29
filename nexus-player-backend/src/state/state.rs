@@ -260,10 +260,7 @@ impl AppState {
     async fn fill_cursor_queue(&self, tracks: Vec<AudioTrack>) {
         let mut queue = self.queue.lock().await;
         let ActiveQueue::Cursor(cq) = &mut *queue;
-        cq.clear();
-        for track in tracks {
-            cq.add_track(track);
-        }
+        cq.load_tracks(tracks);
     }
 
     // --- Cancellation mechanism ---
