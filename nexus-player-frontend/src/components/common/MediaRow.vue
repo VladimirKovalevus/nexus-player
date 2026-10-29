@@ -29,7 +29,7 @@
         :disabled="(store.isLoading && active) || track?.unavailable"
         @click.stop="handlePlay"
       >
-        <AppIcon v-if="store.isLoading && active" name="loader-dot" :size="14" />
+        <AppIcon v-if="store.isLoading && active" name="spinner" :size="14" :class="$style.loader" />
         <AppIcon v-else-if="track?.unavailable" name="x-circle" :size="14" />
         <AppIcon v-else name="play" :size="14" />
       </button>
@@ -469,6 +469,16 @@ const handleToggleLike = async () => {
 </script>
 
 <style module lang="scss">
+.loader {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @import '@/styles/variables.scss';
 @import '@/styles/mixins.scss';
 

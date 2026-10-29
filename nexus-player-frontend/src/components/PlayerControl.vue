@@ -280,7 +280,7 @@ onUnmounted(() => {
           :disabled="audioStore.isLoading"
           @click="togglePlayPause"
         >
-          <AppIcon v-if="audioStore.isLoading" name="loader-dot" :size="16" :class="$style.loader" />
+          <AppIcon v-if="audioStore.isLoading" name="spinner" :size="16" :class="$style.loader" />
           <AppIcon v-else :name="audioStore.isPlaying ? 'pause' : 'play'" :size="16" />
         </button>
         <button :class="$style.key" :title="$t('player.next')" :aria-label="$t('player.next')" @click="playNext">
@@ -525,12 +525,12 @@ onUnmounted(() => {
 }
 
 .loader {
-  animation: deckPulse 1s ease-in-out infinite;
+  animation: spin 0.8s linear infinite;
 }
 
-@keyframes deckPulse {
-  50% {
-    opacity: 0.35;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
