@@ -262,7 +262,7 @@ impl StreamProvider for BandcampProvider {
         query: &str,
         content_type: Option<ContentType>,
         limit: usize,
-        _offset: usize,
+        offset: usize,
     ) -> StreamResult<Vec<SearchResult>> {
         let results = bandcamp::search(query)
             .await
@@ -270,7 +270,7 @@ impl StreamProvider for BandcampProvider {
 
         let mut search_results = Vec::new();
 
-        for item in results.into_iter().take(limit) {
+        for item in results {
             match item {
                 bandcamp::SearchResultItem::Album(album) => {
                     if content_type.is_none() || content_type == Some(ContentType::Album) {
@@ -301,7 +301,9 @@ impl StreamProvider for BandcampProvider {
             }
         }
 
-        Ok(search_results)
+        // Bandcamp returns a single unpaged list, so paging is applied here, after the
+        // type filter: `offset` counts results of the requested type, as the UI lists them.
+        Ok(search_results.into_iter().skip(offset).take(limit).collect())
     }
 
     async fn expand_collection(&self, collection: SearchResult) -> StreamResult<Vec<TrackInfo>> {

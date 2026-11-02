@@ -27,7 +27,7 @@ fn search_queue(results: Vec<SearchResult>, resolver: &Arc<FakeResolver>) -> Cur
     queue.context = Some(ContainerContext::SearchQuery {
         system: "bandcamp".into(),
         query: "band".into(),
-        content_type: ContentType::Track,
+        content_type: Some(ContentType::Track),
     });
     queue.set_cursor(PlayerCursor::new(Box::new(source), resolver.clone()));
     queue
@@ -139,7 +139,7 @@ async fn previewing_a_container_attaches_tracks_without_moving_rows_or_playback(
 }
 
 #[tokio::test]
-async fn next_into_a_container_replaces_it_with_its_tracks() {
+async fn next_into_a_container_keeps_it_as_the_current_row_and_plays_its_tracks() {
     let resolver = FakeResolver::new();
     album_tracks(&resolver, "a1", &[11, 12, 13]);
     let mut queue = search_queue(
@@ -156,11 +156,75 @@ async fn next_into_a_container_replaces_it_with_its_tracks() {
     let played = queue.next().await.unwrap().expect("a track");
 
     assert_eq!(played.title, "Title 11");
+    assert_eq!(labels(&queue), vec!["Title 1", "[Album A]", "Title 2"]);
+    assert_eq!(queue.snapshot().1, Some(1));
+    assert_eq!(queue.current_track_within_container(), Some(0));
+    match &queue.snapshot().0[1] {
+        QueueEntry::Container { tracks, .. } => {
+            assert_eq!(tracks.as_ref().map(Vec::len), Some(3));
+        }
+        other => panic!("expected the album row, got {other:?}"),
+    }
+
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 12");
+    assert_eq!(queue.current_track_within_container(), Some(1));
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 13");
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 2");
+    // Leaving the album puts its tracks into history as track rows.
     assert_eq!(
         labels(&queue),
         vec!["Title 1", "Title 11", "Title 12", "Title 13", "Title 2"]
     );
-    assert_eq!(queue.snapshot().1, Some(1));
+    assert_eq!(queue.current_track_within_container(), None);
+}
+
+#[tokio::test]
+async fn previous_inside_the_active_container_steps_back_within_it_then_leaves_it() {
+    let resolver = FakeResolver::new();
+    album_tracks(&resolver, "a1", &[11, 12]);
+    let mut queue = search_queue(
+        vec![track_result(1), album_result("a1", "Album A", 2)],
+        &resolver,
+    );
+    queue.next().await.unwrap();
+    queue.next().await.unwrap();
+    queue.next().await.unwrap();
+    assert_eq!(current_label(&queue).as_deref(), Some("[Album A]"));
+
+    assert_eq!(queue.previous().unwrap().title, "Title 11");
+    assert_eq!(queue.current_track_within_container(), Some(0));
+    assert_eq!(queue.previous().unwrap().title, "Title 1");
+    assert_eq!(labels(&queue), vec!["Title 1", "[Album A]"]);
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 11");
+}
+
+#[tokio::test]
+async fn a_queued_track_cuts_into_the_active_container_which_then_resumes() {
+    let resolver = FakeResolver::new();
+    album_tracks(&resolver, "a1", &[11, 12, 13]);
+    let mut queue = search_queue(vec![album_result("a1", "Album A", 3)], &resolver);
+    queue.next().await.unwrap();
+    queue.add_track(track_info(7).into());
+
+    assert_eq!(queue.peek_next().unwrap().title, "Title 7");
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 7");
+    assert_eq!(labels(&queue), vec!["Title 11", "Title 7", "[Album A]"]);
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 12");
+    assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 13");
+}
+
+#[tokio::test]
+async fn playing_a_track_of_the_active_container_moves_within_it() {
+    let resolver = FakeResolver::new();
+    album_tracks(&resolver, "a1", &[11, 12, 13]);
+    let mut queue = search_queue(vec![album_result("a1", "Album A", 3)], &resolver);
+    queue.next().await.unwrap();
+
+    let played = queue.play_queue_item(0, Some(2)).await.unwrap().unwrap();
+
+    assert_eq!(played.title, "Title 13");
+    assert_eq!(queue.current_track_within_container(), Some(2));
+    assert_eq!(labels(&queue), vec!["[Album A]"]);
 }
 
 #[tokio::test]
@@ -185,10 +249,9 @@ async fn playing_a_container_row_with_a_track_index_starts_at_that_track() {
         .expect("a track");
 
     assert_eq!(played.title, "Title 13");
-    assert_eq!(current_label(&queue).as_deref(), Some("Title 13"));
-    let all = labels(&queue);
-    assert!(all.iter().all(|l| !l.starts_with('[')), "no container left");
-    assert_eq!(all.last().map(String::as_str), Some("Title 2"));
+    assert_eq!(current_label(&queue).as_deref(), Some("[Album A]"));
+    assert_eq!(queue.current_track_within_container(), Some(2));
+    assert_eq!(labels(&queue), vec!["Title 1", "[Album A]", "Title 2"]);
 }
 
 #[tokio::test]
@@ -250,8 +313,82 @@ async fn empty_container_is_skipped_when_playback_reaches_it() {
     assert!(labels(&queue).iter().all(|l| !l.starts_with('[')));
 }
 
+/// A local playlist root that describes its nested playlist 9, as `LocalPlaylistSource` does.
+struct DescribedLocalRoot(VecSource);
+
+#[async_trait::async_trait]
+impl nexus_player_backend::playlist::cursor::CursorSource for DescribedLocalRoot {
+    async fn next_batch(&mut self, limit: usize) -> anyhow::Result<Vec<CursorItem>> {
+        self.0.next_batch(limit).await
+    }
+
+    fn has_more(&self) -> bool {
+        self.0.has_more()
+    }
+
+    fn container_meta(
+        &self,
+        context: &ContainerContext,
+    ) -> Option<nexus_player_backend::playlist::cursor::ContainerMeta> {
+        matches!(context, ContainerContext::LocalPlaylist(9)).then(|| {
+            nexus_player_backend::playlist::cursor::ContainerMeta {
+                kind: ContainerKind::Playlist,
+                id: "9".into(),
+                system: "local".into(),
+                title: "Saved album".into(),
+                artist: "Artist".into(),
+                track_count: 2,
+                thumbnail: None,
+            }
+        })
+    }
+}
+
+/// Local playlist 1 = `[Title 1, playlist 9, Title 4]`, playlist 9 = `[Title 2, Title 3]`.
+fn described_local_queue(resolver: &Arc<FakeResolver>) -> CursorQueue {
+    resolver.serve_local_playlist(9, vec![track_item(2), track_item(3)]);
+    let source = DescribedLocalRoot(VecSource::new(vec![
+        track_item(1),
+        CursorItem::Container(ContainerContext::LocalPlaylist(9)),
+        track_item(4),
+    ]));
+    let mut queue = CursorQueue::new();
+    queue.context = Some(ContainerContext::LocalPlaylist(1));
+    queue.set_cursor(PlayerCursor::new(Box::new(source), resolver.clone()));
+    queue
+}
+
 #[tokio::test]
-async fn local_playlist_context_yields_track_rows_only() {
+async fn nested_local_playlist_is_one_container_row_until_reached() {
+    let resolver = FakeResolver::new();
+    let mut queue = described_local_queue(&resolver);
+
+    queue.prefetch(10).await.unwrap();
+
+    assert_eq!(labels(&queue), vec!["Title 1", "[Saved album]", "Title 4"]);
+    assert!(resolver.resolved_contexts().is_empty());
+
+    let mut played = Vec::new();
+    for _ in 0..4 {
+        played.push(queue.next().await.unwrap().expect("a track").title);
+    }
+    assert_eq!(played, vec!["Title 1", "Title 2", "Title 3", "Title 4"]);
+}
+
+#[tokio::test]
+async fn shuffle_on_a_local_playlist_flattens_its_container_rows() {
+    let resolver = FakeResolver::new();
+    let mut queue = described_local_queue(&resolver);
+    queue.prefetch(10).await.unwrap();
+    queue.shuffle_enabled = true;
+
+    queue.next().await.unwrap().expect("a track");
+
+    assert!(labels(&queue).iter().all(|l| !l.starts_with('[')));
+}
+
+#[tokio::test]
+async fn undescribed_local_container_yields_track_rows() {
     let resolver = FakeResolver::new();
     resolver.serve_local_playlist(9, vec![track_item(2), track_item(3)]);
     let source = VecSource::new(vec![
@@ -337,7 +474,8 @@ async fn starting_at_an_album_position_plays_its_first_track_from_one_page() {
     let (queue, track) = start_at(pages.clone(), &resolver, 47).await.unwrap();
 
     assert_eq!(track.title, "Title 501");
-    assert_eq!(current_label(&queue).as_deref(), Some("Title 501"));
+    assert_eq!(current_label(&queue).as_deref(), Some("[Album 47]"));
+    assert_eq!(queue.current_track_within_container(), Some(0));
     assert!(resolver
         .resolved_contexts()
         .iter()
@@ -581,7 +719,7 @@ async fn shuffle_on_an_endless_search_picks_from_the_lookahead_window_without_dr
     queue.context = Some(ContainerContext::SearchQuery {
         system: "bandcamp".into(),
         query: "band".into(),
-        content_type: ContentType::Track,
+        content_type: Some(ContentType::Track),
     });
     queue.set_cursor(PlayerCursor::new(Box::new(source), resolver.clone()));
     queue.shuffle_enabled = true;
@@ -893,4 +1031,50 @@ async fn jumping_to_the_third_upcoming_row_after_many_plays_makes_it_current() {
     assert_eq!(queue.history.len(), 119 + 3);
     assert_eq!(queue.history[0].title, "Title 0");
     assert_eq!(queue.next().await.unwrap().unwrap().title, "Title 122");
+}
+
+/// Serves an album then tracks when no type is given (the UI's "All" filter), and tracks
+/// only when `Track` is asked for, as the providers do.
+struct TypedPages;
+
+#[async_trait::async_trait]
+impl nexus_player_backend::playlist::cursor::SearchPageSource for TypedPages {
+    async fn search(
+        &self,
+        _system: &str,
+        content_type: Option<ContentType>,
+        _query: &str,
+        limit: usize,
+        offset: usize,
+    ) -> nexus_player_backend::streaming::error::StreamResult<Vec<SearchResult>> {
+        let all: Vec<SearchResult> = match content_type {
+            None => std::iter::once(album_result("a0", "Album 0", 2))
+                .chain((1..5).map(track_result))
+                .collect(),
+            _ => (1..5).map(track_result).collect(),
+        };
+        Ok(all.into_iter().skip(offset).take(limit).collect())
+    }
+}
+
+#[tokio::test]
+async fn search_with_every_type_starts_at_the_album_the_ui_listed() {
+    let resolver = FakeResolver::new();
+    resolver.serve_album("a0", vec![track_item(100), track_item(101)]);
+    let mut queue = CursorQueue::new();
+
+    let track = queue
+        .start_search_at_checked(
+            Arc::new(TypedPages),
+            resolver.clone(),
+            "bandcamp",
+            "band",
+            None,
+            0,
+            Some("a0"),
+        )
+        .await
+        .expect("the album at position 0 of an all-types search must start");
+
+    assert_eq!(track.title, "Title 100");
 }

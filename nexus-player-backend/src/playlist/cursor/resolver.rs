@@ -6,7 +6,7 @@ use crate::library::types::{PlaylistId, TrackId as LibTrackId};
 use crate::library::LibraryService;
 use crate::playlist::cursor::{
     ContainerContext, CursorResolver, CursorSource, DbTrackCursor, LocalPlaylistSource,
-    ProviderCursor, StreamingSearchCursor,
+    ProviderCursor, RadioSource, StreamingSearchCursor,
 };
 use crate::streaming::types::ContentType;
 use crate::streaming::StreamingService;
@@ -48,7 +48,11 @@ impl CursorResolver for AppCursorResolver {
                 ContentType::Album,
             ))),
 
-            ContainerContext::Radio { track_ids, .. } => {
+            ContainerContext::Radio { blocks, .. } => {
+                Ok(Box::new(RadioSource::new(self.library.clone(), blocks)))
+            }
+
+            ContainerContext::RadioPlaylist { track_ids, .. } => {
                 let ids: Vec<LibTrackId> = track_ids.into_iter().map(LibTrackId).collect();
                 Ok(Box::new(DbTrackCursor::new(self.library.clone(), ids)))
             }

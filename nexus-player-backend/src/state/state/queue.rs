@@ -69,11 +69,11 @@ impl AppState {
     /// Builds a radio order for `mode`, freezes it into the queue context and starts
     /// playing from the top.
     pub async fn start_radio(&self, mode: RadioMode) -> Result<()> {
-        let track_ids = radio::build_radio_order(&self.library, mode).await?;
-        if track_ids.is_empty() {
+        let blocks = radio::build_radio_blocks(&self.library, mode).await?;
+        if blocks.is_empty() {
             anyhow::bail!("No tracks available for radio");
         }
-        tracing::info!("Starting radio {:?} with {} tracks", mode, track_ids.len());
+        tracing::info!("Starting radio {:?} with {} blocks", mode, blocks.len());
 
         // Radio *is* the shuffle. Leaving `shuffle_enabled` on would make CursorQueue::next()
         // re-randomise inside the prefetch window, destroying the frozen order — and the
@@ -84,7 +84,7 @@ impl AppState {
             cq.shuffle_enabled = false;
         }
 
-        self.load_context_and_play(ContainerContext::Radio { mode, track_ids }, 0)
+        self.load_context_and_play(ContainerContext::Radio { mode, blocks }, 0)
             .await
     }
 

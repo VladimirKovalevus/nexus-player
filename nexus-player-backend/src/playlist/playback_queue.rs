@@ -31,6 +31,16 @@ enum UpcomingRow {
     },
 }
 
+/// The album or playlist playback is inside. It stays one row of the snapshot (the
+/// current one) while its tracks play; `current_track` is `tracks[index]`.
+#[derive(Debug, Clone)]
+struct ActiveContainer {
+    context: ContainerContext,
+    info: ContainerMeta,
+    tracks: Vec<Track>,
+    index: usize,
+}
+
 /// History entries kept in memory; older ones are dropped.
 const HISTORY_CAP: usize = 500;
 /// History entries `snapshot()` sends to the UI.
@@ -55,6 +65,9 @@ pub struct CursorQueue {
     pub repeat_mode: RepeatMode,
     pub shuffle_enabled: bool,
     pub context: Option<ContainerContext>,
+    /// Set while playback is inside a container row. Its played tracks join `history`
+    /// only when playback leaves it, so the snapshot shows them inside the container.
+    active: Option<ActiveContainer>,
 }
 
 impl Default for CursorQueue {
@@ -79,12 +92,20 @@ impl CursorQueue {
             repeat_mode: RepeatMode::Off,
             shuffle_enabled: false,
             context: None,
+            active: None,
         }
     }
 
-    /// Search contexts keep album and playlist results as container rows.
+    /// Search results and the nested playlists of a local playlist stay one row until
+    /// playback reaches them. Shuffle on a local playlist flattens it instead, so it can
+    /// draw from every track.
     fn keeps_root_containers(&self) -> bool {
-        matches!(self.context, Some(ContainerContext::SearchQuery { .. }))
+        match self.context {
+            Some(ContainerContext::SearchQuery { .. }) => true,
+            Some(ContainerContext::LocalPlaylist(_)) => !self.shuffle_enabled,
+            Some(ContainerContext::Radio { .. }) => true,
+            _ => false,
+        }
     }
 
     /// How many history rows a snapshot shows.
@@ -176,16 +197,119 @@ impl CursorQueue {
         Ok(count)
     }
 
-    /// Takes upcoming row `i` as the current track. A container is replaced by its
-    /// tracks and its first one is taken; an empty container yields `None`.
+    /// Takes upcoming row `i` out as the next track to play. A container starts at its
+    /// first track (see `activate`); an empty container yields `None`.
     async fn enter_row(&mut self, i: usize) -> Result<Option<Track>> {
         if matches!(self.lookahead.get(i), Some(UpcomingRow::Container { .. })) {
-            self.expand_in_place(i).await?;
+            let tracks = self.container_tracks(i).await?;
+            let Some(UpcomingRow::Container { context, info, .. }) = self.lookahead.remove(i)
+            else {
+                return Ok(None);
+            };
+            return Ok(self.activate(context, info, tracks, 0, i));
         }
         match self.lookahead.remove(i) {
             Some(UpcomingRow::Track(track)) => Ok(Some(track)),
             _ => Ok(None),
         }
+    }
+
+    /// Starts playing `tracks[start]` of a container that was taken out of the lookahead
+    /// at position `at`. Without shuffle the container becomes the active one and stays
+    /// one row; with shuffle its tracks go back to the lookahead as track rows, so
+    /// shuffle can draw from them. Returns `None` for an empty container.
+    fn activate(
+        &mut self,
+        context: ContainerContext,
+        info: ContainerMeta,
+        mut tracks: Vec<Track>,
+        start: usize,
+        at: usize,
+    ) -> Option<Track> {
+        let start = start.min(tracks.len().checked_sub(1)?);
+        let track = tracks[start].clone();
+        if self.shuffle_enabled {
+            let rest = tracks.split_off(start + 1);
+            tracks.truncate(start);
+            self.history.extend(tracks);
+            for (offset, t) in rest.into_iter().enumerate() {
+                self.lookahead.insert(at + offset, UpcomingRow::Track(t));
+            }
+        } else {
+            self.active = Some(ActiveContainer {
+                context,
+                info,
+                tracks,
+                index: start,
+            });
+        }
+        Some(track)
+    }
+
+    /// Leaves the active container after its current track: the tracks played so far
+    /// go to history and the rest goes back to the front of the lookahead (one container
+    /// row, or track rows under shuffle). Clears `current_track`.
+    fn finish_active(&mut self) {
+        let Some(mut active) = self.active.take() else {
+            return;
+        };
+        self.current_track = None;
+        let rest = active.tracks.split_off(active.index + 1);
+        self.history.extend(active.tracks);
+        self.trim_history();
+        if rest.is_empty() {
+            return;
+        }
+        if self.shuffle_enabled {
+            for t in rest.into_iter().rev() {
+                self.lookahead.push_front(UpcomingRow::Track(t));
+            }
+        } else {
+            self.lookahead.push_front(UpcomingRow::Container {
+                context: active.context,
+                info: active.info,
+                tracks: Some(rest),
+            });
+        }
+    }
+
+    /// Puts the active container back, whole, at the front of the lookahead (for going
+    /// back to earlier tracks: replaying from there replays the container from its start).
+    /// Clears `current_track`.
+    fn suspend_active(&mut self) {
+        let Some(active) = self.active.take() else {
+            return;
+        };
+        self.current_track = None;
+        self.lookahead.push_front(UpcomingRow::Container {
+            context: active.context,
+            info: active.info,
+            tracks: Some(active.tracks),
+        });
+    }
+
+    /// Moves everything before lookahead row `j` (current, user queue, earlier rows) to
+    /// history, as if played; skipped container rows are dropped.
+    fn pass_to_lookahead(&mut self, j: usize) {
+        match self.active.take() {
+            Some(active) => {
+                self.current_track = None;
+                self.history.extend(active.tracks);
+            }
+            None => self.history.extend(self.current_track.take()),
+        }
+        self.history.extend(self.user_queue.drain(..));
+        for row in self.lookahead.drain(..j) {
+            if let UpcomingRow::Track(track) = row {
+                self.history.push(track);
+            }
+        }
+        self.trim_history();
+    }
+
+    /// Where the current track sits inside the active container, if playback is in one.
+    pub fn current_track_within_container(&self) -> Option<usize> {
+        self.active.as_ref().map(|a| a.index)
     }
 
     pub async fn next(&mut self) -> Result<Option<Track>> {
@@ -196,8 +320,23 @@ impl CursorQueue {
             }
         }
 
+        // Inside a container: go on with its next track unless the user queue cuts in
+        if let Some(active) = &mut self.active {
+            if !self.shuffle_enabled
+                && self.user_queue.is_empty()
+                && active.index + 1 < active.tracks.len()
+            {
+                active.index += 1;
+                let track = active.tracks[active.index].clone();
+                self.current_track = Some(track.clone());
+                return Ok(Some(track));
+            }
+        }
+
         // Save current track to history before moving to next
-        if let Some(track) = self.current_track.take() {
+        if self.active.is_some() {
+            self.finish_active();
+        } else if let Some(track) = self.current_track.take() {
             self.history.push(track);
             self.trim_history();
         }
@@ -208,8 +347,17 @@ impl CursorQueue {
         }
 
         if self.shuffle_enabled && self.is_finite_source() {
-            // Flatten the remainder so shuffle draws from all of it
+            // Flatten the remainder so shuffle draws from all of it, including container
+            // rows fetched before shuffle was turned on.
             self.prefetch(usize::MAX).await?;
+            let mut i = 0;
+            while i < self.lookahead.len() {
+                if matches!(self.lookahead[i], UpcomingRow::Container { .. }) {
+                    self.expand_in_place(i).await?;
+                } else {
+                    i += 1;
+                }
+            }
         }
 
         let mut restarted = false;
@@ -252,6 +400,7 @@ impl CursorQueue {
         let resolver = cursor.resolver();
         self.cursor = Some(PlayerCursor::from_context(context, resolver).await?);
         self.lookahead.clear();
+        self.active = None;
         Ok(true)
     }
 
@@ -263,7 +412,17 @@ impl CursorQueue {
             }
         }
 
+        if let Some(active) = &mut self.active {
+            if active.index > 0 {
+                active.index -= 1;
+                let track = active.tracks[active.index].clone();
+                self.current_track = Some(track.clone());
+                return Some(track);
+            }
+        }
+
         let prev = self.history.pop()?;
+        self.suspend_active();
 
         // Push current track back to the front of the upcoming rows to allow "going forward" again
         if let Some(current) = self.current_track.take() {
@@ -278,6 +437,9 @@ impl CursorQueue {
         if let Some(track) = self.user_queue.front() {
             return Some(track.clone());
         }
+        if let Some(track) = self.active_rest().first() {
+            return Some(track.clone());
+        }
         match self.lookahead.front() {
             Some(UpcomingRow::Track(track)) => Some(track.clone()),
             _ => None,
@@ -287,6 +449,7 @@ impl CursorQueue {
     pub fn peek_upcoming_tracks(&self, limit: usize) -> Vec<Track> {
         self.user_queue
             .iter()
+            .chain(self.active_rest())
             .cloned()
             .chain(self.lookahead.iter().map_while(|row| match row {
                 UpcomingRow::Track(track) => Some(track.clone()),
@@ -294,6 +457,14 @@ impl CursorQueue {
             }))
             .take(limit)
             .collect()
+    }
+
+    /// The tracks of the active container after the current one.
+    fn active_rest(&self) -> &[Track] {
+        match &self.active {
+            Some(a) => &a.tracks[a.index + 1..],
+            None => &[],
+        }
     }
 
     pub fn current(&self) -> Option<&Track> {
@@ -318,7 +489,11 @@ impl CursorQueue {
     pub fn remove_track(&mut self, index: usize) -> Option<Track> {
         match self.locate(index)? {
             RowLocation::History(i) => Some(self.history.remove(i)),
-            RowLocation::Current => self.current_track.take(),
+            RowLocation::Current => {
+                // The active container is the current row: it goes as a whole
+                self.active = None;
+                self.current_track.take()
+            }
             RowLocation::User(i) => self.user_queue.remove(i),
             RowLocation::Lookahead(i) => match self.lookahead.remove(i)? {
                 UpcomingRow::Track(track) => Some(track),
@@ -334,6 +509,7 @@ impl CursorQueue {
         match self.locate(index) {
             Some(RowLocation::History(i)) => {
                 // Replay order: the tracks after the target, then the old current.
+                self.suspend_active();
                 let mut replay: Vec<Track> = self.history.split_off(i + 1);
                 let Some(target) = self.history.pop() else {
                     return;
@@ -348,6 +524,8 @@ impl CursorQueue {
                 let Some(target) = self.user_queue.remove(i) else {
                     return;
                 };
+                // A user track cuts into the active container, as in `next()`
+                self.finish_active();
                 self.history.extend(self.current_track.take());
                 self.history.extend(self.user_queue.drain(..i));
                 self.current_track = Some(target);
@@ -357,41 +535,51 @@ impl CursorQueue {
                 if !matches!(self.lookahead.get(j), Some(UpcomingRow::Track(_))) {
                     return;
                 }
-                self.history.extend(self.current_track.take());
-                self.history.extend(self.user_queue.drain(..));
-                for row in self.lookahead.drain(..j) {
-                    if let UpcomingRow::Track(track) = row {
-                        self.history.push(track);
-                    }
-                }
+                self.pass_to_lookahead(j);
                 if let Some(UpcomingRow::Track(target)) = self.lookahead.pop_front() {
                     self.current_track = Some(target);
                 }
-                self.trim_history();
             }
             Some(RowLocation::Current) | None => {}
         }
     }
 
-    /// Plays snapshot row `index`. A container row is replaced in place by its tracks and
-    /// `track_index` (default: the first) picks which one starts. An empty container is
+    /// Plays snapshot row `index`. On a container row, `track_index` (default: the first)
+    /// picks which of its tracks starts and the container becomes the active one; on the
+    /// active container (the current row) it moves to that track. An empty container is
     /// removed and nothing plays.
     pub async fn play_queue_item(
         &mut self,
         index: usize,
         track_index: Option<usize>,
     ) -> Result<Option<Track>> {
-        let mut target = index;
-        if let Some(RowLocation::Lookahead(i)) = self.locate(index) {
-            if matches!(self.lookahead.get(i), Some(UpcomingRow::Container { .. })) {
-                let count = self.expand_in_place(i).await?;
-                if count == 0 {
+        match self.locate(index) {
+            Some(RowLocation::Current) => {
+                if let (Some(active), Some(t)) = (&mut self.active, track_index) {
+                    if t < active.tracks.len() {
+                        active.index = t;
+                        self.current_track = Some(active.tracks[t].clone());
+                    }
+                }
+            }
+            Some(RowLocation::Lookahead(i))
+                if matches!(self.lookahead.get(i), Some(UpcomingRow::Container { .. })) =>
+            {
+                let tracks = self.container_tracks(i).await?;
+                if tracks.is_empty() {
+                    self.lookahead.remove(i);
                     return Ok(None);
                 }
-                target = index + track_index.filter(|t| *t < count).unwrap_or(0);
+                self.pass_to_lookahead(i);
+                let Some(UpcomingRow::Container { context, info, .. }) = self.lookahead.pop_front()
+                else {
+                    return Ok(None);
+                };
+                self.current_track =
+                    self.activate(context, info, tracks, track_index.unwrap_or(0), 0);
             }
+            _ => self.jump_to(index),
         }
-        self.jump_to(target);
         Ok(self.current_track.clone())
     }
 
@@ -418,7 +606,7 @@ impl CursorQueue {
         resolver: Arc<dyn CursorResolver>,
         system: &str,
         query: &str,
-        content_type: ContentType,
+        content_type: impl Into<Option<ContentType>>,
         position: usize,
     ) -> Result<Track> {
         self.start_search_at_checked(pages, resolver, system, query, content_type, position, None)
@@ -434,10 +622,11 @@ impl CursorQueue {
         resolver: Arc<dyn CursorResolver>,
         system: &str,
         query: &str,
-        content_type: ContentType,
+        content_type: impl Into<Option<ContentType>>,
         position: usize,
         expected_id: Option<&str>,
     ) -> Result<Track> {
+        let content_type = content_type.into();
         self.clear();
         let source = StreamingSearchCursor::with_source(
             pages,
@@ -504,6 +693,7 @@ impl CursorQueue {
         self.cursor = None;
         self.user_queue.clear();
         self.lookahead.clear();
+        self.active = None;
         // Must be reset too: a stale context would make Repeat::All resurrect the old
         // source, and would misreport the active radio session to the UI.
         self.context = None;
@@ -512,18 +702,28 @@ impl CursorQueue {
     /// Creates the row list the UI shows: history tracks, the current track, then the
     /// upcoming part. Returns `(rows, current_row_index)`.
     ///
-    /// Row model: a row is a track or a container. Container rows exist only in the
-    /// upcoming part, only for albums and playlists the root of a search context yielded,
-    /// and only until playback reaches them (then they become track rows). Every row index
-    /// the UI sends back (`remove_track`, `jump_to`, `play_queue_item`, `expand_container`)
-    /// refers to this list.
+    /// Row model: a row is a track or a container. Containers are the albums and
+    /// playlists the root of a search yielded, the nested playlists of a local playlist
+    /// (without shuffle) and the playlists of a radio session. An upcoming container row
+    /// stays unexpanded until previewed or reached. The container playback is in (the
+    /// active one) is the current row, with its tracks attached;
+    /// `current_track_within_container()` says which one plays, and its played tracks join
+    /// history only when playback leaves it. Every row index the UI sends back
+    /// (`remove_track`, `jump_to`, `play_queue_item`, `expand_container`) refers to this list.
     pub fn snapshot(&self) -> (Vec<QueueEntry>, Option<usize>) {
         let shown = &self.history[self.history.len() - self.history_window_len()..];
         let mut rows =
             Vec::with_capacity(shown.len() + 1 + self.user_queue.len() + self.lookahead.len());
         rows.extend(shown.iter().cloned().map(QueueEntry::Track));
         let current_index = self.current_track.as_ref().map(|current| {
-            rows.push(QueueEntry::Track(current.clone()));
+            rows.push(match &self.active {
+                Some(active) => QueueEntry::Container {
+                    info: active.info.clone(),
+                    tracks: Some(active.tracks.clone()),
+                    play_index: active.index,
+                },
+                None => QueueEntry::Track(current.clone()),
+            });
             rows.len() - 1
         });
         rows.extend(self.user_queue.iter().cloned().map(QueueEntry::Track));

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { errorMessage } from '@/utils/errorMessage';
-import type { QueueState } from '@/types/types';
+import type { QueueEntryDto, QueueState } from '@/types/types';
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@/utils/providerAuth';
 import MediaRow from './common/MediaRow.vue';
@@ -24,6 +24,8 @@ const { addContainerToPlaylist } = usePlaylistActions();
 // Expansion is keyed by the container itself, not by row index: when a container is
 // played its row turns into track rows and every later index shifts.
 const expandedContainers = ref<Set<string>>(new Set());
+// The container that is playing starts expanded; this remembers the user folding it.
+const collapsedContainers = ref<Set<string>>(new Set());
 const containerKey = (index: number): string | null => {
   const entry = audioStore.entries[index];
   if (entry?.entryType !== 'container') return null;
@@ -113,17 +115,25 @@ const expandContainer = async (itemIndex: number) => {
 };
 
 const toggleContainer = (itemIndex: number) => {
+  const key = containerKey(itemIndex);
   if (isContainerExpanded(itemIndex)) {
-    const key = containerKey(itemIndex);
-    if (key) expandedContainers.value.delete(key);
+    if (key) {
+      expandedContainers.value.delete(key);
+      collapsedContainers.value.add(key);
+    }
   } else {
+    if (key) collapsedContainers.value.delete(key);
     expandContainer(itemIndex);
   }
 };
 
 function isContainerExpanded(itemIndex: number): boolean {
   const key = containerKey(itemIndex);
-  return key !== null && expandedContainers.value.has(key);
+  if (key === null) return false;
+  if (itemIndex === audioStore.currentPosition?.itemIndex) {
+    return !collapsedContainers.value.has(key);
+  }
+  return expandedContainers.value.has(key);
 }
 
 const clearQueue = async () => {
@@ -175,7 +185,25 @@ const handleCreatePlaylist = async (data: {
       // Creating playlist from a single container
       const idx = modalTarget.value.index;
       const entry = audioStore.entries[idx];
-      if (entry?.entryType === 'container') {
+      if (entry?.entryType === 'container' && isLocalContainer(entry)) {
+        // A saved playlist: copy its tracks into the new playlist
+        if (!entry.tracks) {
+          const result = await invoke<QueueState>('expand_queue_container', { itemIndex: idx });
+          audioStore.updateQueueState(result);
+        }
+        const fresh = audioStore.entries[idx];
+        if (fresh?.entryType !== 'container' || !fresh.tracks) {
+          throw new Error('The container has no tracks');
+        }
+        await invoke<number>('create_playlist_with_tracks', {
+          request: {
+            title: data.title,
+            description: data.description,
+            artworkUrl: data.artworkUrl,
+            tracks: fresh.tracks,
+          },
+        });
+      } else if (entry?.entryType === 'container') {
         // Prefer create_playlist_from_container for streaming containers
         await invoke<number>('create_playlist_from_container', {
           provider: entry.meta.system,
@@ -228,6 +256,12 @@ const handleCreatePlaylist = async (data: {
             playlistId: parentId,
             track: entry.track,
           });
+        } else if (entry.entryType === 'container' && isLocalContainer(entry)) {
+          // A saved playlist is nested as it is, not copied
+          await invoke('add_playlist_to_playlist', {
+            parentPlaylistId: parentId,
+            childPlaylistId: Number(entry.meta.id),
+          });
         } else if (entry.entryType === 'container' && entry.tracks) {
           // Create sub-playlist from container tracks
           const childId = await invoke<number>('create_playlist_with_tracks', {
@@ -255,6 +289,10 @@ const handleCreatePlaylist = async (data: {
   }
 };
 
+/** A container row for a nested playlist of the library, not a streaming album or playlist. */
+const isLocalContainer = (entry: QueueEntryDto): boolean =>
+  entry.entryType === 'container' && entry.meta.system === 'local';
+
 const handleContainerCreatePlaylist = (itemIndex: number) => {
   const entry = audioStore.entries[itemIndex];
   if (entry && entry.entryType === 'container') {
@@ -276,6 +314,8 @@ const handleContainerAddToPlaylist = async (
   if (entry?.entryType !== 'container') return;
 
   await addContainerToPlaylist(playlistId, entry.meta.title, async () => {
+    // A saved playlist is nested as it is, not copied
+    if (isLocalContainer(entry)) return Number(entry.meta.id);
     if (!entry.tracks) {
       const result = await invoke<QueueState>('expand_queue_container', { itemIndex });
       audioStore.updateQueueState(result);

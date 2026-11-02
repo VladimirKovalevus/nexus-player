@@ -68,3 +68,41 @@ async fn playlist_that_is_not_nested_appears_once() {
     assert_eq!(count(&order, t2.0), 1);
     assert_eq!(order.len(), 2);
 }
+
+#[tokio::test]
+async fn playlist_radio_shows_each_playlist_as_one_container_row() {
+    use common::FakeResolver;
+    use nexus_player_backend::playlist::cursor::{
+        ContainerContext, CursorRow, PlayerCursor, RadioSource,
+    };
+    use nexus_player_backend::playlist::radio::build_radio_blocks;
+
+    let lib = TempLibrary::new().await;
+    let t1 = lib.track("one").await;
+    let t2 = lib.track("two").await;
+    let p = lib.playlist("Saved album").await;
+    lib.service.add_track_to_playlist(p, t1).await.expect("t1");
+    lib.service.add_track_to_playlist(p, t2).await.expect("t2");
+
+    let blocks = build_radio_blocks(&lib.service, RadioMode::Playlists)
+        .await
+        .expect("radio blocks");
+    assert_eq!(blocks.len(), 1);
+    assert_eq!(blocks[0].playlist_id, Some(p.0));
+    assert_eq!(blocks[0].track_ids, vec![t1.0, t2.0]);
+
+    let source = RadioSource::new(lib.service.clone(), blocks);
+    let mut cursor = PlayerCursor::new(Box::new(source), FakeResolver::new());
+    match cursor.next_row(true).await.expect("row") {
+        Some(CursorRow::Container { context, meta }) => {
+            assert_eq!(meta.title, "Saved album");
+            assert_eq!(meta.track_count, 2);
+            assert!(matches!(
+                context,
+                ContainerContext::RadioPlaylist { id, ref track_ids }
+                    if id == p.0 && *track_ids == vec![t1.0, t2.0]
+            ));
+        }
+        other => panic!("expected a container row, got {other:?}"),
+    }
+}

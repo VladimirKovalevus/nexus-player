@@ -21,15 +21,30 @@ pub enum ContainerContext {
     SearchQuery {
         system: String,
         query: String,
-        content_type: crate::streaming::types::ContentType,
+        /// `None` searches every content type, as the UI's "All" filter does.
+        content_type: Option<crate::streaming::types::ContentType>,
     },
 
-    // Radio: a precomputed play order. The shuffled ids live in the context itself so
+    // Radio: a precomputed play order. The shuffled blocks live in the context itself so
     // the queue replays the exact same order when Repeat::All restarts it.
     Radio {
         mode: RadioMode,
+        blocks: Vec<RadioBlock>,
+    },
+
+    // One playlist of a radio session, with the track ids frozen when radio started.
+    RadioPlaylist {
+        id: i64,
         track_ids: Vec<i64>,
     },
+}
+
+/// One block of a radio order: a whole playlist (its tracks in order, nested playlists
+/// already expanded) or a single loose track (`playlist_id: None`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RadioBlock {
+    pub playlist_id: Option<i64>,
+    pub track_ids: Vec<i64>,
 }
 
 /// What a radio session is built from.

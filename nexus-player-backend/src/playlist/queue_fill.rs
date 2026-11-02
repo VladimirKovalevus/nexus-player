@@ -86,10 +86,14 @@ pub async fn fill_context_queue_at(
             let cursor = PlayerCursor::from_context(context.clone(), resolver).await?;
             fresh.context = Some(context);
             fresh.set_cursor(cursor);
-            let prefetched = fresh.prefetch(PREFETCH).await?;
-            tracing::info!("Prefetched {} tracks from cursor", prefetched);
+            // The start row must be inside the prefetched part to be played.
+            let window = PREFETCH.max(start_index.map_or(0, |i| i + 1));
+            let prefetched = fresh.prefetch(window).await?;
+            tracing::info!("Prefetched {} rows from cursor", prefetched);
             if let Some(index) = start_index {
-                fresh.jump_to(index);
+                // A container row starts at its first track; an empty one plays nothing,
+                // and then the queue starts from the top.
+                fresh.play_queue_item(index, None).await?;
                 if fresh.current_track.is_none() && index == 0 {
                     fresh.next().await?;
                 }
@@ -111,7 +115,7 @@ pub async fn fill_search_queue(
     pages: Arc<dyn SearchPageSource>,
     system: &str,
     query: &str,
-    content_type: ContentType,
+    content_type: impl Into<Option<ContentType>>,
     position: usize,
     cancel: &CancellationToken,
 ) -> Result<FillOutcome> {
@@ -142,14 +146,15 @@ pub async fn fill_search_queue_by_track_id(
     pages: Arc<dyn SearchPageSource>,
     system: &str,
     query: &str,
-    content_type: ContentType,
+    content_type: impl Into<Option<ContentType>>,
     track_id: usize,
     cancel: &CancellationToken,
 ) -> Result<FillOutcome> {
     use crate::streaming::types::SearchResult;
 
+    let content_type = content_type.into();
     let first_page = pages
-        .search(system, Some(content_type), query, PREFETCH, 0)
+        .search(system, content_type, query, PREFETCH, 0)
         .await
         .map_err(|e| anyhow::anyhow!("Search failed: {e}"))?;
     let position = first_page

@@ -8,7 +8,7 @@ impl AppState {
         &self,
         system: String,
         query: String,
-        content_type: ContentType,
+        content_type: Option<ContentType>,
         position: Option<usize>,
         track_id: usize,
     ) -> Result<()> {
@@ -22,7 +22,7 @@ impl AppState {
         &self,
         system: String,
         query: String,
-        content_type: ContentType,
+        content_type: Option<ContentType>,
         position: Option<usize>,
         track_id: usize,
     ) -> Result<()> {
@@ -59,7 +59,6 @@ impl AppState {
     ) -> Result<()> {
         let cancel = self.begin_exclusive_op().await;
         let position = offset + selected_index;
-        let content_type = content_type.unwrap_or(ContentType::Track);
 
         // The new queue is built off to the side; the lock is only taken to swap it in.
         let (repeat_mode, shuffle_enabled) = {

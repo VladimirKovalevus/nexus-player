@@ -505,7 +505,7 @@ impl AppState {
         &self,
         system: &str,
         query: &str,
-        content_type: ContentType,
+        content_type: Option<ContentType>,
         position: Option<usize>,
         track_id: usize,
         cancel: &CancellationToken,

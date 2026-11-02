@@ -863,7 +863,7 @@ mod cursor_queue_rows {
         queue.context = Some(ContainerContext::SearchQuery {
             system: "bandcamp".into(),
             query: "band".into(),
-            content_type: ContentType::Album,
+            content_type: Some(ContentType::Album),
         });
         let source = StreamingSearchCursor::with_source(
             Arc::new(OneAlbumPage),

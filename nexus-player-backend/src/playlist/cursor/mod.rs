@@ -9,10 +9,12 @@ pub mod types;
 pub use engine::{CursorResolver, PlayerCursor};
 pub use resolver::AppCursorResolver;
 pub use sources::{
-    search_result_to_item, DbTrackCursor, LocalPlaylistSource, ProviderCursor, SearchPageSource,
-    StreamingSearchCursor,
+    search_result_to_item, DbTrackCursor, LocalPlaylistSource, ProviderCursor, RadioSource,
+    SearchPageSource, StreamingSearchCursor,
 };
-pub use types::{ContainerContext, ContainerKind, ContainerMeta, CursorItem, CursorRow, RadioMode};
+pub use types::{
+    ContainerContext, ContainerKind, ContainerMeta, CursorItem, CursorRow, RadioBlock, RadioMode,
+};
 
 #[async_trait]
 pub trait CursorSource: Send + Sync {

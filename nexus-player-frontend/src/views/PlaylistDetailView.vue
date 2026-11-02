@@ -281,10 +281,8 @@ const handlePlayAll = async () => {
 const handleSubTrackPlay = async (subPlaylistId: number, index: number) => {
   audioStore.startLoading();
   try {
-    const startIndex = subPlaylistItems[subPlaylistId]
-      .slice(0, index)
-      .filter((subItem) => subItem.itemType === 'track').length;
-    await invoke('load_playlist_and_play', { playlistId: subPlaylistId, startIndex });
+    // Each item is one queue row: a nested playlist is a container row.
+    await invoke('load_playlist_and_play', { playlistId: subPlaylistId, startIndex: index });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play track from sub-playlist:', e);
@@ -295,13 +293,8 @@ const handleSubTrackPlay = async (subPlaylistId: number, index: number) => {
 const handleTrackPlay = async (index: number) => {
   audioStore.startLoading();
   try {
-    let trackIndex = 0;
-    for (let i = 0; i < index; i++) {
-      if (items.value[i].itemType === 'track') {
-        trackIndex++;
-      }
-    }
-    await invoke('load_playlist_and_play', { playlistId: props.playlistId, startIndex: trackIndex });
+    // Each item is one queue row: a nested playlist is a container row.
+    await invoke('load_playlist_and_play', { playlistId: props.playlistId, startIndex: index });
     refreshQueue();
   } catch (e) {
     console.error('Failed to play track from playlist:', e);

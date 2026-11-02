@@ -93,7 +93,7 @@ pub(crate) fn build_queue_state_dto(
         entries: rows.into_iter().map(entry_dto).collect(),
         current_position: current_index.map(|idx| CurrentPositionDto {
             item_index: idx,
-            track_within_container: None,
+            track_within_container: cq.current_track_within_container(),
         }),
         repeat_mode: repeat_mode_label(cq.repeat_mode),
         shuffle_enabled: cq.shuffle_enabled,

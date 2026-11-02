@@ -92,12 +92,13 @@ pub async fn handle_streaming_track(
                         let target_id = audio_track.id;
                         let system = audio_track.source.system().to_string();
 
+                        // No type means the UI searched every type ("All").
                         let content_type = match search_type.as_deref() {
-                            Some("track") => ContentType::Track,
-                            Some("playlist") => ContentType::Playlist,
-                            Some("album") => ContentType::Album,
-                            Some("channel") => ContentType::Channel,
-                            _ => ContentType::Track,
+                            Some("track") => Some(ContentType::Track),
+                            Some("playlist") => Some(ContentType::Playlist),
+                            Some("album") => Some(ContentType::Album),
+                            Some("channel") => Some(ContentType::Channel),
+                            _ => None,
                         };
 
                         if should_play {

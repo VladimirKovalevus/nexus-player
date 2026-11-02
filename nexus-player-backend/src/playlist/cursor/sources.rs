@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use super::{ContainerContext, ContainerKind, ContainerMeta, CursorItem, CursorSource};
+use super::{ContainerContext, ContainerKind, ContainerMeta, CursorItem, CursorSource, RadioBlock};
 use crate::library::models::PlaylistItemKind;
 use crate::library::types::{PlaylistId, TrackId as LibTrackId};
 use crate::library::LibraryService;
@@ -59,11 +59,14 @@ impl CursorSource for DbTrackCursor {
 
 /// A cursor over one local playlist's own items. Tracks are yielded as tracks and nested
 /// playlists as containers; a child's items are fetched only when the cursor enters it.
+/// Each yielded child is described (title, artwork, item count) so a queue can show it
+/// as one row.
 pub struct LocalPlaylistSource {
     library: Arc<LibraryService>,
     playlist_id: PlaylistId,
     items: Option<Vec<(PlaylistItemKind, i64)>>,
     index: usize,
+    metas: Vec<ContainerMeta>,
 }
 
 impl LocalPlaylistSource {
@@ -73,8 +76,42 @@ impl LocalPlaylistSource {
             playlist_id,
             items: None,
             index: 0,
+            metas: Vec::new(),
         }
     }
+}
+
+/// Describes local playlist `id` for a container row; `None` when it no longer exists.
+async fn describe_local_playlist(
+    library: &LibraryService,
+    id: i64,
+) -> Result<Option<ContainerMeta>> {
+    let Some(pwi) = library.get_playlist_with_items(PlaylistId(id)).await? else {
+        return Ok(None);
+    };
+    let playlist = pwi.playlist;
+    let thumbnail = playlist
+        .metadata
+        .artwork
+        .as_ref()
+        .and_then(|art| match &art.source {
+            crate::library::types::ArtworkSource::Url { url } => Some(url.clone()),
+            _ => None,
+        });
+    Ok(Some(ContainerMeta {
+        kind: ContainerKind::Playlist,
+        id: id.to_string(),
+        system: "local".to_string(),
+        title: playlist.metadata.title,
+        // A playlist saved from an album keeps the album's artist in its description.
+        artist: playlist
+            .metadata
+            .description
+            .or(playlist.creator)
+            .unwrap_or_default(),
+        track_count: pwi.items.len(),
+        thumbnail,
+    }))
 }
 
 #[async_trait]
@@ -101,6 +138,9 @@ impl CursorSource for LocalPlaylistSource {
             self.index += 1;
             match kind {
                 PlaylistItemKind::Playlist => {
+                    if let Some(meta) = describe_local_playlist(&self.library, id).await? {
+                        self.metas.push(meta);
+                    }
                     batch.push(CursorItem::Container(ContainerContext::LocalPlaylist(id)));
                 }
                 PlaylistItemKind::Track => match self.library.get_track(LibTrackId(id)).await? {
@@ -117,6 +157,78 @@ impl CursorSource for LocalPlaylistSource {
             Some(items) => self.index < items.len(),
             None => true,
         }
+    }
+
+    fn container_meta(&self, context: &ContainerContext) -> Option<ContainerMeta> {
+        let ContainerContext::LocalPlaylist(id) = context else {
+            return None;
+        };
+        let id = id.to_string();
+        self.metas.iter().find(|m| m.id == id).cloned()
+    }
+}
+
+/// A cursor over a frozen radio order. Loose tracks are yielded as tracks, playlist
+/// blocks as `RadioPlaylist` containers described like local playlists.
+pub struct RadioSource {
+    library: Arc<LibraryService>,
+    blocks: Vec<RadioBlock>,
+    index: usize,
+    metas: Vec<ContainerMeta>,
+}
+
+impl RadioSource {
+    pub fn new(library: Arc<LibraryService>, blocks: Vec<RadioBlock>) -> Self {
+        Self {
+            library,
+            blocks,
+            index: 0,
+            metas: Vec::new(),
+        }
+    }
+}
+
+#[async_trait]
+impl CursorSource for RadioSource {
+    async fn next_batch(&mut self, limit: usize) -> Result<Vec<CursorItem>> {
+        let mut batch = Vec::new();
+        while batch.len() < limit && self.index < self.blocks.len() {
+            let block = self.blocks[self.index].clone();
+            self.index += 1;
+            match block.playlist_id {
+                Some(id) => {
+                    if let Some(mut meta) = describe_local_playlist(&self.library, id).await? {
+                        meta.track_count = block.track_ids.len();
+                        self.metas.push(meta);
+                    }
+                    batch.push(CursorItem::Container(ContainerContext::RadioPlaylist {
+                        id,
+                        track_ids: block.track_ids,
+                    }));
+                }
+                None => {
+                    for id in block.track_ids {
+                        match self.library.get_track(LibTrackId(id)).await? {
+                            Some(t) => batch.push(CursorItem::Track(t.into())),
+                            None => tracing::debug!("RadioSource: skipping missing track {id}"),
+                        }
+                    }
+                }
+            }
+        }
+        Ok(batch)
+    }
+
+    fn has_more(&self) -> bool {
+        self.index < self.blocks.len()
+    }
+
+    fn container_meta(&self, context: &ContainerContext) -> Option<ContainerMeta> {
+        let ContainerContext::RadioPlaylist { id, .. } = context else {
+            return None;
+        };
+        let id = id.to_string();
+        self.metas.iter().find(|m| m.id == id).cloned()
     }
 }
 
@@ -273,7 +385,7 @@ pub struct StreamingSearchCursor {
     source: Arc<dyn SearchPageSource>,
     system: String,
     query: String,
-    content_type: ContentType,
+    content_type: Option<ContentType>,
     items: Vec<CursorItem>,
     metas: Vec<ContainerMeta>,
     index: usize,
@@ -290,7 +402,7 @@ impl StreamingSearchCursor {
         streaming: Arc<StreamingService>,
         system: String,
         query: String,
-        content_type: ContentType,
+        content_type: impl Into<Option<ContentType>>,
     ) -> Self {
         Self::with_source(streaming, system, query, content_type)
     }
@@ -299,13 +411,13 @@ impl StreamingSearchCursor {
         source: Arc<dyn SearchPageSource>,
         system: String,
         query: String,
-        content_type: ContentType,
+        content_type: impl Into<Option<ContentType>>,
     ) -> Self {
         Self {
             source,
             system,
             query,
-            content_type,
+            content_type: content_type.into(),
             items: Vec::new(),
             metas: Vec::new(),
             index: 0,
@@ -338,7 +450,7 @@ impl StreamingSearchCursor {
                 .source
                 .search(
                     &self.system,
-                    Some(self.content_type),
+                    self.content_type,
                     &self.query,
                     self.limit,
                     self.offset,
