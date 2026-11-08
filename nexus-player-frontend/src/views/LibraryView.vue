@@ -12,29 +12,41 @@
 
     <p v-if="status" :class="$style.status">{{ status }}</p>
 
-    <div :class="$style.searchRow">
-      <label class="filter-box" :class="$style.search">
-        <AppIcon name="search" :size="14" />
-        <input v-model="query" type="search" :placeholder="$t('library.searchPlaceholder')" />
-        <button v-if="query" type="button" :aria-label="$t('common.clear')" @click="query = ''">
-          <AppIcon name="close" :size="13" />
-        </button>
-      </label>
-      <select v-model="sortField" :class="$style.sort" :aria-label="$t('library.sortLabel')">
-        <option value="catalog">{{ $t('library.sort.catalog') }}</option>
-        <option value="title">{{ $t('library.sort.title') }}</option>
-        <option value="artist">{{ $t('library.sort.artist') }}</option>
-      </select>
-      <button
-        class="deck-btn"
-        :class="$style.direction"
-        :disabled="sortField === 'catalog'"
-        :title="sortDirection === 'asc' ? $t('library.ascending') : $t('library.descending')"
-        :aria-label="sortDirection === 'asc' ? $t('library.ascending') : $t('library.descending')"
-        @click="sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'"
-      >
-        <AppIcon :name="sortDirection === 'asc' ? 'arrow-up' : 'arrow-down'" :size="13" />
+    <label class="filter-box" :class="$style.search">
+      <AppIcon name="search" :size="14" />
+      <input v-model="query" type="search" :placeholder="$t('library.searchPlaceholder')" />
+      <button v-if="query" type="button" :aria-label="$t('common.clear')" @click="query = ''">
+        <AppIcon name="close" :size="13" />
       </button>
+    </label>
+
+    <div :class="$style.filters">
+      <div :class="$style.filter" role="group" :aria-label="$t('library.sortLabel')">
+        <span class="section-label">{{ $t('common.sort') }}</span>
+        <div class="seg">
+          <button
+            v-for="field in sortFields"
+            :key="field"
+            type="button"
+            :aria-pressed="sortField === field"
+            @click="sortField = field"
+          >
+            {{ $t(`library.sort.${field}`) }}
+          </button>
+        </div>
+        <div class="seg">
+          <button
+            type="button"
+            :class="$style.direction"
+            :disabled="sortField === 'catalog'"
+            :title="sortDirection === 'asc' ? $t('library.ascending') : $t('library.descending')"
+            :aria-label="sortDirection === 'asc' ? $t('library.ascending') : $t('library.descending')"
+            @click="sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'"
+          >
+            <AppIcon :name="sortDirection === 'asc' ? 'arrow-up' : 'arrow-down'" :size="13" />
+          </button>
+        </div>
+      </div>
     </div>
 
     <section v-if="!isAndroid && sources.length" :class="$style.sources">
@@ -59,7 +71,7 @@
     </div>
 
     <div v-else class="track-table" :class="$style.table">
-      <TrackTableHeader />
+      <TrackTableHeader :class="$style.head" />
       <VirtualList :class="$style.list" :items="visibleTracks" :item-height="rowHeights.table.value" :overscan="8">
         <template #default="{ item: track, index }">
           <MediaRow
@@ -105,7 +117,8 @@ const scanning = ref(false);
 const error = ref('');
 const status = ref('');
 const query = ref('');
-const sortField = ref<'catalog' | 'title' | 'artist'>('catalog');
+const sortFields = ['catalog', 'title', 'artist'] as const;
+const sortField = ref<(typeof sortFields)[number]>('catalog');
 const sortDirection = ref<'asc' | 'desc'>('asc');
 const audioStore = useAudioStore();
 const refreshQueue = inject<() => void>('refreshQueue', () => {});
@@ -214,31 +227,32 @@ onMounted(async () => {
   color: var(--muted);
 }
 
-.searchRow {
+.search {
+  margin: 10px 12px 8px;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 0 12px 10px;
+}
+
+.filter {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 12px 8px;
-}
-
-.search {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-}
-
-.sort {
-  height: 30px;
-  padding: 0 6px;
-  background: var(--key);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
+  flex-wrap: wrap;
+  gap: 4px 8px;
 }
 
 .direction {
-  height: 30px;
+  display: inline-flex;
+  align-items: center;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
 }
 
 .sources {
@@ -280,6 +294,13 @@ onMounted(async () => {
   min-height: 0;
 }
 
+// The list scrolls on its own here, so its scrollbar narrows the rows. The header and
+// the list both keep the scrollbar gutter, so their grid columns line up.
+.table .head,
+.table .list {
+  overflow-y: scroll;
+}
+
 .empty {
   flex: 1;
   display: flex;
@@ -305,21 +326,14 @@ onMounted(async () => {
 }
 
 @media (max-width: $mobile-breakpoint) {
-  .searchRow {
-    flex-wrap: wrap;
-  }
+  .filter {
+    flex-wrap: nowrap;
+    width: 100%;
 
-  .search {
-    flex-basis: 100%;
-  }
-
-  .sort,
-  .direction {
-    height: 38px;
-  }
-
-  .sort {
-    flex: 1;
+    > :first-child {
+      flex: none;
+      width: 62px;
+    }
   }
 }
 </style>
