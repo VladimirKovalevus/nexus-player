@@ -12,6 +12,20 @@ Music today is spread across platforms: one artist is on SoundCloud, another onl
 
 Playlists are not limited to tracks. A playlist can contain whole albums, which play one after another, and other playlists.
 
+## Screenshots
+
+![Main window with a Bandcamp album open](docs/media/screenshot.png)
+
+Playing a track from the library:
+
+![Playing a track from the library](docs/media/playback.gif)
+
+Radio from playlists, with the queue panel open:
+
+![Radio from playlists with the queue panel](docs/media/radio.gif)
+
+Playing an album and opening the visualizer: [visualizer.mp4](docs/media/visualizer.mp4)
+
 ## Architecture
 
 ```mermaid
