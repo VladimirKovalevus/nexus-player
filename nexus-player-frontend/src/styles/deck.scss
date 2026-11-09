@@ -257,6 +257,57 @@ textarea.deck-input {
   }
 }
 
+// Range slider drawn by hand, so every slider looks the same on every platform.
+// Set --fill (0..1) inline: the filled part ends at the thumb's centre, which
+// the native slider cannot do because it insets its track.
+.deck-slider {
+  --thumb: 12px;
+  --slider-fill: var(--accent);
+  --slider-track: var(--line);
+  --slider-thumb: var(--text);
+  --stop: calc(var(--thumb) / 2 + var(--fill, 0) * (100% - var(--thumb)));
+
+  appearance: none;
+  -webkit-appearance: none;
+  height: var(--thumb);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  background: linear-gradient(to right, var(--slider-fill) var(--stop), var(--slider-track) var(--stop))
+    center / 100% 4px no-repeat;
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: var(--thumb);
+    height: var(--thumb);
+    background: var(--slider-thumb);
+    border-radius: 2px;
+  }
+
+  &::-moz-range-thumb {
+    width: var(--thumb);
+    height: var(--thumb);
+    border: 0;
+    background: var(--slider-thumb);
+    border-radius: 2px;
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.deck-slider--vertical {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: var(--thumb);
+  height: auto;
+  background: linear-gradient(to top, var(--slider-fill) var(--stop), var(--slider-track) var(--stop))
+    center / 4px 100% no-repeat;
+}
+
 @media (max-width: 640px) {
   .track-grid {
     grid-template-columns: 40px minmax(0, 1fr) 46px 34px 34px;

@@ -323,8 +323,8 @@ onUnmounted(() => {
           <div v-if="volumePopupOpen" :class="$style.volumePopup" @click.stop>
             <input
               type="range"
-              :class="$style.volumeSlider"
-              :style="{ '--volume': `${localVolume * 100}%` }"
+              :class="['deck-slider', $style.volumeSlider]"
+              :style="{ '--fill': localVolume }"
               :value="localVolume"
               min="0"
               max="1"
@@ -563,30 +563,7 @@ onUnmounted(() => {
 }
 
 .volumeSlider {
-  appearance: none;
-  -webkit-appearance: none;
   width: 140px;
-  height: 4px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: linear-gradient(to right, var(--accent) var(--volume), var(--line) var(--volume));
-
-  &::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 10px;
-    height: 16px;
-    background: var(--text);
-    border-radius: 1px;
-  }
-
-  &::-moz-range-thumb {
-    width: 10px;
-    height: 16px;
-    border: 0;
-    background: var(--text);
-    border-radius: 1px;
-  }
 }
 
 .volumePercent {

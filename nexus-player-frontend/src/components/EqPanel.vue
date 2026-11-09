@@ -70,7 +70,8 @@ function formatGain(db: number): string {
               <span class="band-value">{{ formatGain(eqStore.settings.gains[i] ?? 0) }}</span>
               <input
                 type="range"
-                class="band-slider"
+                class="deck-slider deck-slider--vertical band-slider"
+                :style="{ '--fill': ((eqStore.settings.gains[i] ?? 0) + 12) / 24 }"
                 min="-12"
                 max="12"
                 step="0.5"
@@ -187,15 +188,13 @@ function formatGain(db: number): string {
   color: var(--led);
 }
 
+// Sits on the screen, so it takes the screen palette.
 .band-slider {
-  writing-mode: vertical-lr;
-  direction: rtl;
-  appearance: slider-vertical;
-  -webkit-appearance: slider-vertical;
-  width: 20px;
+  --slider-fill: var(--led);
+  --slider-track: var(--screen-track);
+  --slider-thumb: var(--screen-text);
+
   height: 110px;
-  cursor: pointer;
-  accent-color: var(--led);
 }
 
 .eq-presets {

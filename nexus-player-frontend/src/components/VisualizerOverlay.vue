@@ -474,6 +474,8 @@ const presetLabel = (name: string) => (name === 'Random' ? t('visualizer.random'
           <AppIcon name="volume-high" :size="16" />
           <input
             type="range"
+            class="deck-slider"
+            :style="{ '--fill': localVolume }"
             :value="localVolume"
             min="0"
             max="1"
