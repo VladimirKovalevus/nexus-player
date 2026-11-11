@@ -27,6 +27,7 @@ Radio from playlists, with the queue panel open:
 ![Radio from playlists with the queue panel](docs/media/radio.gif)
 
 Playing an album and opening the visualizer:  
+
 https://github.com/user-attachments/assets/2a93847b-8610-431e-bc8f-b3e7045159ad
 
 ## Architecture
