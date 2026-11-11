@@ -348,10 +348,6 @@ impl HlsAudioDecoder {
                 return Err(AudioError::OutsideOfBuffer);
             }
 
-            self.source
-                .seek((time_secs * 1000.0) as u64)
-                .map_err(|e| AudioError::DecodingError(format!("HLS source seek failed: {}", e)))?;
-
             let Some(reader) = self.continuous_reader.as_mut() else {
                 return Err(AudioError::DecodingError(
                     "HLS continuous reader is not initialised".to_string(),
@@ -371,10 +367,6 @@ impl HlsAudioDecoder {
             info!("HLS continuous seek completed to {:.2}s", time_secs);
             return Ok(seeked_to.actual_ts);
         }
-
-        self.source
-            .seek((time_secs * 1000.0) as u64)
-            .map_err(|e| AudioError::DecodingError(format!("HLS seek failed: {}", e)))?;
 
         let durations = self.source.durations();
 

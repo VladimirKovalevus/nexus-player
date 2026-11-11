@@ -32,12 +32,11 @@ pub struct AppState {
     /// Bumped when a queue fill starts; only the latest fill may swap its queue in.
     fill_generation: std::sync::atomic::AtomicU64,
 
-    // NEW: Resolver for creating cursors
     pub cursor_resolver: Arc<AppCursorResolver>,
 
     library: Arc<LibraryService>,
 
-    streaming: Arc<StreamingService>, // Made Arc to share with resolver
+    streaming: Arc<StreamingService>,
 
     artwork: Arc<ArtworkCache>,
 

@@ -77,7 +77,11 @@ impl HlsDownloader {
                             variants = master.variants.len(),
                             "master playlist detected"
                         );
-                        let variant = master.select_variant(self.bandwidth_bps);
+                        let Some(variant) = master.select_variant(self.bandwidth_bps) else {
+                            return Err(InitializationError::Error(
+                                "master playlist has no variants".to_string(),
+                            ));
+                        };
 
                         tracing::debug!(bandwidth = variant.bandwidth, uri = %variant.uri, "selected variant");
 

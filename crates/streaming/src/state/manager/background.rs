@@ -405,7 +405,6 @@ impl DownloadManager {
                 TrackState::Downloading { url, buffer, meta } => {
                     let start = std::time::Instant::now();
                     let result = task.downloader.download().await;
-                    // let result: Result<usize, StreamingError> = Ok(0);
                     let duration = start.elapsed();
 
                     match result {

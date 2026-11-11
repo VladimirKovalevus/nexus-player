@@ -12,7 +12,7 @@ pub fn parse_m3u8(content: &str, base_url: &str) -> Result<HlsPlaylist, Streamin
         )),
     }
 }
-pub fn select_variant(master: &MasterPlaylist, bandwidth_bps: u64) -> &StreamVariant {
+pub fn select_variant(master: &MasterPlaylist, bandwidth_bps: u64) -> Option<&StreamVariant> {
     master.select_variant(bandwidth_bps)
 }
 

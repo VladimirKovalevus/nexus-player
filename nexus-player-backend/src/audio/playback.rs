@@ -18,6 +18,9 @@ pub use hls_reader::HlsReaderAdapter;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+/// How long `seek` blocks waiting for decoded data at the new position.
+const SEEK_DATA_TIMEOUT: Duration = Duration::from_secs(5);
+
 pub struct PlaybackEngine {
     decoder: Arc<Mutex<Option<DecoderType>>>,
     next_decoder: Arc<Mutex<Option<DecoderType>>>,
@@ -601,6 +604,7 @@ impl PlaybackEngine {
                 return Err(AudioError::OutsideOfBuffer);
             }
             info!("Waiting for data at the new position...");
+            let deadline = std::time::Instant::now() + SEEK_DATA_TIMEOUT;
             loop {
                 match dec.decode_next_block() {
                     Ok(Some(samples)) => {
@@ -614,6 +618,15 @@ impl PlaybackEngine {
                         break;
                     }
                     Err(AudioError::InProgress) => {
+                        if std::time::Instant::now() >= deadline {
+                            // The output callback keeps polling the decoder, so playback
+                            // resumes once the data arrives.
+                            warn!(
+                                "No data {:?} after seek, resuming without it",
+                                SEEK_DATA_TIMEOUT
+                            );
+                            break;
+                        }
                         std::thread::sleep(std::time::Duration::from_millis(50));
                         continue;
                     }

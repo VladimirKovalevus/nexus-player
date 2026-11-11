@@ -7,7 +7,6 @@ use std::sync::Mutex;
 use bytes::Bytes;
 
 mod persistence;
-mod profile;
 mod readers;
 mod waveform;
 pub use readers::HlsSequentialReader;

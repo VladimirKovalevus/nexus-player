@@ -189,36 +189,6 @@ impl HlsSource {
         Ok(byte_offset)
     }
 
-    pub fn seek(&self, offset_ms: u64) -> Result<(), Box<dyn std::error::Error>> {
-        let seconds = offset_ms as f64 / 1000.0;
-        let durations = self.buffer.durations();
-
-        if durations.is_empty() {
-            return Ok(());
-        }
-
-        let mut accumulated_duration = 0.0;
-        let mut segment_index = 0;
-
-        for (i, duration) in durations.iter().enumerate() {
-            accumulated_duration += duration;
-            if seconds < accumulated_duration {
-                segment_index = i;
-                break;
-            }
-            segment_index = i + 1;
-        }
-
-        if !self.buffer.has_segment(segment_index) {
-            // self.sender.send(ManagerCommand::Seek(
-            //     self.track_id,
-            //     SeekPos::Milliseconds(offset_ms),
-            // ))?;
-        }
-
-        Ok(())
-    }
-
     pub fn durations(&self) -> Vec<f64> {
         self.buffer.durations()
     }

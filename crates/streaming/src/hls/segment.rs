@@ -104,20 +104,19 @@ impl HlsPlaylist {
 }
 
 impl MasterPlaylist {
-    pub fn select_variant(&self, available_bandwidth_bps: u64) -> &StreamVariant {
-        if self.variants.is_empty() {
-            panic!("Master playlist has no variants");
-        }
+    /// `None` when the master playlist lists no variants.
+    pub fn select_variant(&self, available_bandwidth_bps: u64) -> Option<&StreamVariant> {
+        let first = self.variants.first()?;
 
         // If no bandwidth information, return the first one (often used as default/auto)
         if available_bandwidth_bps == 0 {
-            return &self.variants[0];
+            return Some(first);
         }
 
         // Choose the highest bandwidth variant that is <= 80% of available bandwidth
         let target_bandwidth = (available_bandwidth_bps as f64 * 0.8) as u64;
 
-        let mut best_variant = &self.variants[0];
+        let mut best_variant = first;
         let mut max_bandwidth = 0;
 
         for variant in &self.variants {
@@ -145,6 +144,6 @@ impl MasterPlaylist {
 
         tracing::debug!(?best_variant, "selected best variant");
 
-        best_variant
+        Some(best_variant)
     }
 }
