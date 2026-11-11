@@ -100,6 +100,12 @@ impl LibraryService {
 
     /// Older frontend DTO conversion represented local files as External("unknown", path).
     /// Repair those rows and merge them into their canonical local track when one exists.
+    ///
+    /// Raw sqlx rather than SeaORM: this is a one-off data migration that also rewrites
+    /// `local_media_index`, which has no SeaORM entity (`local_library.rs` owns it through
+    /// the same pool), and its merge statements (`MAX(...)`, correlated `DELETE ... EXISTS`)
+    /// read more plainly as SQL. It runs before any repository is used, so it cannot race
+    /// with SeaORM writes.
     async fn repair_misclassified_local_sources(&self) -> Result<()> {
         use sqlx::Row;
 

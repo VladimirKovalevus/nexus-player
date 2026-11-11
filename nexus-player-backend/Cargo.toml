@@ -22,7 +22,7 @@ anyhow = { workspace = true }
 #===AUDIO=======
 #===============
 symphonia = { path = "../vendor/Symphonia/symphonia", features = ["all", "ogg", "vorbis", "opus"] }
-lofty = "0.21"
+lofty = { workspace = true }
 cpal = "0.15"
 resampler = "0.4.1"
 biquad = "0.4"
@@ -54,7 +54,7 @@ chrono = { workspace = true }
 dirs = "6"
 walkdir = "2"
 #===============
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "stream", "blocking", "multipart", "json"] }
+reqwest = { workspace = true, features = ["stream", "blocking", "multipart", "json"] }
 bandcamp = { path = "../vendor/bandcamp" }
 rsoundcloud = { workspace = true }
 sha2 = "0.10.9"
