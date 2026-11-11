@@ -1,3 +1,5 @@
+
+
 <p align="center">
   <img src="logo.png" alt="Nexus Player logo" width="160">
 </p>
@@ -24,7 +26,7 @@ Radio from playlists, with the queue panel open:
 
 ![Radio from playlists with the queue panel](docs/media/radio.gif)
 
-Playing an album and opening the visualizer: [visualizer.mp4](docs/media/visualizer.mp4)
+Playing an album and opening the visualizer: [visualizer.mp4](https://github.com/user-attachments/assets/2a93847b-8610-431e-bc8f-b3e7045159ad)
 
 ## Architecture
 
