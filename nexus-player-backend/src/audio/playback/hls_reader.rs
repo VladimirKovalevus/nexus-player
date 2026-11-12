@@ -71,11 +71,14 @@ impl Seek for HlsReaderAdapter {
 
 impl symphonia::core::io::MediaSource for HlsReaderAdapter {
     fn is_seekable(&self) -> bool {
-        true
+        // HLS byte offsets are estimated from durations and bitrate. Ogg probing
+        // and bisection require exact offsets and can corrupt the read position.
+        false
     }
 
     fn byte_len(&self) -> Option<u64> {
-        self.source.estimate_total_size()
+        // An estimated download size is not the length of a seekable media file.
+        None
     }
 }
 
