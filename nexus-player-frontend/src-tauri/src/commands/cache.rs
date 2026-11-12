@@ -34,6 +34,7 @@ pub async fn save_track_to_file(
         if let CacheStatus::Cached { path, .. } = &lib_track.cache {
             if path.exists() {
                 tracing::info!("Track {} already cached, skipping download", track_id);
+                app.emit("download-finish", (track_id, true, track.title.clone()))?;
                 return Ok(());
             }
         }
@@ -89,44 +90,61 @@ pub async fn save_track_to_file(
                 streaming::error::StreamingError,
             >,
                   _| {
-                let success = res.is_ok();
-                if let Ok(buffer) = res {
-                    let file_path = downloads_dir.join(format!(
+                let app_handle = app_handle.clone();
+                let state_arc = state_arc.clone();
+                let track_title = track_title.clone();
+                let file_path = res.as_ref().ok().map(|buffer| {
+                    downloads_dir.join(format!(
                         "{} - {}.{}",
                         track.artist.clone().unwrap_or("Unknown".to_string()),
                         track.title,
                         buffer.container()
-                    ));
-                    let _ = buffer.save_to_file(file_path.clone());
-
-                    // Update database in background
-                    let file_path_clone = file_path;
-                    let state_arc_clone = state_arc.clone();
-                    tauri::async_runtime::spawn(async move {
-                        use nexus_player_backend::library::types::CacheStatus;
-                        if let Ok(Some(mut lib_track)) = state_arc_clone
+                    ))
+                });
+                // Completion means the file and library status have both been persisted.
+                tauri::async_runtime::spawn(async move {
+                    let outcome = async {
+                        let buffer = res.map_err(|e| e.to_string())?;
+                        let path = file_path.ok_or("Missing cache path")?;
+                        tokio::task::spawn_blocking({
+                            let path = path.clone();
+                            move || buffer.save_to_file(path)
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?
+                        .map_err(|e| e.to_string())?;
+                        let mut lib_track = state_arc
                             .library()
-                            .get_track(nexus_player_backend::library::TrackId(track_id))
+                            .get_track(TrackId(track_id))
                             .await
-                        {
-                            lib_track.cache = CacheStatus::Cached {
-                                path: file_path_clone,
-                                downloaded_at: chrono::Utc::now(),
-                            };
-                            let _ = state_arc_clone.library().update_track(lib_track).await;
-                        }
-                    });
-                }
-                let _ = app_handle.emit(
-                    "audio-event",
-                    FrontendEvent::DownloadFinished {
-                        track_id,
-                        title: track_title.clone(),
-                        success,
-                    },
-                );
-                let _ =
-                    app_handle.emit("download-finish", (track_id, success, track_title.clone()));
+                            .map_err(|e| e.to_string())?
+                            .ok_or("Track not found in library")?;
+                        lib_track.cache = CacheStatus::Cached {
+                            path,
+                            downloaded_at: chrono::Utc::now(),
+                        };
+                        state_arc
+                            .library()
+                            .update_track(lib_track)
+                            .await
+                            .map_err(|e| e.to_string())?;
+                        Ok::<(), String>(())
+                    }
+                    .await;
+                    if let Err(error) = &outcome {
+                        tracing::error!(track_id, %error, "Failed to cache track");
+                    }
+                    let success = outcome.is_ok();
+                    let _ = app_handle.emit(
+                        "audio-event",
+                        FrontendEvent::DownloadFinished {
+                            track_id,
+                            title: track_title.clone(),
+                            success,
+                        },
+                    );
+                    let _ = app_handle.emit("download-finish", (track_id, success, track_title));
+                });
             }
         }) as Arc<streaming::state::types::TaskCallback>),
     };

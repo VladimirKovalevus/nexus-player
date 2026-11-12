@@ -320,7 +320,10 @@ impl StreamingService {
     }
 
     pub async fn has_track(&self, track_id: u64) -> bool {
-        self.download_manager.get_track(track_id).await.is_some()
+        self.download_manager.list_tasks().await.iter().any(|task| {
+            task.track_id == track_id
+                && matches!(task.state.as_str(), "Pending" | "Downloading" | "Complete")
+        })
     }
 
     pub async fn direct_link_resolve(

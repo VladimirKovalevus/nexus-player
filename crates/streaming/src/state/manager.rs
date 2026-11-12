@@ -122,9 +122,43 @@ impl DownloadManager {
     }
 
     pub async fn update_task(&self, track_id: TrackId, options: DownloadOptions) {
-        let mut q = self.queue.lock().await;
-        if let Some(task) = q.get_mut(&track_id) {
-            task.options = Some(options);
+        loop {
+            // The worker temporarily removes running tasks from the queue.
+            // Lock in worker order and retry until it returns or completes.
+            let mut q = self.queue.lock().await;
+            let states = self.states.lock().await;
+            if let Some(TrackState::Complete { buffer, meta, .. }) = states.get(&track_id) {
+                let buffer = buffer.clone();
+                let meta = meta.clone();
+                drop(states);
+                drop(q);
+                if let Some(on_finish) = options.on_finish {
+                    on_finish(Ok((*buffer).clone()), meta);
+                }
+                return;
+            }
+            if let Some(task) = q.get_mut(&track_id) {
+                task.options = Some(options);
+                drop(states);
+                drop(q);
+                let mut playback = self.playback.lock().await;
+                if !playback.low_priority_queue.contains(&track_id) {
+                    playback.low_priority_queue.push(track_id);
+                }
+                let _ = self.sender.send(ManagerCommand::Wake);
+                return;
+            }
+            let running = matches!(
+                states.get(&track_id),
+                Some(TrackState::Pending { .. } | TrackState::Downloading { .. })
+            );
+            drop(states);
+            drop(q);
+            if !running {
+                return;
+            }
+            let _ = self.sender.send(ManagerCommand::Wake);
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }
 
@@ -420,5 +454,54 @@ impl Drop for DownloadManager {
             let _ = self.sender.send(ManagerCommand::Shutdown());
             let _ = thread.join();
         }
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+    use crate::{buffers::chunked::ChunkedBuffer, state::types::BufferType};
+    use std::sync::atomic::AtomicBool;
+
+    #[tokio::test]
+    async fn caching_completed_track_saves_existing_buffer_without_downloading() {
+        let manager = DownloadManager::new_default();
+        let buffer = Arc::new(BufferType::Chunked(Arc::new(ChunkedBuffer::new(false))));
+        manager.states.lock().await.insert(
+            42,
+            TrackState::Complete {
+                url: "https://unused.invalid/audio".into(),
+                buffer: buffer.clone(),
+                meta: None,
+            },
+        );
+        let saved = Arc::new(AtomicBool::new(false));
+        let saved_callback = saved.clone();
+        manager
+            .update_task(
+                42,
+                DownloadOptions {
+                    user_agent: None,
+                    meta: None,
+                    on_start: None,
+                    on_progress: None,
+                    on_finish: Some(Arc::new(move |result, _| {
+                        assert_eq!(
+                            result.expect("existing buffer").byte_size(),
+                            buffer.byte_size()
+                        );
+                        saved_callback.store(true, Ordering::SeqCst);
+                    })),
+                },
+            )
+            .await;
+        assert!(
+            saved.load(Ordering::SeqCst),
+            "completed buffer must be passed to disk-save callback"
+        );
+        assert!(
+            manager.queue.lock().await.is_empty(),
+            "must not queue a second download"
+        );
     }
 }
