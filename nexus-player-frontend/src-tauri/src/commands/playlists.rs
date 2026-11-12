@@ -13,7 +13,23 @@ use tauri::State;
 pub async fn get_all_playlists(state: State<'_, Arc<AppState>>) -> Result<Vec<PlaylistDto>> {
     let playlists = state.get_all_playlists().await?;
 
-    Ok(playlists.into_iter().map(|p| p.into()).collect())
+    let mut result = Vec::with_capacity(playlists.len());
+    for playlist in playlists {
+        let items = state.get_playlist_with_items(playlist.id).await?;
+        let mut dto: PlaylistDto = playlist.into();
+        dto.track_count = items.map_or(0, |playlist| {
+            playlist
+                .items
+                .iter()
+                .filter(|item| {
+                    item.item_kind
+                        == nexus_player_backend::library::models::PlaylistItemKind::Track
+                })
+                .count()
+        });
+        result.push(dto);
+    }
+    Ok(result)
 }
 
 #[tauri::command]
