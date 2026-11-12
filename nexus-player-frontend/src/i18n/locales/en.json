@@ -210,6 +210,8 @@
     "open": "Open",
     "like": "Add to favorites",
     "unlike": "Remove from favorites",
+    "unlikeTitle": "Remove from favorites?",
+    "unlikeMessage": "Remove “{title}” from favorites?",
     "expand": "Expand",
     "collapse": "Collapse"
   },

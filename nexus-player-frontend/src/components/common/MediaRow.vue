@@ -116,6 +116,7 @@ import { sourceLabel } from '@/utils/sourceLabel';
 import type { TrackDto, PlaylistDto, ContainerMetaDto } from '@/types/types';
 import { useAudioStore } from '@/stores/audio';
 import { useNotificationStore } from '@/stores/notifications';
+import { confirmAction } from '@/composables/useConfirm';
 import { usePlaylistActions } from '@/composables/usePlaylistActions';
 import ActionMenu from './ActionMenu.vue';
 import MenuItem from './MenuItem.vue';
@@ -457,12 +458,23 @@ const handleDeleteCache = async () => {
 const handleToggleLike = async () => {
   if (props.type !== 'track' || !props.track) return;
 
+  if (props.track.liked) {
+    const confirmed = await confirmAction({
+      title: t('media.unlikeTitle'),
+      message: t('media.unlikeMessage', { title: props.track.title }),
+      confirmLabel: t('media.unlike'),
+    });
+    if (!confirmed) return;
+  }
+
+  const wasLiked = props.track.liked;
   try {
-    props.track.liked =  !props.track.liked
+    props.track.liked = !wasLiked;
 
     await invoke('toggle_liked', { track: toTrackDto(props.track) });
     emit('refresh');
   } catch (e) {
+    props.track.liked = wasLiked;
     console.error('Failed to toggle like:', e);
   }
 };
