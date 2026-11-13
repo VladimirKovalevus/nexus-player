@@ -1,12 +1,14 @@
 use crate::state::types::Waveform;
 use std::io::Cursor;
-use symphonia::core::audio::{AudioBufferRef, Signal};
+use symphonia::core::audio::{AudioBufferRef, SampleBuffer};
 use symphonia::core::codecs::{Decoder, DecoderOptions};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader};
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
+
+const WAVEFORM_POINTS: usize = 50;
 
 pub struct StatefulWaveformAnalyzer {
     format: Box<dyn FormatReader>,
@@ -71,8 +73,7 @@ impl StatefulWaveformAnalyzer {
 
             match self.decoder.decode(&packet) {
                 Ok(decoded) => {
-                    let rms = calculate_rms(&decoded);
-                    amplitudes.push(rms);
+                    append_frame_energy(&decoded, &mut amplitudes);
 
                     // Update current time based on decoded frames
                     let frames = decoded.frames();
@@ -101,7 +102,7 @@ impl StatefulWaveformAnalyzer {
         }
 
         Some(Waveform {
-            data: amplitudes,
+            data: uniform_rms(&amplitudes, WAVEFORM_POINTS),
             start_time: 0.0,
             end_time: 0.0,
             byte_start: None,
@@ -137,9 +138,7 @@ pub fn analyze_waveform(data: &[u8]) -> Option<Waveform> {
     let track_id = track.id;
     let mut amplitudes = Vec::new();
 
-    // We only decode a limited number of packets to keep it fast
-    let max_packets = 50;
-    let mut packets_count = 0;
+    // Decode the whole chunk: a packet limit would discard its tail.
 
     while let Ok(packet) = format.next_packet() {
         if packet.track_id() != track_id {
@@ -148,17 +147,11 @@ pub fn analyze_waveform(data: &[u8]) -> Option<Waveform> {
 
         match decoder.decode(&packet) {
             Ok(decoded) => {
-                let rms = calculate_rms(&decoded);
-                amplitudes.push(rms);
+                append_frame_energy(&decoded, &mut amplitudes);
             }
             Err(Error::IoError(_)) => break,
             Err(Error::DecodeError(_)) => continue,
             Err(_) => break,
-        }
-
-        packets_count += 1;
-        if packets_count >= max_packets {
-            break;
         }
     }
 
@@ -166,10 +159,8 @@ pub fn analyze_waveform(data: &[u8]) -> Option<Waveform> {
         return None;
     }
 
-    // Return a simplified waveform (e.g. average RMS for the chunk)
-    // Or just the list of RMS values if we want more detail.
     Some(Waveform {
-        data: amplitudes,
+        data: uniform_rms(&amplitudes, WAVEFORM_POINTS),
         start_time: 0.0, // These will be set by the caller
         end_time: 0.0,
         byte_start: None,
@@ -177,72 +168,97 @@ pub fn analyze_waveform(data: &[u8]) -> Option<Waveform> {
     })
 }
 
-fn calculate_rms(decoded: &AudioBufferRef) -> f32 {
-    match decoded {
-        AudioBufferRef::F32(buf) => {
-            let samples = buf.chan(0);
-            if samples.is_empty() {
-                return 0.0;
-            }
-            let sum_sq: f32 = samples.iter().map(|&s| s * s).sum();
-            (sum_sq / samples.len() as f32).sqrt()
+// Store channel-averaged energy per frame, so packet sizes and sample formats do
+// not affect the time axis. Averaging energy also preserves opposite-phase stereo.
+fn append_frame_energy(decoded: &AudioBufferRef, energies: &mut Vec<f32>) {
+    let channels = decoded.spec().channels.count();
+    if channels == 0 || decoded.frames() == 0 {
+        return;
+    }
+    let mut samples = SampleBuffer::<f32>::new(decoded.frames() as u64, *decoded.spec());
+    samples.copy_interleaved_ref(decoded.clone());
+    energies.extend(
+        samples
+            .samples()
+            .chunks_exact(channels)
+            .map(|frame| frame.iter().map(|&s| s * s).sum::<f32>() / channels as f32),
+    );
+}
+
+// Each point represents an equal interval of the complete decoded chunk. Use
+// every frame in the interval instead of picking samples that can miss transients.
+fn uniform_rms(energies: &[f32], points: usize) -> Vec<f32> {
+    let points = points.min(energies.len());
+    (0..points)
+        .map(|i| {
+            let start = i * energies.len() / points;
+            let end = (i + 1) * energies.len() / points;
+            let energy: f64 = energies[start..end].iter().map(|&e| f64::from(e)).sum();
+            (energy / (end - start) as f64).sqrt() as f32
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn wav(samples: &[i16], channels: u16) -> Vec<u8> {
+        let data_len = (samples.len() * 2) as u32;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36 + data_len).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&channels.to_le_bytes());
+        bytes.extend_from_slice(&8000u32.to_le_bytes());
+        bytes.extend_from_slice(&(8000 * u32::from(channels) * 2).to_le_bytes());
+        bytes.extend_from_slice(&(channels * 2).to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&data_len.to_le_bytes());
+        for sample in samples {
+            bytes.extend_from_slice(&sample.to_le_bytes());
         }
-        AudioBufferRef::U8(buf) => {
-            let samples = buf.chan(0);
-            if samples.is_empty() {
-                return 0.0;
-            }
-            let sum_sq: f32 = samples
-                .iter()
-                .map(|&s| {
-                    let f = (s as f32 - 128.0) / 128.0;
-                    f * f
-                })
-                .sum();
-            (sum_sq / samples.len() as f32).sqrt()
-        }
-        AudioBufferRef::U16(buf) => {
-            let samples = buf.chan(0);
-            if samples.is_empty() {
-                return 0.0;
-            }
-            let sum_sq: f32 = samples
-                .iter()
-                .map(|&s| {
-                    let f = (s as f32 - 32768.0) / 32768.0;
-                    f * f
-                })
-                .sum();
-            (sum_sq / samples.len() as f32).sqrt()
-        }
-        AudioBufferRef::S8(buf) => {
-            let samples = buf.chan(0);
-            if samples.is_empty() {
-                return 0.0;
-            }
-            let sum_sq: f32 = samples
-                .iter()
-                .map(|&s| {
-                    let f = s as f32 / 128.0;
-                    f * f
-                })
-                .sum();
-            (sum_sq / samples.len() as f32).sqrt()
-        }
-        AudioBufferRef::S16(buf) => {
-            let samples = buf.chan(0);
-            if samples.is_empty() {
-                return 0.0;
-            }
-            let sum_sq: f32 = samples
-                .iter()
-                .map(|&s| {
-                    let f = s as f32 / 32768.0;
-                    f * f
-                })
-                .sum();
-            (sum_sq / samples.len() as f32).sqrt()
-        }
-        _ => 0.0, // Other formats not implemented for brevity
+        bytes
+    }
+
+    #[test]
+    fn waveform_covers_the_end_of_a_long_chunk() {
+        let mut samples = vec![0; 160_000];
+        samples[80_000..].fill(16384);
+        let waveform = analyze_waveform(&wav(&samples, 1)).expect("valid WAV");
+        assert_eq!(waveform.data.len(), 50);
+        assert!(waveform.data[..25].iter().all(|&a| a < 0.001));
+        assert!(waveform.data[25..].iter().all(|&a| (a - 0.5).abs() < 0.001));
+    }
+
+    #[test]
+    fn waveform_includes_energy_from_both_channels() {
+        let samples: Vec<i16> = (0..8000).flat_map(|_| [0, 16384]).collect();
+        let waveform = analyze_waveform(&wav(&samples, 2)).expect("valid stereo WAV");
+        let expected = (0.125_f32).sqrt();
+        assert_eq!(waveform.data.len(), WAVEFORM_POINTS);
+        assert!(waveform.data.iter().all(|&a| (a - expected).abs() < 0.001));
+    }
+
+    #[test]
+    fn stateful_waveform_covers_the_whole_segment() {
+        let mut samples = vec![0; 160_000];
+        samples[80_000..].fill(16384);
+        let mut analyzer = StatefulWaveformAnalyzer::new(Box::new(Cursor::new(wav(&samples, 1))))
+            .expect("valid WAV");
+        let waveform = analyzer.analyze_segment(20.0).expect("segment waveform");
+        assert_eq!(waveform.data.len(), WAVEFORM_POINTS);
+        assert!(waveform.data[..25].iter().all(|&a| a < 0.001));
+        assert!(waveform.data[25..].iter().all(|&a| (a - 0.5).abs() < 0.001));
+    }
+
+    #[test]
+    fn short_and_empty_chunks_do_not_produce_empty_bins() {
+        assert!(uniform_rms(&[], WAVEFORM_POINTS).is_empty());
+        let waveform = analyze_waveform(&wav(&[0, 16384, 0], 1)).expect("short WAV");
+        assert_eq!(waveform.data, vec![0.0, 0.5, 0.0]);
     }
 }
