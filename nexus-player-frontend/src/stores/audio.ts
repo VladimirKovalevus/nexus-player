@@ -1,7 +1,7 @@
 import { i18n } from '@/i18n';
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { AudioState, QueueState, AudioEvent } from '@/types/types';
+import type { AudioState, QueueState, AudioEvent, SearchResult } from '@/types/types';
 
 interface NexusAudioBridge {
   stopService: () => void;
@@ -346,10 +346,22 @@ export const useAudioStore = defineStore('audio', () => {
 
   /** Starts playback of a search result; failures become a notification and are not rethrown. */
   async function searchAndPlay(args: SearchPlayArgs): Promise<boolean> {
+    return startResultPlayback('handle_search', { ...args });
+  }
+
+  async function playResolvedResult(searchResult: SearchResult): Promise<boolean> {
+    return startResultPlayback('handle_streaming_track', {
+      searchResult,
+      strategy: 'cache',
+      play: true,
+    });
+  }
+
+  async function startResultPlayback(command: string, args: Record<string, unknown>): Promise<boolean> {
     const wasWaiting = isWaitingForAudio.value;
     startLoading();
     try {
-      await invoke('handle_search', { ...args });
+      await invoke(command, args);
       return true;
     } catch (e) {
       console.error('Failed to play search result:', e);
@@ -413,6 +425,7 @@ export const useAudioStore = defineStore('audio', () => {
     updateQueueState,
     setPosition,
     searchAndPlay,
+    playResolvedResult,
     playNext,
     playPrevious,
   };

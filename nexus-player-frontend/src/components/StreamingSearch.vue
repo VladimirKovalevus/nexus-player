@@ -74,6 +74,7 @@ const containerRow = (result: Exclude<SearchResult, StreamingTrack>) => {
 };
 
 const URL_REGEX = /^https?:\/\/.+/;
+const isDirectLink = computed(() => URL_REGEX.test(activeQuery.value));
 
 const submitSearch = async () => {
   const value = query.value.trim();
@@ -144,15 +145,17 @@ const handleResultPlay = async (result: SearchResult, index: number) => {
     return;
   }
 
-  const ok = await audioStore.searchAndPlay({
-    system: activeProvider.value,
-    contentType: activeContentType.value?.toLowerCase(),
-    query: activeQuery.value,
-    limit: limit.value,
-    offset: offset.value,
-    selectedIndex: index,
-    resultId: result.type === 'track' ? result.source?.url : result.id,
-  });
+  const ok = isDirectLink.value
+    ? await audioStore.playResolvedResult(result)
+    : await audioStore.searchAndPlay({
+      system: activeProvider.value,
+      contentType: activeContentType.value?.toLowerCase(),
+      query: activeQuery.value,
+      limit: limit.value,
+      offset: offset.value,
+      selectedIndex: index,
+      resultId: result.type === 'track' ? result.source?.url : result.id,
+    });
   if (!ok) return;
   emit('refetch');
 };
@@ -227,7 +230,7 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
         {{ $t('search.count', { count: searchResults.length }) }}
       </span>
       <span class="view-spacer" />
-      <template v-if="searchResults.length > 0 && (offset > 0 || searchResults.length >= limit)">
+      <template v-if="!isDirectLink && searchResults.length > 0 && (offset > 0 || searchResults.length >= limit)">
         <button
           class="deck-btn"
           :title="$t('common.previousPage')"
