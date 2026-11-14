@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { invoke } from '@/utils/providerAuth';
 import AppModal from '@/components/common/AppModal.vue';
 
-import type { TrackDto } from '@/types/types';
+import type { PlaylistDto, TrackDto } from '@/types/types';
 
 interface Props {
   isOpen: boolean;
@@ -21,26 +21,35 @@ const emit = defineEmits<{
 const title = ref('');
 const description = ref('');
 const allTracks = ref<TrackDto[]>([]);
+const allAlbums = ref<PlaylistDto[]>([]);
+const selectionView = ref<'tracks' | 'albums'>('tracks');
+const selectedAlbumIds = ref<Set<number>>(new Set());
 const selectedTrackIds = ref<Set<number>>(new Set());
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-// Loaded on open: this modal stays mounted, so tracks added later would be missing otherwise.
-watch(
-  () => props.isOpen,
-  (isOpen) => {
-    if (isOpen) fetchTracks();
-  },
-);
-
-const fetchTracks = async () => {
+const fetchLibrary = async () => {
   try {
-    allTracks.value = await invoke<TrackDto[]>('get_all_tracks');
+    const [tracks, albums] = await Promise.all([
+      invoke<TrackDto[]>('get_all_tracks'),
+      invoke<PlaylistDto[]>('get_all_playlists'),
+    ]);
+    allTracks.value = tracks;
+    allAlbums.value = albums;
   } catch (e) {
     console.error('Failed to fetch tracks:', e);
     error.value = t('common.error', { error: errorMessage(e) });
   }
 };
+
+// Loaded on open: this modal stays mounted, so tracks added later would be missing otherwise.
+watch(
+  () => props.isOpen,
+  (isOpen) => {
+    if (isOpen) fetchLibrary();
+  },
+  { immediate: true },
+);
 
 const toggleTrackSelection = (trackId: number) => {
   if (selectedTrackIds.value.has(trackId)) {
@@ -50,8 +59,16 @@ const toggleTrackSelection = (trackId: number) => {
   }
 };
 
+const toggleAlbumSelection = (albumId: number) => {
+  if (selectedAlbumIds.value.has(albumId)) {
+    selectedAlbumIds.value.delete(albumId);
+  } else {
+    selectedAlbumIds.value.add(albumId);
+  }
+};
+
 const handleSave = async () => {
-  if (!title.value.trim()) return;
+  if (loading.value || !title.value.trim()) return;
 
   loading.value = true;
   error.value = null;
@@ -59,7 +76,7 @@ const handleSave = async () => {
   try {
     const tracksToSave = allTracks.value.filter(t => selectedTrackIds.value.has(t.id));
 
-    await invoke<number>('create_playlist_with_tracks', {
+    const playlistId = await invoke<number>('create_playlist_with_tracks', {
       request: {
         title: title.value.trim(),
         description: description.value.trim() || null,
@@ -67,8 +84,22 @@ const handleSave = async () => {
       },
     });
 
+    try {
+      for (const albumId of selectedAlbumIds.value) {
+        await invoke('add_playlist_to_playlist', {
+          parentPlaylistId: playlistId,
+          childPlaylistId: albumId,
+        });
+      }
+    } catch (e) {
+      // Remove the incomplete playlist so saving again does not create duplicates.
+      await invoke('delete_playlist', { playlistId });
+      throw e;
+    }
+
     emit('created');
-    handleClose();
+    resetForm();
+    emit('close');
   } catch (e) {
     console.error('Failed to create playlist:', e);
     error.value = t('common.error', { error: errorMessage(e) });
@@ -77,11 +108,18 @@ const handleSave = async () => {
   }
 };
 
-const handleClose = () => {
+const resetForm = () => {
   title.value = '';
   description.value = '';
   selectedTrackIds.value.clear();
+  selectedAlbumIds.value.clear();
+  selectionView.value = 'tracks';
   error.value = null;
+};
+
+const handleClose = () => {
+  if (loading.value) return;
+  resetForm();
   emit('close');
 };
 
@@ -122,8 +160,16 @@ const formatDuration = (seconds: number | null): string => {
     </div>
 
     <div class="deck-field">
-      <span class="section-label">{{ $t('playlistForm.tracks', { count: selectedTrackIds.size }) }}</span>
-      <div :class="$style.trackList">
+      <div :class="$style.selectionTabs">
+        <button type="button" class="deck-btn" :aria-pressed="selectionView === 'tracks'" @click="selectionView = 'tracks'">
+          {{ $t('playlistForm.tracks', { count: selectedTrackIds.size }) }}
+        </button>
+        <button type="button" class="deck-btn" :aria-pressed="selectionView === 'albums'" @click="selectionView = 'albums'">
+          {{ $t('playlistForm.albums', { count: selectedAlbumIds.size }) }}
+        </button>
+      </div>
+      <div v-if="selectionView === 'tracks'" :class="$style.trackList">
+        <p v-if="allTracks.length === 0" :class="$style.empty">{{ $t('home.noTracks') }}</p>
         <label v-for="track in allTracks" :key="track.id" :class="$style.trackItem">
           <input
             type="checkbox"
@@ -136,6 +182,22 @@ const formatDuration = (seconds: number | null): string => {
             <span :class="$style.trackArtist">{{ track.artist || $t('track.unknownArtist') }}</span>
           </span>
           <span v-if="track.durationSecs" :class="$style.trackTime">{{ formatDuration(track.durationSecs) }}</span>
+        </label>
+      </div>
+      <div v-else :class="$style.trackList">
+        <p v-if="allAlbums.length === 0" :class="$style.empty">{{ $t('home.noPlaylists') }}</p>
+        <label v-for="album in allAlbums" :key="album.id" :class="$style.trackItem">
+          <input
+            type="checkbox"
+            :checked="selectedAlbumIds.has(album.id)"
+            :disabled="loading"
+            @change="toggleAlbumSelection(album.id)"
+          />
+          <span :class="$style.trackInfo">
+            <span :class="$style.trackTitle">{{ album.title }}</span>
+            <span :class="$style.trackArtist">{{ album.creator || $t('track.unknownArtist') }}</span>
+          </span>
+          <span :class="$style.trackTime">{{ $t('home.trackCount', { count: album.trackCount }) }}</span>
         </label>
       </div>
     </div>
@@ -156,6 +218,22 @@ const formatDuration = (seconds: number | null): string => {
 .error {
   color: var(--danger);
   overflow-wrap: anywhere;
+}
+
+.selectionTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  [aria-pressed='true'] {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+}
+
+.empty {
+  padding: 10px;
+  color: var(--muted);
 }
 
 .trackList {

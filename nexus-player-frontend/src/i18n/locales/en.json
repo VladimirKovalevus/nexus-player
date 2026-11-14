@@ -327,6 +327,7 @@
     "artwork": "Cover",
     "pickFile": "Choose file",
     "saving": "Saving…",
+    "albums": "Albums, selected: {count}",
     "tracks": "Tracks, selected: {count}"
   },
   "visualizer": {
