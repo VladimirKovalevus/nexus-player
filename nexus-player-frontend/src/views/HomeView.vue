@@ -450,4 +450,10 @@ const handleTrackPlay = async (
   align-items: center;
   gap: 6px;
 }
+
+@media (max-width: 640px) {
+  .cell {
+    width: 100%;
+  }
+}
 </style>
