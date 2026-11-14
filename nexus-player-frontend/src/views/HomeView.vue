@@ -56,6 +56,7 @@
             <MediaTile
               :title="item.title"
               :subtitle="item.subtitle"
+              :track-count="item.trackCount"
               :thumbnail="item.thumbnail"
               placeholder-icon="playlist"
               @click="handlePlaylistClick(item)"
@@ -207,7 +208,8 @@ const playlistItems = computed<MediaTileItem[]>(() =>
   playlistsStore.playlists.map((playlist) => ({
     id: playlist.id,
     title: playlist.title,
-    subtitle: t('home.trackCount', { count: playlist.trackCount }),
+    subtitle: playlist.creator ?? playlist.description ?? t('track.unknownArtist'),
+    trackCount: playlist.trackCount,
     thumbnail: playlist.thumbnail,
   })),
 );

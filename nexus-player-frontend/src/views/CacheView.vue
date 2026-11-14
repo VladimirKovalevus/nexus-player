@@ -53,7 +53,8 @@ const albumItems = computed<MediaTileItem[]>(() =>
   albums.value.map((album) => ({
     id: album.id,
     title: album.title,
-    subtitle: `${album.artist || t('track.unknownArtist')} · ${album.cachedTrackCount}`,
+    subtitle: album.artist || t('track.unknownArtist'),
+    trackCount: album.cachedTrackCount,
     thumbnail: album.artworkUrl,
   })),
 );

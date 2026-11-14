@@ -22,6 +22,7 @@
         :key="item.id"
         :title="item.title"
         :subtitle="item.subtitle"
+        :track-count="item.trackCount"
         :thumbnail="item.thumbnail"
         :placeholder-icon="placeholderIcon"
         @click="$emit('item-click', item)"
@@ -45,6 +46,7 @@ export interface MediaTileItem {
   id: number;
   title: string;
   subtitle: string;
+  trackCount?: number;
   thumbnail?: string | null;
 }
 

@@ -25,7 +25,10 @@
           <span :class="$style.placeholder"><AppIcon name="playlist" :size="15" /></span>
         </template>
       </AppImage>
-      <span :class="$style.name">{{ playlist.title }}</span>
+      <span :class="$style.text">
+        <span :class="$style.name">{{ playlist.title }}</span>
+        <span :class="$style.artist">{{ playlist.creator ?? playlist.description ?? $t('track.unknownArtist') }}</span>
+      </span>
       <span :class="$style.count">{{ playlist.trackCount }}</span>
     </button>
     <p v-if="visible.length === 0" :class="$style.empty">
@@ -36,6 +39,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import AppIcon from '@/components/common/AppIcon.vue';
 import AppImage from '@/components/common/AppImage.vue';
 import { usePlaylistsStore } from '@/stores/playlists';
@@ -45,9 +49,10 @@ defineProps<{ selectedId: number | null }>();
 defineEmits<{ select: [id: number]; create: [] }>();
 
 const store = usePlaylistsStore();
+const { t } = useI18n();
 const query = ref('');
 const visible = computed(() =>
-  fuzzyFilterItems(query.value.trim(), store.playlists, (playlist) => [playlist.title]),
+  fuzzyFilterItems(query.value.trim(), store.playlists, (playlist) => [playlist.title, playlist.creator ?? playlist.description ?? t('track.unknownArtist')]),
 );
 
 onMounted(store.fetch);
@@ -86,7 +91,7 @@ onMounted(store.fetch);
   grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
-  height: 38px;
+  min-height: 46px;
   padding: 0 12px;
   text-align: left;
 
@@ -117,7 +122,19 @@ onMounted(store.fetch);
   color: var(--muted);
 }
 
+.text {
+  min-width: 0;
+}
+
+.artist {
+  display: block;
+  font: 500 var(--font-size-xs) $font-family-mono;
+  color: var(--muted);
+  @include text-ellipsis;
+}
+
 .name {
+  display: block;
   @include text-ellipsis;
 }
 

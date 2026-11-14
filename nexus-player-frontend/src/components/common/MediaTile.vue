@@ -14,6 +14,7 @@
       <div :class="$style.title" :title="title">{{ title }}</div>
       <div :class="$style.subtitle">{{ subtitle }}</div>
     </div>
+    <span v-if="trackCount != null" :class="$style.count" :title="$t('home.trackCount', { count: trackCount })">{{ trackCount }}</span>
     <ActionMenu v-if="$slots.menu" :label="$t('common.more')" :trigger-class="$style.more">
       <template #default="menuProps">
         <slot name="menu" v-bind="menuProps" />
@@ -27,7 +28,7 @@ import AppIcon from './AppIcon.vue';
 import AppImage from './AppImage.vue';
 import ActionMenu from './ActionMenu.vue';
 
-defineProps<{ title: string; subtitle: string; thumbnail?: string | null; placeholderIcon: string }>();
+defineProps<{ title: string; subtitle: string; trackCount?: number; thumbnail?: string | null; placeholderIcon: string }>();
 defineEmits<{ click: []; play: [] }>();
 </script>
 
@@ -36,7 +37,7 @@ defineEmits<{ click: []; play: [] }>();
 
 .tile {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
+  grid-template-columns: 48px minmax(0, 1fr) auto auto;
   gap: 9px;
   align-items: center;
   padding: 7px 8px 7px 10px;
@@ -97,6 +98,12 @@ defineEmits<{ click: []; play: [] }>();
   font: 500 var(--font-size-xs) var(--font-mono);
   color: var(--muted);
   @include text-ellipsis;
+}
+
+.count {
+  font: 500 var(--font-size-xs) var(--font-mono);
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .more {

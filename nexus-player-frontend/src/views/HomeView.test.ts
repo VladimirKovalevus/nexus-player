@@ -64,7 +64,8 @@ describe('HomeView mobile Playlists row', () => {
     expect(block.exists()).toBe(true);
     expect(w.findAll('[data-testid="home-playlist-tile"]')).toHaveLength(5);
     for (const tile of w.findAll('[data-testid="home-playlist-tile"]')) {
-      expect(tile.text()).toContain('Tracks: 3');
+      expect(tile.text()).toContain('Unknown artist');
+      expect(tile.find('[title="Tracks: 3"]').text()).toBe('3');
     }
     expect(w.find('[data-testid="home-playlists-all-tile"]').exists()).toBe(false);
     const link = w.find('[data-testid="home-playlists-all-link"]');
