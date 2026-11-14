@@ -89,6 +89,7 @@ const searchQuery = ref('');
 const filteredTracks = computed(() =>
   fuzzyFilterItems(searchQuery.value.trim(), props.tracks, (track) => [track.title, track.artist]),
 );
+defineExpose({ filteredTracks, isFiltered: computed(() => !!searchQuery.value.trim()) });
 </script>
 
 <style module lang="scss">

@@ -61,6 +61,10 @@ const statusText = computed(() =>
     ? t('radio.playing', { mode: t(`radio.modes.${radioStore.activeMode}.name`) })
     : t('radio.off'),
 );
+defineExpose({ startPlayback: async () => {
+  await radioStore.start();
+  return true;
+} });
 </script>
 
 <style module lang="scss">

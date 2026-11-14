@@ -15,7 +15,7 @@
         @item-play="handleAlbumPlay"
       />
 
-      <TrackListSection
+      <TrackListSection ref="trackList"
         :title="$t('cacheView.tracks')"
         :tracks="cachedTracks"
         :active-track-id="audioStore.currentTrack?.id ?? null"
@@ -105,6 +105,13 @@ const handleAlbumPlay = async (item: MediaTileItem) => {
 };
 
 onMounted(() => fetchData());
+const trackList = ref<InstanceType<typeof TrackListSection> | null>(null);
+defineExpose({ startPlayback: async () => {
+  const available = (trackList.value?.filteredTracks ?? cachedTracks.value).filter((track) => !track.unavailable);
+  if (!available.length) return false;
+  await playVisibleTracks(available[0], available);
+  return true;
+} });
 </script>
 
 <style module lang="scss">

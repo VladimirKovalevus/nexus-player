@@ -329,6 +329,11 @@ const handleRemovePlaylistFromPlaylist = async (childPlaylistId: number) => {
 onMounted(() => {
   fetchPlaylist();
 });
+defineExpose({ startPlayback: async () => {
+  if (!items.value.length) return false;
+  await handlePlayAll();
+  return true;
+} });
 </script>
 
 <style module lang="scss">

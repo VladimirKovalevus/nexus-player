@@ -84,7 +84,7 @@
         </div>
       </section>
 
-      <TrackListSection
+      <TrackListSection ref="trackList"
         v-if="!showAllPlaylists"
         :title="$t('home.tracks')"
         :tracks="tracks"
@@ -401,6 +401,13 @@ const handleTrackPlay = async (
     audioStore.stopLoading();
   }
 };
+const trackList = ref<InstanceType<typeof TrackListSection> | null>(null);
+defineExpose({ startPlayback: async () => {
+  const available = (trackList.value?.filteredTracks ?? tracks.value).filter((track) => !track.unavailable);
+  if (!available.length) return false;
+  await handleTrackClick(available[0], available, trackList.value?.isFiltered ?? false);
+  return true;
+} });
 </script>
 
 <style module lang="scss">

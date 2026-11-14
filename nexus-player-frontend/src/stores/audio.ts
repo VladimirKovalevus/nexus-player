@@ -82,13 +82,13 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   if ('mediaSession' in navigator) {
-    navigator.mediaSession.setActionHandler('play', () => invoke('resume'));
+    navigator.mediaSession.setActionHandler('play', () => controlPlayback('play'));
     navigator.mediaSession.setActionHandler('pause', () => invoke('pause'));
     navigator.mediaSession.setActionHandler('previoustrack', () =>
-      invoke('play_previous'),
+      playPrevious(),
     );
     navigator.mediaSession.setActionHandler('nexttrack', () =>
-      invoke('play_next'),
+      playNext(),
     );
     navigator.mediaSession.setActionHandler('seekto', (details) => {
       if (details.seekTime !== undefined) {
@@ -402,20 +402,42 @@ export const useAudioStore = defineStore('audio', () => {
     }
   }
 
-  function playNext() {
+  let playbackContext: (() => Promise<boolean>) | null = null;
+
+  function setPlaybackContext(context: () => Promise<boolean>) {
+    playbackContext = context;
+  }
+
+  async function controlPlayback(command: 'play' | 'play_next' | 'play_previous') {
+    if (isLoading.value) return;
     startLoading();
-    invoke('play_next').catch((e) => {
-      console.error('Failed to play next:', e);
+    try {
+      if (queueState.value.entries.length === 0 && !isRadioActive.value && !(command === 'play' && isPlaying.value)) {
+        if (!await playbackContext?.()) stopLoading();
+        return;
+      }
+      if (command === 'play') {
+        await invoke(isPlaying.value ? 'pause' : isPaused.value ? 'resume' : 'play_at_index',
+          isStopped.value ? { index: 0 } : undefined);
+      } else {
+        await invoke(command);
+      }
+    } catch (e) {
+      console.error('Failed to control playback:', e);
       stopLoading();
-    });
+    }
+  }
+
+  function togglePlayPause() {
+    return controlPlayback('play');
+  }
+
+  function playNext() {
+    return controlPlayback('play_next');
   }
 
   function playPrevious() {
-    startLoading();
-    invoke('play_previous').catch((e) => {
-      console.error('Failed to play previous:', e);
-      stopLoading();
-    });
+    return controlPlayback('play_previous');
   }
 
   return {
@@ -455,6 +477,8 @@ export const useAudioStore = defineStore('audio', () => {
     setPosition,
     searchAndPlay,
     playResolvedResult,
+    setPlaybackContext,
+    togglePlayPause,
     playNext,
     playPrevious,
   };

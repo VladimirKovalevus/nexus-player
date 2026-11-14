@@ -220,6 +220,12 @@ const handleCreatePlaylist = async (data: { title: string; description: string |
     isSavingPlaylist.value = false;
   }
 };
+defineExpose({ startPlayback: async () => {
+  const index = searchResults.value.findIndex((result) => result.type !== 'channel');
+  if (index < 0) return false;
+  await handleResultPlay(searchResults.value[index], index);
+  return true;
+} });
 </script>
 
 <template>

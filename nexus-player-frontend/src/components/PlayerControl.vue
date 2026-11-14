@@ -83,42 +83,9 @@ const fetchQueueState = async () => {
   }
 };
 
-const togglePlayPause = async () => {
-  audioStore.startLoading();
-  try {
-    if (audioStore.isPlaying) {
-      await invoke('pause');
-    } else if (audioStore.isPaused) {
-      await invoke('resume');
-    }
-    if (audioStore.isStopped) {
-      await invoke('play_at_index', { index: 0 });
-    }
-  } catch (e) {
-    console.error('Failed to toggle play/pause:', e);
-    audioStore.stopLoading();
-  }
-};
-
-const playNext = async () => {
-  audioStore.startLoading();
-  try {
-    await invoke('play_next');
-  } catch (e) {
-    console.error('Failed to play next:', e);
-    audioStore.stopLoading();
-  }
-};
-
-const playPrevious = async () => {
-  audioStore.startLoading();
-  try {
-    await invoke('play_previous');
-  } catch (e) {
-    console.error('Failed to play previous:', e);
-    audioStore.stopLoading();
-  }
-};
+const togglePlayPause = () => audioStore.togglePlayPause();
+const playNext = () => audioStore.playNext();
+const playPrevious = () => audioStore.playPrevious();
 
 const cycleRepeatMode = async () => {
   const modes: Array<'off' | 'all' | 'one'> = ['off', 'all', 'one'];

@@ -93,3 +93,68 @@ it('retains a duration by track ID across stale snapshots', () => {
   expect(audio.duration).toBe(123);
   expect(audio.tracks[0].durationSecs).toBe(123);
 });
+
+describe('playback with an empty queue', () => {
+  it.each(['togglePlayPause', 'playNext', 'playPrevious'] as const)(
+    '%s starts the current view instead of invoking an empty queue', async (action) => {
+      const audio = useAudioStore();
+      const context = vi.fn().mockResolvedValue(true);
+      audio.setPlaybackContext(context);
+      await audio[action]();
+      expect(context).toHaveBeenCalledOnce();
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it('uses the latest context after navigation', async () => {
+    const audio = useAudioStore();
+    const home = vi.fn().mockResolvedValue(true);
+    const playlist = vi.fn().mockResolvedValue(true);
+    audio.setPlaybackContext(home);
+    audio.setPlaybackContext(playlist);
+    await audio.playNext();
+    expect(home).not.toHaveBeenCalled();
+    expect(playlist).toHaveBeenCalledOnce();
+  });
+
+  it('does not leave the player loading when the context is empty', async () => {
+    const audio = useAudioStore();
+    audio.setPlaybackContext(vi.fn().mockResolvedValue(false));
+    await audio.togglePlayPause();
+    expect(audio.isLoading).toBe(false);
+  });
+
+  it('clears loading after a failed context start', async () => {
+    const audio = useAudioStore();
+    audio.setPlaybackContext(vi.fn().mockRejectedValue(new Error('offline')));
+    await audio.playPrevious();
+    expect(audio.isLoading).toBe(false);
+  });
+
+  it.each(['togglePlayPause', 'playNext', 'playPrevious'] as const)(
+    '%s keeps using an existing queue', async (action) => {
+      const audio = useAudioStore();
+      audio.queueState.entries = [{ entryType: 'container', id: 1 } as never];
+      const context = vi.fn();
+      audio.setPlaybackContext(context);
+      await audio[action]();
+      expect(context).not.toHaveBeenCalled();
+      expect(invoke).toHaveBeenCalledWith(
+        action === 'togglePlayPause' ? 'play_at_index' : action === 'playNext' ? 'play_next' : 'play_previous',
+        ...(action === 'togglePlayPause' ? [{ index: 0 }] : []),
+      );
+    },
+  );
+
+  it('ignores repeated clicks while context playback is starting', async () => {
+    const audio = useAudioStore();
+    let resolve!: (started: boolean) => void;
+    const context = vi.fn(() => new Promise<boolean>((done) => { resolve = done; }));
+    audio.setPlaybackContext(context);
+    const pending = audio.togglePlayPause();
+    await audio.playNext();
+    expect(context).toHaveBeenCalledOnce();
+    resolve(true);
+    await pending;
+  });
+});

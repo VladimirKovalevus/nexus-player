@@ -147,6 +147,20 @@ const formatTime = (timestamp: number) => {
 };
 
 onMounted(() => fetchHistory(0));
+defineExpose({ startPlayback: async () => {
+  const entry = historyEntries.value[0];
+  if (!entry) return false;
+  await invoke('handle_streaming_track', {
+    searchResult: {
+      type: 'track', id: entry.id, title: entry.title,
+      artist: entry.artist || '', thumbnail: entry.artworkUrl,
+      source: entry.source, state: { type: 'streaming' }, liked: false,
+    },
+    strategy: 'cache', play: true,
+  });
+  refreshQueue();
+  return true;
+} });
 </script>
 
 <style module lang="scss">

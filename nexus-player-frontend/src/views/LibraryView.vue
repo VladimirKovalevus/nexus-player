@@ -208,6 +208,12 @@ onMounted(async () => {
   await load();
   if (tracks.value.length === 0 && !error.value) await scan();
 });
+defineExpose({ startPlayback: async () => {
+  const first = visibleTracks.value.find((track) => !track.unavailable);
+  if (!first) return false;
+  await play(first);
+  return true;
+} });
 </script>
 
 <style module lang="scss">

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, provide } from 'vue';
+import { useAudioStore } from '@/stores/audio';
+import { invoke } from '@/utils/providerAuth';
+import type { TrackDto } from '@/types/types';
 import AppLayout from './components/layout/AppLayout.vue';
 import PlaybackQueue from './components/PlaybackQueue.vue';
 import PlayerControl from './components/PlayerControl.vue';
@@ -20,6 +23,19 @@ import VisualizerOverlay from './components/VisualizerOverlay.vue';
 import CommandLine from './components/CommandLine.vue';
 import PlaylistCreateModal from './components/PlaylistCreateModal.vue';
 import ConfirmDialog from './components/common/ConfirmDialog.vue';
+
+const contextView = ref<{ startPlayback: () => Promise<boolean> } | null>(null);
+useAudioStore().setPlaybackContext(async () => {
+  if (contextView.value) return contextView.value.startPlayback();
+  const tracks = await invoke<TrackDto[]>('get_all_tracks');
+  const available = tracks.filter((track) => !track.unavailable);
+  if (!available.length) return false;
+  await invoke('load_and_play_library_tracks', {
+    trackIds: available.map((track) => track.id), selectedId: available[0].id,
+  });
+  refreshQueue();
+  return true;
+});
 
 const playbackQueueRef = ref<InstanceType<typeof PlaybackQueue> | null>(null);
 const playerControlRef = ref<InstanceType<typeof PlayerControl> | null>(null);
@@ -120,6 +136,7 @@ provide('openNewPlaylist', () => { isCreatePlaylistOpen.value = true; });
     </template>
 
     <PlaylistDetailView
+      ref="contextView"
       v-if="(currentView === 'home' || currentView === 'cache') && selectedPlaylistId !== null"
       :key="selectedPlaylistId"
       :playlist-id="selectedPlaylistId"
@@ -127,15 +144,16 @@ provide('openNewPlaylist', () => { isCreatePlaylistOpen.value = true; });
       @back="navigateBackFromPlaylist"
     />
     <HomeView
+      ref="contextView"
       v-else-if="currentView === 'home'"
       @navigate-playlist="navigateToPlaylist"
     />
-    <StreamingSearch v-else-if="currentView === 'search'" @refetch="handleSearchRefetch" />
-    <HistoryView v-else-if="currentView === 'history'" />
-    <CacheView v-else-if="currentView === 'cache'" @navigate-playlist="navigateToPlaylist" />
+    <StreamingSearch ref="contextView" v-else-if="currentView === 'search'" @refetch="handleSearchRefetch" />
+    <HistoryView ref="contextView" v-else-if="currentView === 'history'" />
+    <CacheView ref="contextView" v-else-if="currentView === 'cache'" @navigate-playlist="navigateToPlaylist" />
     <DownloadsView v-else-if="currentView === 'downloads'" />
-    <LibraryView v-else-if="currentView === 'library'" />
-    <RadioView v-else-if="currentView === 'radio'" />
+    <LibraryView ref="contextView" v-else-if="currentView === 'library'" />
+    <RadioView ref="contextView" v-else-if="currentView === 'radio'" />
     <SettingsView v-else-if="currentView === 'settings'" @close="currentView = viewBeforeSettings" />
   </AppLayout>
   <GlobalNotifications />
