@@ -83,6 +83,32 @@ impl LibraryService {
         self.track_repo.update(track).await
     }
 
+    /// Persist a decoded duration without overwriting other track metadata.
+    pub async fn update_track_duration(&self, id: TrackId, duration: f64) -> Result<bool> {
+        use crate::library::entities_v2::track;
+        use sea_orm::{sea_query::Expr, ColumnTrait, Condition, EntityTrait, QueryFilter};
+
+        if !duration.is_finite() || duration <= 0.0 {
+            return Ok(false);
+        }
+
+        let result = track::Entity::update_many()
+            .col_expr(track::Column::DurationSecs, Expr::value(duration))
+            .col_expr(
+                track::Column::UpdatedAt,
+                Expr::value(chrono::Utc::now().timestamp()),
+            )
+            .filter(track::Column::Id.eq(id.0))
+            .filter(
+                Condition::any()
+                    .add(track::Column::DurationSecs.is_null())
+                    .add(track::Column::DurationSecs.ne(duration)),
+            )
+            .exec(&self.db)
+            .await?;
+        Ok(result.rows_affected > 0)
+    }
+
     /// Mark a track as unavailable (e.g. 404/403 from streaming provider)
     pub async fn set_track_unavailable(&self, id: TrackId, unavailable: bool) -> Result<()> {
         self.track_repo.set_unavailable(id, unavailable).await

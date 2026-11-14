@@ -14,6 +14,8 @@ import { useNotificationStore } from './notifications';
 export const useAudioStore = defineStore('audio', () => {
   const notificationStore = useNotificationStore();
 
+  const trackDurations = ref<Record<number, number>>({});
+
   const lastUnavailableTrackId = ref<number | null>(null);
   const lastCachedTrack = ref<{ trackId: number; success: boolean } | null>(null);
 
@@ -211,12 +213,21 @@ export const useAudioStore = defineStore('audio', () => {
           }
         }
         break;
-      case 'DurationChanged':
-        if (event.payload?.durationSecs !== undefined) {
-          audioState.value.durationSecs = event.payload.durationSecs;
+      case 'DurationChanged': {
+        const { trackId, durationSecs } = event.payload ?? {};
+        if (trackId === undefined || durationSecs === undefined ||
+            !Number.isFinite(durationSecs) || durationSecs <= 0) break;
+        trackDurations.value[trackId] = durationSecs;
+        for (const track of tracks.value) {
+          if (track.id === trackId) track.durationSecs = durationSecs;
+        }
+        if (audioState.value.currentTrack?.id === trackId) {
+          audioState.value.currentTrack.durationSecs = durationSecs;
+          audioState.value.durationSecs = durationSecs;
           updateMediaSessionPlaybackState();
         }
         break;
+      }
       case 'VolumeChanged':
         if (event.payload?.volume !== undefined) {
           audioState.value.volume = event.payload.volume;
@@ -239,6 +250,7 @@ export const useAudioStore = defineStore('audio', () => {
         audioState.value.waveforms = [];
         if (event.payload?.track) {
           audioState.value.currentTrack = event.payload.track;
+          applyKnownDurations();
           updateMediaSessionMetadata();
         }
         updateMediaSessionPlaybackState();
@@ -249,6 +261,7 @@ export const useAudioStore = defineStore('audio', () => {
         if (event.payload?.state) {
           const { positionSecs, fft, ...rest } = event.payload.state;
           audioState.value = rest as AudioState;
+          applyKnownDurations();
           currentPositionSecs.value = positionSecs;
           if (fft) {
             currentFft.value = fft;
@@ -259,6 +272,7 @@ export const useAudioStore = defineStore('audio', () => {
         }
         if (event.payload?.queue) {
           queueState.value = event.payload.queue;
+          applyKnownDurations();
         }
         break;
       case 'DownloadStarted':
@@ -312,6 +326,18 @@ export const useAudioStore = defineStore('audio', () => {
     }
   }
 
+  function applyKnownDurations() {
+    for (const track of tracks.value) {
+      const duration = trackDurations.value[track.id];
+      if (duration !== undefined) track.durationSecs = duration;
+    }
+    const track = audioState.value.currentTrack;
+    if (track && trackDurations.value[track.id] !== undefined) {
+      track.durationSecs = trackDurations.value[track.id];
+      audioState.value.durationSecs = track.durationSecs;
+    }
+  }
+
   function startLoading() {
     isWaitingForAudio.value = true;
   }
@@ -323,11 +349,13 @@ export const useAudioStore = defineStore('audio', () => {
   function updateAudioState(newState: AudioState) {
     const { positionSecs, ...rest } = newState;
     audioState.value = rest as AudioState;
+    applyKnownDurations();
     currentPositionSecs.value = positionSecs;
   }
 
   function updateQueueState(newState: QueueState) {
     queueState.value = newState;
+    applyKnownDurations();
   }
 
   function setPosition(positionSecs: number) {
@@ -391,6 +419,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   return {
+    trackDurations,
     audioState,
     queueState,
     isPlaying,

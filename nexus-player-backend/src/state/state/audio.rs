@@ -27,6 +27,19 @@ impl AppState {
         self.audio_engine.poll_all_events()
     }
 
+    pub async fn update_track_duration(
+        &self,
+        track_id: usize,
+        duration: Duration,
+    ) -> anyhow::Result<bool> {
+        self.library
+            .update_track_duration(
+                crate::library::TrackId(i64::try_from(track_id)?),
+                duration.as_secs_f64(),
+            )
+            .await
+    }
+
     pub fn set_eq_settings(&self, settings: EqSettings) -> anyhow::Result<()> {
         self.audio_engine.set_eq(settings.clone());
         let mut config = self.config_manager.get();

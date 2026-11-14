@@ -114,6 +114,7 @@ pub enum AudioEvent {
     },
 
     DurationChanged {
+        track_id: usize,
         duration: Duration,
     },
 

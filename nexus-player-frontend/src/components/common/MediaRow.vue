@@ -193,7 +193,7 @@ const entity = computed(() => {
       title: props.track.title,
       artist: props.track.artist || t('track.unknownArtist'),
       thumbnail: props.track.artworkUrl||props.track.thumbnail,
-      duration: props.track.durationSecs,
+      duration: (props.track.id != null ? store.trackDurations[props.track.id] : undefined) ?? props.track.durationSecs,
       trackCount: undefined,
       year: undefined,
     };

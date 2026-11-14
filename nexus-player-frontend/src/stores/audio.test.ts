@@ -66,3 +66,30 @@ describe('searchAndPlay store action', () => {
     expect(audio.isLoading).toBe(before);
   });
 });
+
+
+it('retains a duration by track ID across stale snapshots', () => {
+  const audio = useAudioStore();
+  const track = (id: number): import('@/types/types').TrackDto => ({
+    id, title: 'Track', artist: null, album: null, durationSecs: null,
+    artworkUrl: null, playCount: 0, liked: false, state: { type: 'streaming' },
+    source: null, unavailable: false,
+  });
+  audio.audioState.currentTrack = track(1);
+  audio.audioState.durationSecs = 50;
+  audio.queueState.entries = [
+    { entryType: 'track', track: track(1) },
+    { entryType: 'track', track: track(2) },
+  ];
+  audio.handleAudioEvent({ type: 'DurationChanged', payload: { trackId: 2, durationSecs: 123 } });
+  expect(audio.tracks[1].durationSecs).toBe(123);
+  expect(audio.tracks[0].durationSecs).toBeNull();
+  expect(audio.duration).toBe(50);
+  audio.handleAudioEvent({ type: 'AudioStateUpdated', payload: {
+    state: { ...audio.audioState, currentTrack: track(2), durationSecs: 0 },
+    queue: { ...audio.queueState, entries: [{ entryType: 'track', track: track(2) }] },
+  } });
+  expect(audio.currentTrack?.durationSecs).toBe(123);
+  expect(audio.duration).toBe(123);
+  expect(audio.tracks[0].durationSecs).toBe(123);
+});

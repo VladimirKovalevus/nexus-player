@@ -194,9 +194,12 @@ impl AudioEngine {
                     s.duration = playback.duration().unwrap_or(Duration::ZERO);
                     preload_triggered = false;
                     // GaplessSwitched instead of PlaybackStarted so the queue cursor is advanced
-                    let _ = event_tx.send(AudioEvent::GaplessSwitched { track });
+                    let _ = event_tx.send(AudioEvent::GaplessSwitched {
+                        track: track.clone(),
+                    });
                     if s.duration > Duration::ZERO {
                         let _ = event_tx.send(AudioEvent::DurationChanged {
+                            track_id: track.id,
                             duration: s.duration,
                         });
                     }
@@ -387,7 +390,10 @@ impl AudioEngine {
                                 }
 
                                 if duration > Duration::ZERO {
-                                    let _ = event_tx.send(AudioEvent::DurationChanged { duration });
+                                    let _ = event_tx.send(AudioEvent::DurationChanged {
+                                        track_id: track.id,
+                                        duration,
+                                    });
                                 }
                                 last_position_update = std::time::Instant::now();
 
@@ -451,7 +457,10 @@ impl AudioEngine {
                                 }
 
                                 if duration > Duration::ZERO {
-                                    let _ = event_tx.send(AudioEvent::DurationChanged { duration });
+                                    let _ = event_tx.send(AudioEvent::DurationChanged {
+                                        track_id: track.id,
+                                        duration,
+                                    });
                                 }
                                 last_position_update = std::time::Instant::now();
 
@@ -515,7 +524,10 @@ impl AudioEngine {
                                 }
 
                                 if duration > Duration::ZERO {
-                                    let _ = event_tx.send(AudioEvent::DurationChanged { duration });
+                                    let _ = event_tx.send(AudioEvent::DurationChanged {
+                                        track_id: track.id,
+                                        duration,
+                                    });
                                 }
                                 last_position_update = std::time::Instant::now();
 

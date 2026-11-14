@@ -34,6 +34,7 @@ pub enum FrontendEvent {
 
     #[serde(rename_all = "camelCase")]
     DurationChanged {
+        track_id: usize,
         duration_secs: f64,
     },
 
@@ -162,9 +163,19 @@ pub fn start_event_loop(app_handle: AppHandle, state: Arc<AppState>) {
                             pcm,
                         }
                     }
-                    AudioEvent::DurationChanged { duration } => FrontendEvent::DurationChanged {
-                        duration_secs: duration.as_secs_f64(),
-                    },
+                    AudioEvent::DurationChanged { track_id, duration } => {
+                        let event = FrontendEvent::DurationChanged {
+                            track_id,
+                            duration_secs: duration.as_secs_f64(),
+                        };
+                        if let Err(e) = app_handle.emit("audio-event", &event) {
+                            tracing::error!("Failed to emit duration: {e}");
+                        }
+                        if let Err(e) = state.update_track_duration(track_id, duration).await {
+                            tracing::error!("Failed to persist duration for track {track_id}: {e}");
+                        }
+                        continue;
+                    }
                     AudioEvent::VolumeChanged { volume } => FrontendEvent::VolumeChanged { volume },
                     AudioEvent::Error { message } => FrontendEvent::Error { message },
                     AudioEvent::BufferUpdated { ranges } => FrontendEvent::BufferUpdated {
