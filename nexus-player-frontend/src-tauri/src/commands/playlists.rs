@@ -22,8 +22,7 @@ pub async fn get_all_playlists(state: State<'_, Arc<AppState>>) -> Result<Vec<Pl
                 .items
                 .iter()
                 .filter(|item| {
-                    item.item_kind
-                        == nexus_player_backend::library::models::PlaylistItemKind::Track
+                    item.item_kind == nexus_player_backend::library::models::PlaylistItemKind::Track
                 })
                 .count()
         });

@@ -303,7 +303,11 @@ impl StreamProvider for BandcampProvider {
 
         // Bandcamp returns a single unpaged list, so paging is applied here, after the
         // type filter: `offset` counts results of the requested type, as the UI lists them.
-        Ok(search_results.into_iter().skip(offset).take(limit).collect())
+        Ok(search_results
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .collect())
     }
 
     async fn expand_collection(&self, collection: SearchResult) -> StreamResult<Vec<TrackInfo>> {
