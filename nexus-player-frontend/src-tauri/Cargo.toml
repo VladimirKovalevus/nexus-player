@@ -1,6 +1,6 @@
 [package]
 name = "nexus-player-frontend"
-version = "0.1.0"
+version = "0.1.1"
 description = "Tauri application shell of Nexus Player that exposes the Rust backend to the Vue frontend."
 edition = "2021"
 license = "MIT"
